@@ -1,24 +1,74 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 
-function EmployeeForm({ setEmployees }) {
-  const [employee, setEmployee] = useState({ name: "", position: "", department: "", email: "", phone: "" });
+const EmployeeForm = ({ selectedEmployee, setEmployees }) => {
+  const [employeeData, setEmployeeData] = useState({
+    name: "",
+    position: "",
+    department: "",
+    email: "",
+    phone: "",
+  });
+
+  // If editing, populate the form with selected employee's data
+  useEffect(() => {
+    if (selectedEmployee) {
+      setEmployeeData({
+        name: selectedEmployee.name,
+        position: selectedEmployee.position,
+        department: selectedEmployee.department,
+        email: selectedEmployee.email,
+        phone: selectedEmployee.phone,
+      });
+    }
+  }, [selectedEmployee]);
+
+  const handleChange = (e) => {
+    setEmployeeData({
+      ...employeeData,
+      [e.target.name]: e.target.value,
+    });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const res = await axios.post("http://localhost:5000/api/employees", employee);
-    setEmployees(prev => [...prev, res.data]); // Update the list with the new employee
-    setEmployee({ name: "", position: "", department: "", email: "", phone: "" });
+    try {
+      if (selectedEmployee) {
+        // Update employee
+        const response = await axios.put(`http://localhost:5000/api/employees/${selectedEmployee._id}`, employeeData);
+        setEmployees((prev) =>
+          prev.map((emp) => (emp._id === selectedEmployee._id ? response.data : emp))
+        );
+      } else {
+        // Create new employee
+        const response = await axios.post("http://localhost:5000/api/employees", employeeData);
+        setEmployees((prev) => [...prev, response.data]);
+      }
+      setEmployeeData({
+        name: "",
+        position: "",
+        department: "",
+        email: "",
+        phone: "",
+      });
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-6 bg-white shadow-md rounded-lg">
-      <h2 className="text-xl font-bold mb-4">Add Employee</h2>
-      <input className="w-full p-2 border rounded mb-2" type="text" placeholder="Name" value={employee.name} onChange={(e) => setEmployee({ ...employee, name: e.target.value })} required />
-      <input className="w-full p-2 border rounded mb-2" type="text" placeholder="Position" value={employee.position} onChange={(e) => setEmployee({ ...employee, position: e.target.value })} required />
-      <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded">Add Employee</button>
+    <form onSubmit={handleSubmit} className="bg-white shadow-md p-6 rounded-lg">
+      <h2 className="text-2xl font-bold mb-4">{selectedEmployee ? 'Edit Employee' : 'Add Employee'}</h2>
+      <input type="text" name="name" value={employeeData.name} onChange={handleChange} className="w-full p-2 border mb-4" placeholder="Name" required />
+      <input type="text" name="position" value={employeeData.position} onChange={handleChange} className="w-full p-2 border mb-4" placeholder="Position" required />
+      <input type="text" name="department" value={employeeData.department} onChange={handleChange} className="w-full p-2 border mb-4" placeholder="Department" />
+      <input type="email" name="email" value={employeeData.email} onChange={handleChange} className="w-full p-2 border mb-4" placeholder="Email" />
+      <input type="text" name="phone" value={employeeData.phone} onChange={handleChange} className="w-full p-2 border mb-4" placeholder="Phone" />
+      <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded">
+        {selectedEmployee ? 'Update Employee' : 'Add Employee'}
+      </button>
     </form>
   );
-}
+};
 
 export default EmployeeForm;

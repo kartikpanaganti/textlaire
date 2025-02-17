@@ -1,27 +1,63 @@
-import express from "express";
-import Employee from "../models/Employee.js";
+import express from 'express';
+import Employee from '../models/Employee.js';
+import { verifyToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.get("/", async (req, res) => {
+// Create Employee (POST)
+router.post('/', verifyToken, async (req, res) => {
+  const { name, position, department, email, phone } = req.body;
+  const newEmployee = new Employee({ name, position, department, email, phone });
+  
+  try {
+    await newEmployee.save();
+    res.status(201).json(newEmployee);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// Get All Employees (GET)
+router.get('/', verifyToken, async (req, res) => {
+  try {
     const employees = await Employee.find();
     res.json(employees);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
 });
 
-router.post("/", async (req, res) => {
-    const newEmployee = new Employee(req.body);
-    await newEmployee.save();
-    res.json({ message: "Employee added" });
+// Get Single Employee (GET)
+router.get('/:id', verifyToken, async (req, res) => {
+  try {
+    const employee = await Employee.findById(req.params.id);
+    if (!employee) return res.status(404).json({ message: 'Employee not found' });
+    res.json(employee);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
 });
 
-router.put("/:id", async (req, res) => {
-    await Employee.findByIdAndUpdate(req.params.id, req.body);
-    res.json({ message: "Employee updated" });
+// Update Employee (PUT)
+router.put('/:id', verifyToken, async (req, res) => {
+  try {
+    const employee = await Employee.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!employee) return res.status(404).json({ message: 'Employee not found' });
+    res.json(employee);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
 });
 
-router.delete("/:id", async (req, res) => {
-    await Employee.findByIdAndDelete(req.params.id);
-    res.json({ message: "Employee deleted" });
+// Delete Employee (DELETE)
+router.delete('/:id', verifyToken, async (req, res) => {
+  try {
+    const employee = await Employee.findByIdAndDelete(req.params.id);
+    if (!employee) return res.status(404).json({ message: 'Employee not found' });
+    res.json({ message: 'Employee deleted' });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
 });
 
 export default router;
