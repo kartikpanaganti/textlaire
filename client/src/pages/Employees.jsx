@@ -26,12 +26,21 @@ function Employees() {
   };
 
   return (
-    <div className="p-6">
-      <h1 className="text-3xl font-bold mb-4">Manage Employees</h1>
-      <EmployeeForm selectedEmployee={selectedEmployee} setEmployees={setEmployees} />
-      <div className="mt-6 p-6 bg-white shadow-md rounded-lg">
+    <div className="flex h-screen gap-6 p-6">
+      {/* Employee Form Section (Left Side) */}
+      <div className="flex-1 bg-white shadow-md p-6 rounded-lg">
+        <h1 className="text-3xl font-bold mb-4">Manage Employees</h1>
+        <EmployeeForm 
+          selectedEmployee={selectedEmployee} 
+          setEmployees={setEmployees}
+          setSelectedEmployee={setSelectedEmployee}  // Added to reset form after update
+        />
+      </div>
+
+      {/* Employee List Section (Right Sidebar) */}
+      <div className="w-1/4 bg-white shadow-md p-6 rounded-lg overflow-hidden">
         <h2 className="text-xl font-bold mb-4">Employee List</h2>
-        <ul>
+        <ul className="overflow-y-auto max-h-[calc(100vh-250px)]">
           {employees.map(emp => (
             <li key={emp._id} className="border p-2 my-2 rounded">
               {emp.name} - {emp.position}

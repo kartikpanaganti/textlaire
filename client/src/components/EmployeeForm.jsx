@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 
-const EmployeeForm = ({ selectedEmployee, setEmployees }) => {
+const EmployeeForm = ({ selectedEmployee, setEmployees, setSelectedEmployee }) => {
   const [employeeData, setEmployeeData] = useState({
     name: "",
     position: "",
@@ -19,6 +19,15 @@ const EmployeeForm = ({ selectedEmployee, setEmployees }) => {
         department: selectedEmployee.department,
         email: selectedEmployee.email,
         phone: selectedEmployee.phone,
+      });
+    } else {
+      // Reset form if no employee is selected (for adding new employee)
+      setEmployeeData({
+        name: "",
+        position: "",
+        department: "",
+        email: "",
+        phone: "",
       });
     }
   }, [selectedEmployee]);
@@ -39,11 +48,14 @@ const EmployeeForm = ({ selectedEmployee, setEmployees }) => {
         setEmployees((prev) =>
           prev.map((emp) => (emp._id === selectedEmployee._id ? response.data : emp))
         );
+        // Reset selectedEmployee to clear the form
+        setSelectedEmployee(null);
       } else {
         // Create new employee
         const response = await axios.post("http://localhost:5000/api/employees", employeeData);
         setEmployees((prev) => [...prev, response.data]);
       }
+      // Clear form data
       setEmployeeData({
         name: "",
         position: "",

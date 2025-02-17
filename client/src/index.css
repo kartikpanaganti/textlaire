@@ -7,3 +7,23 @@ body {
     font-family: Arial, sans-serif;
     background-color: #f4f4f4;
   }
+  /* Custom scrollbar styling for the employee list */
+ul::-webkit-scrollbar {
+  width: 9px; /* Set the width of the scrollbar */
+  padding: 5px 5px 5px 5px;
+  margin: 5px 5px 5px 5px;
+}
+
+ul::-webkit-scrollbar-thumb {
+  background-color: #b2e6b3; /* Color of the scrollbar thumb */
+  border-radius: 10px; /* Round the corners of the scrollbar */
+}
+
+ul::-webkit-scrollbar-track {
+  background: #f1f1f1; /* Background color of the scrollbar track */
+  border-radius: 10px;
+}
+
+ul::-webkit-scrollbar-thumb:hover {
+  background-color: #62e764; /* Change thumb color on hover */
+}
