@@ -7,13 +7,12 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
   const [position, setPosition] = useState("");
   const [image, setImage] = useState(null);
 
-  // Fill form when editing an employee
   useEffect(() => {
     if (editingEmployee) {
       setName(editingEmployee.name);
       setEmail(editingEmployee.email);
       setPosition(editingEmployee.position);
-      setImage(null); // Reset image to allow optional update
+      setImage(null);
     }
   }, [editingEmployee]);
 
@@ -30,19 +29,17 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
 
     try {
       if (editingEmployee) {
-        // UPDATE Employee
         await axios.put(`http://localhost:5000/api/employees/${editingEmployee._id}`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
       } else {
-        // CREATE Employee
         await axios.post("http://localhost:5000/api/employees", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
       }
 
-      fetchEmployees(); // Refresh employee list
-      setEditingEmployee(null); // Reset form
+      fetchEmployees();
+      setEditingEmployee(null);
       setName("");
       setEmail("");
       setPosition("");
@@ -53,13 +50,13 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-3">
       <input
         type="text"
         placeholder="Name"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        className="p-2 border w-full"
+        className="p-2 border w-full rounded"
         required
       />
       <input
@@ -67,7 +64,7 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
         placeholder="Email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="p-2 border w-full"
+        className="p-2 border w-full rounded"
         required
       />
       <input
@@ -75,14 +72,14 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
         placeholder="Position"
         value={position}
         onChange={(e) => setPosition(e.target.value)}
-        className="p-2 border w-full"
+        className="p-2 border w-full rounded"
         required
       />
       <input
         type="file"
         accept="image/*"
         onChange={(e) => setImage(e.target.files[0])}
-        className="p-2 border w-full"
+        className="p-2 border w-full rounded"
       />
       <button type="submit" className="bg-green-500 text-white px-4 py-2 rounded w-full">
         {editingEmployee ? "Update Employee" : "Add Employee"}
