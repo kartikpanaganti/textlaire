@@ -24,8 +24,8 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
   });
 
   const [image, setImage] = useState(null);
+  const [existingImage, setExistingImage] = useState(null);
 
-  // Load existing employee data when editing
   useEffect(() => {
     if (editingEmployee) {
       setFormData({
@@ -37,7 +37,9 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
         employeeID: editingEmployee.employeeID || "",
         salary: editingEmployee.salary || "",
         shiftTiming: editingEmployee.shiftTiming || "",
-        joiningDate: editingEmployee.joiningDate ? editingEmployee.joiningDate.split("T")[0] : "",
+        joiningDate: editingEmployee.joiningDate
+          ? editingEmployee.joiningDate.split("T")[0]
+          : "",
         experienceLevel: editingEmployee.experienceLevel || "",
         workType: editingEmployee.workType || "",
         supervisor: editingEmployee.supervisor || "",
@@ -48,17 +50,20 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
         workingHours: editingEmployee.workingHours || "",
         attendanceRecord: editingEmployee.attendanceRecord || "",
       });
-      setImage(null); // Reset image when editing
+      setExistingImage(editingEmployee.profileImage || null);
+      setImage(null);
     }
   }, [editingEmployee]);
 
-  // Handle input changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
   };
 
-  // Handle form submission
+  const handleImageChange = (e) => {
+    setImage(e.target.files[0]);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -69,13 +74,19 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
 
     if (image) {
       newFormData.append("image", image);
+    } else if (existingImage) {
+      newFormData.append("existingImage", existingImage);
     }
 
     try {
       if (editingEmployee) {
-        await axios.put(`http://localhost:5000/api/employees/${editingEmployee._id}`, newFormData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        await axios.put(
+          `http://localhost:5000/api/employees/${editingEmployee._id}`,
+          newFormData,
+          {
+            headers: { "Content-Type": "multipart/form-data" },
+          }
+        );
       } else {
         await axios.post("http://localhost:5000/api/employees", newFormData, {
           headers: { "Content-Type": "multipart/form-data" },
@@ -105,88 +116,107 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
         attendanceRecord: "",
       });
       setImage(null);
+      setExistingImage(null);
     } catch (error) {
       console.error("Error saving employee:", error);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 overflow-y-auto h-[600px] p-4 border rounded shadow-md">
-      {/* Name */}
-      <input type="text" name="name" placeholder="Full Name" value={formData.name} onChange={handleChange} className="p-2 border w-full rounded" required />
-      
-      {/* Email */}
-      <input type="email" name="email" placeholder="Email" value={formData.email} onChange={handleChange} className="p-2 border w-full rounded" required />
-      
-      {/* Phone Number */}
-      <input type="text" name="phoneNumber" placeholder="Phone Number" value={formData.phoneNumber} onChange={handleChange} className="p-2 border w-full rounded" required />
-      
-      {/* Department */}
-      <input type="text" name="department" placeholder="Department" value={formData.department} onChange={handleChange} className="p-2 border w-full rounded" />
-      
-      {/* Position */}
-      <input type="text" name="position" placeholder="Position" value={formData.position} onChange={handleChange} className="p-2 border w-full rounded" required />
-      
-      {/* Employee ID */}
-      <input type="text" name="employeeID" placeholder="Employee ID" value={formData.employeeID} onChange={handleChange} className="p-2 border w-full rounded" />
-      
-      {/* Salary */}
-      <input type="number" name="salary" placeholder="Salary" value={formData.salary} onChange={handleChange} className="p-2 border w-full rounded" />
-      
-      {/* Shift Timing */}
-      <input type="text" name="shiftTiming" placeholder="Shift Timing" value={formData.shiftTiming} onChange={handleChange} className="p-2 border w-full rounded" />
-      
-      {/* Joining Date */}
-      <input type="date" name="joiningDate" value={formData.joiningDate} onChange={handleChange} className="p-2 border w-full rounded" />
-      
-      {/* Experience Level */}
-      <input type="text" name="experienceLevel" placeholder="Experience Level" value={formData.experienceLevel} onChange={handleChange} className="p-2 border w-full rounded" />
-      
-      {/* Work Type */}
-      <select name="workType" value={formData.workType} onChange={handleChange} className="p-2 border w-full rounded">
-        <option value="">Select Work Type</option>
-        <option value="Permanent">Permanent</option>
-        <option value="Contract">Contract</option>
-      </select>
-      
-      {/* Supervisor */}
-      <input type="text" name="supervisor" placeholder="Supervisor/Manager" value={formData.supervisor} onChange={handleChange} className="p-2 border w-full rounded" />
-      
-      {/* Address */}
-      <textarea name="address" placeholder="Address" value={formData.address} onChange={handleChange} className="p-2 border w-full rounded" />
-      
-      {/* Emergency Contact */}
-      <input type="text" name="emergencyContact" placeholder="Emergency Contact" value={formData.emergencyContact} onChange={handleChange} className="p-2 border w-full rounded" />
-      
-      {/* Previous Experience */}
-      <textarea name="previousExperience" placeholder="Previous Experience" value={formData.previousExperience} onChange={handleChange} className="p-2 border w-full rounded" />
-      
-      {/* Skills & Certifications */}
-      <textarea name="skills" placeholder="Skills & Certifications" value={formData.skills} onChange={handleChange} className="p-2 border w-full rounded" />
-      
-      {/* Working Hours */}
-      <input type="number" name="workingHours" placeholder="Working Hours" value={formData.workingHours} onChange={handleChange} className="p-2 border w-full rounded" />
-      
-      {/* Attendance Record */}
-      <textarea name="attendanceRecord" placeholder="Attendance Record" value={formData.attendanceRecord} onChange={handleChange} className="p-2 border w-full rounded" />
-      
-      {/* Profile Image */}
-      <input type="file" accept="image/*" onChange={(e) => setImage(e.target.files[0])} className="p-2 border w-full rounded" />
-      
-      {/* Submit Button */}
-      <button type="submit" className="bg-green-500 text-white px-4 py-2 rounded w-full">
-        {editingEmployee ? "Update Employee" : "Add Employee"}
-      </button>
-      {editingEmployee && (
-  <button
-    type="button"
-    className="bg-gray-400 text-white px-4 py-2 rounded w-full mt-2"
-    onClick={() => setEditingEmployee(null)}
-  >
-    Cancel Edit
-  </button>
-)}
-    </form>
+    <div className="h-full overflow-auto p-4 rounded shadow-md bg-white dark:bg-gray-800 dark:text-white">
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <h2 className="text-lg font-semibold mb-4">
+          {editingEmployee ? "Edit Employee" : "Add Employee"}
+        </h2>
+
+        {/* Input Fields */}
+        {[
+          { name: "name", type: "text", placeholder: "Full Name", required: true },
+          { name: "email", type: "email", placeholder: "Email", required: true },
+          { name: "phoneNumber", type: "text", placeholder: "Phone Number", required: true },
+          { name: "department", type: "text", placeholder: "Department" },
+          { name: "position", type: "text", placeholder: "Position", required: true },
+          { name: "employeeID", type: "text", placeholder: "Employee ID" },
+          { name: "salary", type: "number", placeholder: "Salary" },
+          { name: "shiftTiming", type: "text", placeholder: "Shift Timing" },
+          { name: "joiningDate", type: "date" },
+          { name: "experienceLevel", type: "text", placeholder: "Experience Level" },
+          { name: "supervisor", type: "text", placeholder: "Supervisor/Manager" },
+          { name: "emergencyContact", type: "text", placeholder: "Emergency Contact" },
+          { name: "workingHours", type: "number", placeholder: "Working Hours" },
+        ].map(({ name, type, placeholder, required }) => (
+          <input
+            key={name}
+            type={type}
+            name={name}
+            placeholder={placeholder}
+            value={formData[name]}
+            onChange={handleChange}
+            className="p-2 border w-full rounded bg-gray-100 dark:bg-gray-700 dark:text-white"
+            required={required}
+          />
+        ))}
+
+        {/* Work Type */}
+        <select 
+          name="workType" 
+          value={formData.workType} 
+          onChange={handleChange} 
+          className="p-2 border w-full rounded bg-gray-100 dark:bg-gray-700 dark:text-white">
+          <option value="">Select Work Type</option>
+          <option value="Permanent">Permanent</option>
+          <option value="Contract">Contract</option>
+        </select>
+
+        {/* Textareas */}
+        {[
+          { name: "address", placeholder: "Address" },
+          { name: "previousExperience", placeholder: "Previous Experience" },
+          { name: "skills", placeholder: "Skills & Certifications" },
+          { name: "attendanceRecord", placeholder: "Attendance Record" },
+        ].map(({ name, placeholder }) => (
+          <textarea
+            key={name}
+            name={name}
+            placeholder={placeholder}
+            value={formData[name]}
+            onChange={handleChange}
+            className="p-2 border w-full rounded bg-gray-100 dark:bg-gray-700 dark:text-white"
+          />
+        ))}
+
+        {/* Profile Image */}
+        <input 
+          type="file" 
+          accept="image/*" 
+          onChange={handleImageChange} 
+          className="p-2 border w-full rounded bg-gray-100 dark:bg-gray-700 dark:text-white" 
+        />
+        {existingImage && !image && (
+          <div className="mt-2">
+            <p className="text-sm text-gray-500">Current Image:</p>
+            <img src={`http://localhost:5000/uploads/${existingImage}`} alt="Employee" className="w-20 h-20 rounded-md"/>
+          </div>
+        )}
+
+        {/* Submit Button */}
+        <button type="submit" 
+          className="bg-green-500 dark:bg-green-700 text-white px-4 py-2 rounded w-full">
+          {editingEmployee ? "Update Employee" : "Add Employee"}
+        </button>
+
+        {/* Cancel Edit Button */}
+        {editingEmployee && (
+          <button
+            type="button"
+            className="bg-gray-400 dark:bg-gray-600 text-white px-4 py-2 rounded w-full mt-2"
+            onClick={() => setEditingEmployee(null)}
+          >
+            Cancel Edit
+          </button>
+        )}
+      </form>
+    </div>
   );
 };
 
