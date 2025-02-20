@@ -1,0 +1,35 @@
+{
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "name": "new-folder",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "lodash": "^4.17.21",
+    "rxjs": "^7.8.1",
+    "shell-quote": "^1.8.2",
+    "supports-color": "^8.1.1",
+    "tree-kill": "^1.2.2",
+    "yargs": "^17.7.2"
+  },
+  "scripts": {
+    "start": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd server && nodemon server.js",
+    "client": "cd client && npm run dev"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kartikpanganti/textlaire.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/kartikpanganti/textlaire/issues"
+  },
+  "homepage": "https://github.com/kartikpanganti/textlaire#readme"
+}
