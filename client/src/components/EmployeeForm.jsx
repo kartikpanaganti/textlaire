@@ -1,64 +1,101 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 
-const EmployeeForm = () => {
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    position: "",
-    image: null,
-  });
+const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) => {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [position, setPosition] = useState("");
+  const [image, setImage] = useState(null);
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleFileChange = (e) => {
-    setFormData({ ...formData, image: e.target.files[0] });
-  };
+  // Fill form when editing an employee
+  useEffect(() => {
+    if (editingEmployee) {
+      setName(editingEmployee.name);
+      setEmail(editingEmployee.email);
+      setPosition(editingEmployee.position);
+      setImage(null); // Reset image to allow optional update
+    }
+  }, [editingEmployee]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const data = new FormData();
-    Object.entries(formData).forEach(([key, value]) => data.append(key, value));
 
-    await axios.post("http://localhost:5000/api/employees", data);
-    window.location.reload();
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("email", email);
+    formData.append("position", position);
+    if (image) {
+      formData.append("image", image);
+    }
+
+    try {
+      if (editingEmployee) {
+        // UPDATE Employee
+        await axios.put(`http://localhost:5000/api/employees/${editingEmployee._id}`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      } else {
+        // CREATE Employee
+        await axios.post("http://localhost:5000/api/employees", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      }
+
+      fetchEmployees(); // Refresh employee list
+      setEditingEmployee(null); // Reset form
+      setName("");
+      setEmail("");
+      setPosition("");
+      setImage(null);
+    } catch (error) {
+      console.error("Error saving employee:", error);
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <input
         type="text"
-        name="name"
         placeholder="Name"
-        value={formData.name}
-        onChange={handleChange}
-        className="p-2 border rounded"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        className="p-2 border w-full"
         required
       />
       <input
-        type="text"
-        name="email"
+        type="email"
         placeholder="Email"
-        value={formData.email}
-        onChange={handleChange}
-        className="p-2 border rounded"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className="p-2 border w-full"
         required
       />
       <input
         type="text"
-        name="position"
         placeholder="Position"
-        value={formData.position}
-        onChange={handleChange}
-        className="p-2 border rounded"
+        value={position}
+        onChange={(e) => setPosition(e.target.value)}
+        className="p-2 border w-full"
         required
       />
-      <input type="file" name="image" onChange={handleFileChange} className="p-2 border rounded" required />
-      <button type="submit" className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600">
-        Add Employee
+      <input
+        type="file"
+        accept="image/*"
+        onChange={(e) => setImage(e.target.files[0])}
+        className="p-2 border w-full"
+      />
+      <button type="submit" className="bg-green-500 text-white px-4 py-2 rounded w-full">
+        {editingEmployee ? "Update Employee" : "Add Employee"}
       </button>
+      {editingEmployee && (
+        <button
+          type="button"
+          className="bg-gray-400 text-white px-4 py-2 rounded w-full mt-2"
+          onClick={() => setEditingEmployee(null)}
+        >
+          Cancel Edit
+        </button>
+      )}
     </form>
   );
 };
