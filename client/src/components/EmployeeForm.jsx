@@ -1,83 +1,63 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import axios from "axios";
 
-const EmployeeForm = ({ selectedEmployee, setEmployees, setSelectedEmployee }) => {
-  const [employeeData, setEmployeeData] = useState({
+const EmployeeForm = () => {
+  const [formData, setFormData] = useState({
     name: "",
-    position: "",
-    department: "",
     email: "",
-    phone: "",
+    position: "",
+    image: null,
   });
 
-  // If editing, populate the form with selected employee's data
-  useEffect(() => {
-    if (selectedEmployee) {
-      setEmployeeData({
-        name: selectedEmployee.name,
-        position: selectedEmployee.position,
-        department: selectedEmployee.department,
-        email: selectedEmployee.email,
-        phone: selectedEmployee.phone,
-      });
-    } else {
-      // Reset form if no employee is selected (for adding new employee)
-      setEmployeeData({
-        name: "",
-        position: "",
-        department: "",
-        email: "",
-        phone: "",
-      });
-    }
-  }, [selectedEmployee]);
-
   const handleChange = (e) => {
-    setEmployeeData({
-      ...employeeData,
-      [e.target.name]: e.target.value,
-    });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleFileChange = (e) => {
+    setFormData({ ...formData, image: e.target.files[0] });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    try {
-      if (selectedEmployee) {
-        // Update employee
-        const response = await axios.put(`http://localhost:5000/api/employees/${selectedEmployee._id}`, employeeData);
-        setEmployees((prev) =>
-          prev.map((emp) => (emp._id === selectedEmployee._id ? response.data : emp))
-        );
-        // Reset selectedEmployee to clear the form
-        setSelectedEmployee(null);
-      } else {
-        // Create new employee
-        const response = await axios.post("http://localhost:5000/api/employees", employeeData);
-        setEmployees((prev) => [...prev, response.data]);
-      }
-      // Clear form data
-      setEmployeeData({
-        name: "",
-        position: "",
-        department: "",
-        email: "",
-        phone: "",
-      });
-    } catch (error) {
-      console.error(error);
-    }
+    const data = new FormData();
+    Object.entries(formData).forEach(([key, value]) => data.append(key, value));
+
+    await axios.post("http://localhost:5000/api/employees", data);
+    window.location.reload();
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white shadow-md p-6 rounded-lg">
-      <h2 className="text-2xl font-bold mb-4">{selectedEmployee ? 'Edit Employee' : 'Add Employee'}</h2>
-      <input type="text" name="name" value={employeeData.name} onChange={handleChange} className="w-full p-2 border mb-4" placeholder="Name" required />
-      <input type="text" name="position" value={employeeData.position} onChange={handleChange} className="w-full p-2 border mb-4" placeholder="Position" required />
-      <input type="text" name="department" value={employeeData.department} onChange={handleChange} className="w-full p-2 border mb-4" placeholder="Department" />
-      <input type="email" name="email" value={employeeData.email} onChange={handleChange} className="w-full p-2 border mb-4" placeholder="Email" />
-      <input type="text" name="phone" value={employeeData.phone} onChange={handleChange} className="w-full p-2 border mb-4" placeholder="Phone" />
-      <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded">
-        {selectedEmployee ? 'Update Employee' : 'Add Employee'}
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <input
+        type="text"
+        name="name"
+        placeholder="Name"
+        value={formData.name}
+        onChange={handleChange}
+        className="p-2 border rounded"
+        required
+      />
+      <input
+        type="text"
+        name="email"
+        placeholder="Email"
+        value={formData.email}
+        onChange={handleChange}
+        className="p-2 border rounded"
+        required
+      />
+      <input
+        type="text"
+        name="position"
+        placeholder="Position"
+        value={formData.position}
+        onChange={handleChange}
+        className="p-2 border rounded"
+        required
+      />
+      <input type="file" name="image" onChange={handleFileChange} className="p-2 border rounded" required />
+      <button type="submit" className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600">
+        Add Employee
       </button>
     </form>
   );

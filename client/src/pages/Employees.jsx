@@ -2,56 +2,52 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import EmployeeForm from "../components/EmployeeForm";
 
-function Employees() {
+const Employees = () => {
   const [employees, setEmployees] = useState([]);
-  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
-    // Fetch employees
-    axios.get("http://localhost:5000/api/employees")
-      .then(res => setEmployees(res.data))
-      .catch(err => console.error(err));
+    axios.get("http://localhost:5000/api/employees").then((res) => {
+      setEmployees(res.data);
+    });
   }, []);
 
-  const handleEdit = (employee) => {
-    setSelectedEmployee(employee);
-  };
-
-  const handleDelete = (id) => {
-    axios.delete(`http://localhost:5000/api/employees/${id}`)
-      .then(() => {
-        setEmployees((prev) => prev.filter(emp => emp._id !== id));
-      })
-      .catch(err => console.error(err));
-  };
-
   return (
-    <div className="flex h-screen gap-6 p-6">
-      {/* Employee Form Section (Left Side) */}
-      <div className="flex-1 bg-white shadow-md p-6 rounded-lg">
-        <h1 className="text-3xl font-bold mb-4">Manage Employees</h1>
-        <EmployeeForm 
-          selectedEmployee={selectedEmployee} 
-          setEmployees={setEmployees}
-          setSelectedEmployee={setSelectedEmployee}  // Added to reset form after update
-        />
+    <div className="p-6 flex gap-6">
+      {/* Left: Employee Form */}
+      <div className="w-1/3 bg-white p-4 rounded shadow-md">
+        <h2 className="text-lg font-semibold mb-4">Add Employee</h2>
+        <EmployeeForm />
       </div>
 
-      {/* Employee List Section (Right Sidebar) */}
-      <div className="w-1/4 bg-white shadow-md p-6 rounded-lg overflow-hidden">
-        <h2 className="text-xl font-bold mb-4">Employee List</h2>
-        <ul className="overflow-y-auto max-h-[calc(100vh-250px)]">
-          {employees.map(emp => (
-            <li key={emp._id} className="border p-2 my-2 rounded">
-              {emp.name} - {emp.position}
-              <button onClick={() => handleEdit(emp)} className="ml-4 bg-yellow-500 text-white p-1 rounded">Edit</button>
-              <button onClick={() => handleDelete(emp._id)} className="ml-2 bg-red-500 text-white p-1 rounded">Delete</button>
-            </li>
-          ))}
-        </ul>
+      {/* Right: Employee List */}
+      <div className="w-2/3">
+        <input
+          type="text"
+          placeholder="Search employees..."
+          onChange={(e) => setSearch(e.target.value)}
+          className="p-2 border w-full mb-4"
+        />
+        <div className="grid grid-cols-2 gap-4">
+          {employees
+            .filter((emp) => emp.name.toLowerCase().includes(search.toLowerCase()))
+            .map((emp) => (
+              <div key={emp._id} className="p-4 border shadow-md rounded flex items-center gap-4">
+                <img
+                  src={`http://localhost:5000${emp.image}`}
+                  className="w-16 h-16 object-cover rounded-full"
+                  alt={emp.name}
+                />
+                <div>
+                  <h3 className="text-lg font-bold">{emp.name}</h3>
+                  <p>{emp.position}</p>
+                </div>
+              </div>
+            ))}
+        </div>
       </div>
     </div>
   );
-}
+};
 
 export default Employees;
