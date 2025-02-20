@@ -28,39 +28,104 @@ router.get("/", async (req, res) => {
 // POST: Create Employee
 router.post("/", upload.single("image"), async (req, res) => {
   try {
-    const { name, email, position } = req.body;
+    const {
+      name,
+      email,
+      phoneNumber,
+      department,
+      position,
+      employeeID,
+      salary,
+      shiftTiming,
+      joiningDate,
+      experienceLevel,
+      workType,
+      supervisor,
+      address,
+      emergencyContact,
+      previousExperience,
+      skills,
+      workingHours,
+      attendanceRecord,
+    } = req.body;
+
     const image = req.file ? `/uploads/${req.file.filename}` : "";
 
-    const newEmployee = new Employee({ name, email, position, image });
-    await newEmployee.save();
+    const newEmployee = new Employee({
+      name,
+      email,
+      phoneNumber,
+      department,
+      position,
+      employeeID,
+      salary,
+      shiftTiming,
+      joiningDate,
+      experienceLevel,
+      workType,
+      supervisor,
+      address,
+      emergencyContact,
+      previousExperience,
+      skills,
+      workingHours,
+      attendanceRecord,
+      image,
+    });
 
-    res.json(newEmployee);
+    await newEmployee.save();
+    res.status(201).json(newEmployee);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+
+
 // PUT: Update Employee (with image update)
 router.put("/:id", upload.single("image"), async (req, res) => {
   try {
-    const { name, email, position } = req.body;
+    const { 
+      name, email, phoneNumber, department, position, employeeID, salary,
+      shiftTiming, joiningDate, experienceLevel, workType, supervisor, address,
+      emergencyContact, previousExperience, skills, workingHours, attendanceRecord
+    } = req.body;
+
     const employee = await Employee.findById(req.params.id);
 
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
     }
 
-    // If new image is uploaded, delete old image
+    // If a new image is uploaded, delete the old one
     if (req.file && employee.image) {
       const oldImagePath = path.join("uploads", path.basename(employee.image));
       if (fs.existsSync(oldImagePath)) {
-        fs.unlinkSync(oldImagePath); // Delete old image from local storage
+        fs.unlinkSync(oldImagePath);
       }
     }
 
+    // Update fields
     employee.name = name;
     employee.email = email;
+    employee.phoneNumber = phoneNumber;
+    employee.department = department;
     employee.position = position;
+    employee.employeeID = employeeID;
+    employee.salary = salary;
+    employee.shiftTiming = shiftTiming;
+    employee.joiningDate = joiningDate;
+    employee.experienceLevel = experienceLevel;
+    employee.workType = workType;
+    employee.supervisor = supervisor;
+    employee.address = address;
+    employee.emergencyContact = emergencyContact;
+    employee.previousExperience = previousExperience;
+    employee.skills = skills;
+    employee.workingHours = workingHours;
+    employee.attendanceRecord = attendanceRecord;
+    
+    // If a new image is uploaded, update it
     if (req.file) {
       employee.image = `/uploads/${req.file.filename}`;
     }
@@ -68,9 +133,11 @@ router.put("/:id", upload.single("image"), async (req, res) => {
     await employee.save();
     res.json(employee);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Server Error:", err);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
 
 // DELETE: Delete Employee (with image removal)
 router.delete("/:id", async (req, res) => {
