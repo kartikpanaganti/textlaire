@@ -24,7 +24,6 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
   });
 
   const [image, setImage] = useState(null);
-  const [existingImage, setExistingImage] = useState(null);
 
   useEffect(() => {
     if (editingEmployee) {
@@ -37,9 +36,7 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
         employeeID: editingEmployee.employeeID || "",
         salary: editingEmployee.salary || "",
         shiftTiming: editingEmployee.shiftTiming || "",
-        joiningDate: editingEmployee.joiningDate
-          ? editingEmployee.joiningDate.split("T")[0]
-          : "",
+        joiningDate: editingEmployee.joiningDate ? editingEmployee.joiningDate.split("T")[0] : "",
         experienceLevel: editingEmployee.experienceLevel || "",
         workType: editingEmployee.workType || "",
         supervisor: editingEmployee.supervisor || "",
@@ -50,7 +47,6 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
         workingHours: editingEmployee.workingHours || "",
         attendanceRecord: editingEmployee.attendanceRecord || "",
       });
-      setExistingImage(editingEmployee.profileImage || null);
       setImage(null);
     }
   }, [editingEmployee]);
@@ -58,10 +54,6 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
-  };
-
-  const handleImageChange = (e) => {
-    setImage(e.target.files[0]);
   };
 
   const handleSubmit = async (e) => {
@@ -74,19 +66,13 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
 
     if (image) {
       newFormData.append("image", image);
-    } else if (existingImage) {
-      newFormData.append("existingImage", existingImage);
     }
 
     try {
       if (editingEmployee) {
-        await axios.put(
-          `http://localhost:5000/api/employees/${editingEmployee._id}`,
-          newFormData,
-          {
-            headers: { "Content-Type": "multipart/form-data" },
-          }
-        );
+        await axios.put(`http://localhost:5000/api/employees/${editingEmployee._id}`, newFormData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
       } else {
         await axios.post("http://localhost:5000/api/employees", newFormData, {
           headers: { "Content-Type": "multipart/form-data" },
@@ -116,7 +102,6 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
         attendanceRecord: "",
       });
       setImage(null);
-      setExistingImage(null);
     } catch (error) {
       console.error("Error saving employee:", error);
     }
@@ -189,15 +174,9 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
         <input 
           type="file" 
           accept="image/*" 
-          onChange={handleImageChange} 
+          onChange={(e) => setImage(e.target.files[0])} 
           className="p-2 border w-full rounded bg-gray-100 dark:bg-gray-700 dark:text-white" 
         />
-        {existingImage && !image && (
-          <div className="mt-2">
-            <p className="text-sm text-gray-500">Current Image:</p>
-            <img src={`http://localhost:5000/uploads/${existingImage}`} alt="Employee" className="w-20 h-20 rounded-md"/>
-          </div>
-        )}
 
         {/* Submit Button */}
         <button type="submit" 

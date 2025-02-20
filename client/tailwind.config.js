@@ -9,5 +9,8 @@ export default {
   theme: {
     extend: {},
   },
-  plugins: [],
+  plugins: [
+    require('tailwind-scrollbar'),
+    // Other plugins
+  ],
 }

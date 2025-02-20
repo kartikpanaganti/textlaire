@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { 
   FaUserCog, FaBox, FaChartPie, FaSignOutAlt, 
-  FaBars, FaTachometerAlt
+  FaBars, FaTachometerAlt, FaIndustry, FaClipboardList, 
+  FaTruck, FaCogs 
 } from "react-icons/fa";
 
 function Sidebar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
@@ -24,35 +26,67 @@ function Sidebar() {
         >
           <FaBars />
         </button>
-        {!isCollapsed && <h2 className="text-xl font-bold tracking-wide">Texlaire</h2>}
+        {!isCollapsed && <h2 className="text-xl font-bold tracking-wide">MENU</h2>}
       </div>
 
       {/* Navigation Links */}
       <nav className="flex-1">
-        <ul className="space-y-4">
+        <ul className="space-y-2">
           <SidebarItem 
             icon={<FaTachometerAlt />} 
             label="Dashboard" 
             isCollapsed={isCollapsed} 
+            isActive={location.pathname === "/dashboard"}
             onClick={() => navigate("/dashboard")} 
           />
           <SidebarItem 
             icon={<FaUserCog />} 
             label="Workforce" 
             isCollapsed={isCollapsed} 
+            isActive={location.pathname === "/employees"}
             onClick={() => navigate("/employees")} 
           />
           <SidebarItem 
             icon={<FaBox />} 
             label="Inventory" 
             isCollapsed={isCollapsed} 
+            isActive={location.pathname === "/inventory"}
             onClick={() => navigate("/inventory")} 
+          />
+          <SidebarItem 
+            icon={<FaIndustry />} 
+            label="Production" 
+            isCollapsed={isCollapsed} 
+            isActive={location.pathname === "/production"}
+            onClick={() => navigate("/production")} 
+          />
+          <SidebarItem 
+            icon={<FaClipboardList />} 
+            label="Orders" 
+            isCollapsed={isCollapsed} 
+            isActive={location.pathname === "/orders"}
+            onClick={() => navigate("/orders")} 
           />
           <SidebarItem 
             icon={<FaChartPie />} 
             label="Analytics" 
             isCollapsed={isCollapsed} 
+            isActive={location.pathname === "/analytics"}
             onClick={() => navigate("/analytics")} 
+          />
+          <SidebarItem 
+            icon={<FaTruck />} 
+            label="Suppliers" 
+            isCollapsed={isCollapsed} 
+            isActive={location.pathname === "/suppliers"}
+            onClick={() => navigate("/suppliers")} 
+          />
+          <SidebarItem 
+            icon={<FaCogs />} 
+            label="Settings" 
+            isCollapsed={isCollapsed} 
+            isActive={location.pathname === "/settings"}
+            onClick={() => navigate("/settings")} 
           />
         </ul>
       </nav>
@@ -70,12 +104,17 @@ function Sidebar() {
   );
 }
 
-// Sidebar Item Component for Reusability
-const SidebarItem = ({ icon, label, isCollapsed, onClick }) => (
+// Sidebar Item Component with Active State and Animation
+const SidebarItem = ({ icon, label, isCollapsed, isActive, onClick }) => (
   <li>
     <button 
-      className="flex items-center w-full p-3 hover:bg-blue-700 rounded-lg transition-all duration-300 
-      text-lg font-medium tracking-wide"
+      className={`flex items-center w-full p-3 rounded-lg transition-all duration-300 text-lg font-medium tracking-wide
+        ${
+          isActive 
+            ? "bg-blue-700 shadow-md scale-105 text-cyan-300" 
+            : "hover:bg-blue-700 hover:text-cyan-200"
+        }
+      `}
       onClick={onClick}
     >
       <span className="text-2xl min-w-[40px]">{icon}</span>

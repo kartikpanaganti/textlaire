@@ -110,54 +110,62 @@ const Employees = () => {
         </div>
       </div>
 
-      {/* Employee Details Modal */}
-      {viewingEmployee && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50"
-          onClick={closeModal}
+ {/* Employee Details Modal */}
+{viewingEmployee && (
+  <div 
+    className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50"
+    onClick={closeModal}
+  >
+    <div 
+      className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-2xl w-[450px] max-h-[80vh] overflow-y-auto relative"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button 
+        onClick={closeModal} 
+        className="absolute top-4 right-4 bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded-full"
+      >
+        ✕
+      </button>
+      <div className="text-center mb-4">
+        <img
+          src={viewingEmployee.image ? `http://localhost:5000${viewingEmployee.image}` : "/default-profile.png"}
+          alt={viewingEmployee.name}
+          className="w-28 h-28 object-cover rounded-full mx-auto border-4 border-blue-500 shadow-md"
+        />
+        <h2 className="text-2xl font-semibold mt-2 text-gray-800 dark:text-white">{viewingEmployee.name}</h2>
+        <p className="text-gray-500 dark:text-gray-300">{viewingEmployee.position} - {viewingEmployee.department}</p>
+      </div>
+
+      <div className="space-y-3 text-gray-700 dark:text-gray-300">
+        <p><strong>Email:</strong> {viewingEmployee.email}</p>
+        <p><strong>Phone:</strong> {viewingEmployee.phoneNumber}</p>
+        <p><strong>Employee ID:</strong> {viewingEmployee.employeeID}</p>
+        <p><strong>Salary:</strong> ${viewingEmployee.salary}</p>
+        <p><strong>Shift Timing:</strong> {viewingEmployee.shiftTiming}</p>
+        <p><strong>Joining Date:</strong> {viewingEmployee.joiningDate}</p>
+        <p><strong>Experience Level:</strong> {viewingEmployee.experienceLevel}</p>
+        <p><strong>Work Type:</strong> {viewingEmployee.workType}</p>
+        <p><strong>Supervisor:</strong> {viewingEmployee.supervisor}</p>
+        <p><strong>Address:</strong> {viewingEmployee.address}</p>
+        <p><strong>Emergency Contact:</strong> {viewingEmployee.emergencyContact}</p>
+        <p><strong>Skills:</strong> {viewingEmployee.skills}</p>
+        <p><strong>Working Hours:</strong> {viewingEmployee.workingHours}</p>
+        <p><strong>Attendance Record:</strong> {viewingEmployee.attendanceRecord}</p>
+      </div>
+
+      <div className="mt-6">
+        <button 
+          onClick={closeModal} 
+          className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-md text-lg font-medium"
         >
-          <div 
-            className="bg-white p-6 rounded-lg shadow-2xl w-[450px] max-h-[80vh] overflow-y-auto relative"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button onClick={closeModal} className="absolute top-4 right-4 bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded-full">
-              ✕
-            </button>
-            <div className="text-center mb-4">
-              <img
-                src={viewingEmployee.image ? `http://localhost:5000${viewingEmployee.image}` : "/default-profile.png"}
-                alt={viewingEmployee.name}
-                className="w-28 h-28 object-cover rounded-full mx-auto border-4 border-blue-500 shadow-md"
-              />
-              <h2 className="text-2xl font-semibold mt-2">{viewingEmployee.name}</h2>
-              <p className="text-gray-500">{viewingEmployee.position} - {viewingEmployee.department}</p>
-            </div>
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
-            <div className="space-y-3 text-gray-700">
-              <p><strong>Email:</strong> {viewingEmployee.email}</p>
-              <p><strong>Phone:</strong> {viewingEmployee.phoneNumber}</p>
-              <p><strong>Employee ID:</strong> {viewingEmployee.employeeID}</p>
-              <p><strong>Salary:</strong> ${viewingEmployee.salary}</p>
-              <p><strong>Shift Timing:</strong> {viewingEmployee.shiftTiming}</p>
-              <p><strong>Joining Date:</strong> {viewingEmployee.joiningDate}</p>
-              <p><strong>Experience Level:</strong> {viewingEmployee.experienceLevel}</p>
-              <p><strong>Work Type:</strong> {viewingEmployee.workType}</p>
-              <p><strong>Supervisor:</strong> {viewingEmployee.supervisor}</p>
-              <p><strong>Address:</strong> {viewingEmployee.address}</p>
-              <p><strong>Emergency Contact:</strong> {viewingEmployee.emergencyContact}</p>
-              <p><strong>Skills:</strong> {viewingEmployee.skills}</p>
-              <p><strong>Working Hours:</strong> {viewingEmployee.workingHours}</p>
-              <p><strong>Attendance Record:</strong> {viewingEmployee.attendanceRecord}</p>
-            </div>
 
-            <div className="mt-6">
-              <button onClick={closeModal} className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-md text-lg font-medium">
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

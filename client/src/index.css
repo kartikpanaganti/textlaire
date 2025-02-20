@@ -1,29 +1,71 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-body {
-    margin: 0; /* Remove any default margin */
-    padding: 0; /* Remove any default padding */
-    font-family: Arial, sans-serif;
-    background-color: #f4f4f4;
-  }
-  /* Custom scrollbar styling for the employee list */
-ul::-webkit-scrollbar {
-  width: 9px; /* Set the width of the scrollbar */
-  padding: 5px 5px 5px 5px;
-  margin: 5px 5px 5px 5px;
+
+/* Global Scrollbar Styles */
+* {
+  scrollbar-width: thin; /* For Firefox */
+  scrollbar-color: #ccc #f1f1f1; /* For Firefox */
 }
 
-ul::-webkit-scrollbar-thumb {
-  background-color: #b2e6b3; /* Color of the scrollbar thumb */
-  border-radius: 10px; /* Round the corners of the scrollbar */
+/* Custom Scrollbar for Webkit Browsers (Chrome, Safari) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-ul::-webkit-scrollbar-track {
-  background: #f1f1f1; /* Background color of the scrollbar track */
+::-webkit-scrollbar-thumb {
+  background-color: #ccc;
   border-radius: 10px;
 }
 
-ul::-webkit-scrollbar-thumb:hover {
-  background-color: #62e764; /* Change thumb color on hover */
+::-webkit-scrollbar-thumb:hover {
+  background-color: #888;
+}
+
+::-webkit-scrollbar-track {
+  background-color: #f1f1f1;
+  border-radius: 10px;
+}
+
+/* Dark Mode Scrollbar Styling */
+.dark ::-webkit-scrollbar-thumb {
+  background-color: #444;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: #666;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background-color: #333;
+}
+
+
+/* Customize autofill background */
+input:-webkit-autofill,
+textarea:-webkit-autofill {
+  background-color: #2d2d2d !important; /* Dark background to match your dark theme */
+  color: white !important; /* Ensure the text is visible */
+  transition: background-color 5000s ease-in-out 0s; /* Prevent background color change */
+}
+
+/* Alternatively, for more specificity */
+input:-webkit-autofill,
+textarea:-webkit-autofill {
+  background-color: #1f2937 !important; /* Match dark background */
+  color: white !important;
+}
+
+/* Optional: Adjust input and textarea styles on autofill */
+input,
+textarea {
+  background-color: #2d2d2d; /* Dark background */
+  color: white; /* Ensure text is visible */
+}
+
+input:-webkit-autofill,
+textarea:-webkit-autofill {
+  background-color: #2d2d2d !important; /* Fix autofill background */
+  color: white !important; /* Ensure text remains white */
 }

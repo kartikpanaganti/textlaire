@@ -36,7 +36,7 @@ function Navbar() {
   return (
     <nav className="bg-white dark:bg-gray-900 shadow-md p-4 flex justify-between items-center transition-all duration-300">
       {/* Logo */}
-      <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Texlaire</h2>
+      <h2 className="text-4xl font-semibold text-gray-800 dark:text-white" style={{fontFamily: "Style Script, serif", fontWeight: "600px" }}>Texlaire</h2>
 
       {/* Right Side - Icons & User */}
       <div className="flex items-center gap-4">
