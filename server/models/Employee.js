@@ -1,13 +1,10 @@
 import mongoose from "mongoose";
 
-const employeeSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  position: { type: String, required: true },
-  department: { type: String },
-  email: { type: String },
-  phone: { type: String },
+const EmployeeSchema = new mongoose.Schema({
+  name: String,
+  email: String,
+  position: String,
+  image: String, // Path to the uploaded image
 });
 
-const Employee = mongoose.model("Employee", employeeSchema);
-
-export default Employee;
+export default mongoose.model("Employee", EmployeeSchema);
