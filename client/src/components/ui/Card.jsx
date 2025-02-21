@@ -1,9 +1,7 @@
-// src/components/Card.jsx
-const Card = ({ title, value }) => (
-  <div className="bg-white p-4 rounded shadow-md">
-    <h3 className="font-bold">{title}</h3>
-    <p>{value}</p>
-  </div>
-);
+export function Card({ children, className }) {
+  return <div className={`bg-gray-800 p-4 rounded-lg ${className}`}>{children}</div>;
+}
 
-export default Card;
+export function CardContent({ children }) {
+  return <div className="p-2">{children}</div>;
+}

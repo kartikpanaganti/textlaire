@@ -6,7 +6,7 @@ import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Employees from "./pages/Employees"; // Import Employees Page
 import { ThemeContext } from "./context/ThemeProvider"; // Import Theme Context
-
+import InventoryManagement from "./pages/InventoryManagement";
 function App() {
   return (
     <Router>
@@ -31,6 +31,7 @@ function MainLayout() {
           <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login />} />
           <Route path="/dashboard" element={isAuthenticated ? <Dashboard /> : <Navigate to="/" />} />
           <Route path="/employees" element={isAuthenticated ? <Employees /> : <Navigate to="/" />} /> {/* New Employees Route */}
+          <Route path="/inventory" element={isAuthenticated ? <InventoryManagement /> : <Navigate to="/" />} /> {/* New Inventory Management Route */}
         </Routes>
       </div>
     </div>

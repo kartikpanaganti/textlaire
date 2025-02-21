@@ -4,6 +4,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import employeesRoutes from "./routes/employees.js";
 import authRoutes from "./routes/auth.js";
+import inventoryRoutes from "./routes/inventoryRoutes.js"; // Import Inventory Routes
 import path from "path";
 
 dotenv.config();
@@ -17,6 +18,7 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads"))); // Ser
 // Routes
 app.use("/api/employees", employeesRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/inventory", inventoryRoutes); // Add Inventory Routes
 
 // Database Connection
 mongoose
