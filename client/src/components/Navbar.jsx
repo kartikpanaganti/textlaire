@@ -1,20 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaBell, FaUserCircle, FaSun, FaMoon, FaSignOutAlt, FaCog, FaUser } from "react-icons/fa";
+import { ThemeContext } from "../context/ThemeProvider"; // Import Theme Context
 
 function Navbar() {
   const navigate = useNavigate();
-  const [darkMode, setDarkMode] = useState(localStorage.getItem("theme") === "dark");
-  const [notifications, setNotifications] = useState(3); // Example notification count
+  const { theme, toggleTheme } = useContext(ThemeContext); // Get theme from context
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-
-  // Toggle Theme Mode
-  const toggleTheme = () => {
-    const newTheme = darkMode ? "light" : "dark";
-    localStorage.setItem("theme", newTheme);
-    setDarkMode(!darkMode);
-    document.documentElement.classList.toggle("dark");
-  };
+  const [notifications, setNotifications] = useState(3); // Example notification count
 
   // Logout Function
   const handleLogout = () => {
@@ -43,10 +36,10 @@ function Navbar() {
         
         {/* Theme Toggle Button */}
         <button 
-          onClick={toggleTheme} 
+          onClick={toggleTheme} // Use ThemeContext's function
           className="p-2 rounded-full bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 transition-all"
         >
-          {darkMode ? <FaSun className="text-yellow-400" /> : <FaMoon className="text-gray-600" />}
+          {theme === "dark" ? <FaSun className="text-yellow-400" /> : <FaMoon className="text-gray-600" />}
         </button>
 
         {/* Notifications Icon with Badge */}

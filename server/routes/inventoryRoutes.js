@@ -61,11 +61,14 @@ router.put("/:id", upload.single("image"), async (req, res) => {
     }
 
     // If a new image is uploaded, delete the old one
-    if (req.file && item.image) {
-      const oldImagePath = path.join("uploads/product", path.basename(item.image));
-      if (fs.existsSync(oldImagePath)) {
-        fs.unlinkSync(oldImagePath);
+    if (req.file) {
+      if (item.image) {
+        const oldImagePath = path.join("uploads/product", path.basename(item.image));
+        if (fs.existsSync(oldImagePath)) {
+          fs.unlinkSync(oldImagePath);
+        }
       }
+      item.image = `/uploads/product/${req.file.filename}`;
     }
 
     // Update fields
@@ -73,15 +76,33 @@ router.put("/:id", upload.single("image"), async (req, res) => {
     item.category = category;
     item.stock = stock;
 
-    // If a new image is uploaded, update it
-    if (req.file) {
-      item.image = `/uploads/product/${req.file.filename}`;
-    }
-
     await item.save();
     res.json(item);
   } catch (err) {
     res.status(500).json({ message: "Error updating inventory item", error: err.message });
+  }
+});
+
+// ✅ **PATCH: Update Stock Only (Avoids Unnecessary Updates)**
+router.patch("/:id/stock", async (req, res) => {
+  try {
+    const { stock } = req.body;
+    const item = await Inventory.findById(req.params.id);
+
+    if (!item) {
+      return res.status(404).json({ message: "Inventory item not found" });
+    }
+
+    if (stock < 0) {
+      return res.status(400).json({ message: "Stock cannot be negative" });
+    }
+
+    item.stock = stock;
+    await item.save();
+
+    res.json({ message: "Stock updated", stock: item.stock });
+  } catch (err) {
+    res.status(500).json({ message: "Error updating stock", error: err.message });
   }
 });
 
