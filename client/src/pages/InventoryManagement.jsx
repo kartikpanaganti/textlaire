@@ -2,6 +2,7 @@ import { useState, useEffect, useContext } from "react";
 import axios from "axios";
 import { ThemeContext } from "../context/ThemeProvider";
 
+
 export default function InventoryManagement() {
   const { theme } = useContext(ThemeContext);
   const [search, setSearch] = useState("");
@@ -9,11 +10,58 @@ export default function InventoryManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newItem, setNewItem] = useState({ name: "", category: "", stock: "", image: null });
   const [editingItem, setEditingItem] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(""); // ✅ Success Message State
+  // ✅ Add missing state variables
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+  // ✅ Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5; // Set number of items per page
 
-    // ✅ Add missing state variables
-    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-    const [selectedItem, setSelectedItem] = useState(null);
-  
+  const showSuccessPopup = (message) => {
+    setSuccessMessage(message);
+    setTimeout(() => setSuccessMessage(""), 3000); // Auto-close after 3 seconds
+  };
+
+  const handleAddItem = async (event) => {
+    event.preventDefault();
+    try {
+      await axios.post("http://localhost:5000/api/inventory", newItem);
+      fetchInventory();
+      showSuccessPopup("Item successfully added! ✅");
+      setIsModalOpen(false);
+      setNewItem({ name: "", category: "", stock: 0 });
+    } catch (error) {
+      console.error("Error adding item:", error);
+    }
+  };
+
+  const handleUpdateItem = async (event) => {
+    event.preventDefault();
+    try {
+      await axios.put(`http://localhost:5000/api/inventory/${editingItem._id}`, newItem);
+      fetchInventory();
+      showSuccessPopup("Item successfully updated! 🔄");
+      setIsModalOpen(false);
+      setEditingItem(null);
+      setNewItem({ name: "", category: "", stock: 0 });
+    } catch (error) {
+      console.error("Error updating item:", error);
+    }
+  };
+
+  const handleDeleteItem = async () => {
+    if (selectedItemToDelete) {
+      try {
+        await axios.delete(`http://localhost:5000/api/inventory/${selectedItemToDelete._id}`);
+        fetchInventory();
+        setIsDeleteModalOpen(false);
+        showSuccessPopup("Item successfully deleted! ❌");
+      } catch (error) {
+        console.error("Error deleting item:", error);
+      }
+    }
+  };
 
   useEffect(() => {
     fetchInventory();
@@ -55,26 +103,21 @@ export default function InventoryManagement() {
 
       if (editingItem) {
         await axios.put(`http://localhost:5000/api/inventory/${editingItem._id}`, formData);
+        showSuccessPopup("Item successfully updated! 🔄");
+
       } else {
         await axios.post("http://localhost:5000/api/inventory", formData);
+        showSuccessPopup("Item successfully added! ✅");
+
       }
 
       fetchInventory();
       setIsModalOpen(false);
       setEditingItem(null);
       setNewItem({ name: "", category: "", stock: "", image: null });
+
     } catch (error) {
       console.error("Error saving inventory item:", error);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this item?")) return;
-    try {
-      await axios.delete(`http://localhost:5000/api/inventory/${id}`);
-      fetchInventory();
-    } catch (error) {
-      console.error("Error deleting inventory item:", error);
     }
   };
 
@@ -106,11 +149,23 @@ export default function InventoryManagement() {
         await axios.delete(`http://localhost:5000/api/inventory/${selectedItem._id}`);
         setInventory(inventory.filter((item) => item._id !== selectedItem._id));
         handleCloseDeleteModal();
+        showSuccessPopup("Item successfully deleted! ❌");
+
       } catch (error) {
         console.error("Error deleting item", error);
       }
     }
   };
+
+  // ✅ Pagination Logic
+  const lastIndex = currentPage * itemsPerPage;
+  const firstIndex = lastIndex - itemsPerPage;
+  const paginatedItems = inventory
+    .filter((item) => item.name.toLowerCase().includes(search.toLowerCase()))
+    .slice(firstIndex, lastIndex);
+
+  const totalPages = Math.ceil(inventory.length / itemsPerPage);
+
 
   const openEditModal = (item) => {
     setEditingItem(item);
@@ -119,155 +174,138 @@ export default function InventoryManagement() {
   };
 
   return (
-    <div className={`p-6 min-h-screen ${theme === "dark" ? "bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold mb-4 md:mb-0">Inventory Management</h1>
-        <button onClick={() => setIsModalOpen(true)} className="bg-green-500 px-4 py-2 rounded text-white">
-          + Add Item
-        </button>
-      </div>
+    <div className={`h-screen overflow-hidden flex flex-col items-center p-4 ${theme === "dark" ? "bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
 
+      {/* Success Popup Notification */}
+      {successMessage && (
+        <div className="fixed top-5 right-5 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg">
+          {successMessage}
+        </div>
+      )}
+
+      {/* 🔍 Search Bar */}
       <input
         type="text"
         placeholder="Search Inventory..."
-        className={`w-full p-2 rounded mb-4 ${theme === "dark" ? "bg-gray-700 text-white" : "bg-gray-200 text-gray-900"}`}
+        className={`w-full max-w-2xl p-2 rounded mb-4 text-center ${theme === "dark" ? "bg-gray-700 text-white" : "bg-gray-200 text-gray-900"}`}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
 
-      <div className={`p-4 rounded-lg overflow-x-auto ${theme === "dark" ? "bg-gray-800" : "bg-gray-100"}`}>
-        <table className="w-full text-left min-w-[600px]">
-          <thead>
-            <tr className={`border-b ${theme === "dark" ? "border-gray-600 text-gray-300" : "border-gray-300 text-gray-900"}`}>
-              <th className="p-3 text-center">Product</th>
-              <th className="p-3 text-center">Category</th>
-              <th className="p-3 text-center">Stock</th>
-              <th className="p-3 text-center">Image</th>
-              <th className="p-3 text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {inventory
-              .filter((item) => item.name.toLowerCase().includes(search.toLowerCase()))
-              .map((item) => (
-                <tr key={item._id} className={`border-b ${theme === "dark" ? "border-gray-700" : "border-gray-300"}`}>
-                  <td className="p-3 text-center">{item.name}</td>
-                  <td className="p-3 text-center">{item.category}</td>
-                  <td className="p-3 flex items-center justify-center space-x-2">
-                    <button
-                      className="bg-green-500 text-white px-3 py-1 rounded-md"
-                      onClick={() => handleStockChange(item._id, item.stock + 1)}
-                    >
-                      +
-                    </button>
-                    <span className={`px-3 py-1 rounded-md text-white ${item.stock === 0 ? "bg-red-500" : item.stock < 10 ? "bg-orange-500" : "bg-green-500"}`}>
-                      {item.stock}
-                    </span>
-                    <button
-                      className="bg-purple-500 text-white px-3 py-1 rounded-md"
-                      onClick={() => handleStockChange(item._id, item.stock - 1)}
-                      disabled={item.stock === 0}
-                    >
-                      -
-                    </button>
-                  </td>
-                  <td className="p-3 text-center">
-                    {item.image && <img src={`http://localhost:5000${item.image}`} alt={item.name} className="w-16 h-16 object-cover rounded-md mx-auto" />}
-                  </td>
-                  <td className="p-3 text-center">
-                    <button className="bg-blue-500 px-3 py-1 rounded mr-2" onClick={() => openEditModal(item)}>
-                      Edit
-                    </button>
-                    <button className="bg-red-500 px-3 py-1 rounded" onClick={() => handleOpenDeleteModal(item)}>
-                      Delete
-                    </button>
-                  </td>
+      {/* 📊 Inventory Table - Fixed Theme & Scrollbar Issue */}
+      <div className="w-full max-w-6xl border border-gray-600 rounded-lg">
+        <div className="overflow-x-auto">
+          <div className="overflow-y-auto max-h-[70vh]">
+            <table className={`min-w-full text-left border-collapse ${theme === "dark" ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-900"}`}>
+              <thead className={`${theme === "dark" ? "bg-gray-900 text-white" : "bg-gray-500 text-gray-900"} sticky top-0`}>
+                <tr>
+                  <th className="p-3 text-center w-[20%]">Product</th>
+                  <th className="p-3 text-center w-[15%]">Category</th>
+                  <th className="p-3 text-center w-[20%]">Stock</th>
+                  <th className="p-3 text-center w-[20%]">Image</th>
+                  <th className="p-3 text-center w-[25%]">Actions</th>
                 </tr>
-              ))}
-          </tbody>
-        </table>
+              </thead>
+              {/* 🔵 Table Body with a Different Color */}
+              <tbody className={`${theme === "dark" ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900"}`}>
+                {paginatedItems.map((item, index) => (
+                  <tr key={item._id} className={`border-b transition h-16 ${theme === "dark" ? (index % 2 === 0 ? "bg-gray-700" : "bg-gray-800") : (index % 2 === 0 ? "bg-gray-200" : "bg-white")} hover:${theme === "dark" ? "bg-gray-600" : "bg-gray-300"}`}>
+                    <td className="p-3 text-center truncate">{item.name}</td>
+                    <td className="p-3 text-center">{item.category}</td>
+
+                    {/* 📦 Stock Management */}
+                    <td className="p-3 flex items-center justify-center space-x-2">
+                      <button
+                        className="bg-black text-white px-3 py-1 rounded-md hover:bg-cyan-600 transition"
+                        onClick={() => handleStockChange(item._id, item.stock + 1)}
+                      >
+                        +     {/* // 🔼 Increase Stock */}
+                      </button>
+                      <span
+                        className={`px-3 py-1 rounded-md text-white ${item.stock === 0 ? "bg-red-600"      // 🔴 Out of Stock
+                          : item.stock < 5 ? "bg-orange-600"     // 🟠 Critical Low Stock
+                            : item.stock < 10 ? "bg-yellow-500"    // 🟡 Low Stock
+                              : item.stock < 20 ? "bg-blue-500"      // 🔵 Moderate Stock
+                                : "bg-green-500"}                      // 🟢 Sufficient Stock `}
+                      >
+                        {item.stock === 0 ? "Out of Stock" : item.stock}
+                      </span>
+
+
+                      <button
+                        className="bg-black text-white px-3 py-1 rounded-md hover:bg-cyan-600 transition"
+                        onClick={() => handleStockChange(item._id, item.stock - 1)}
+                        disabled={item.stock === 0}
+                      >
+                       -    {/* // 🔻 Decrease Stock */}
+                      </button>
+                    </td>
+
+                    <td className="p-3 text-center">
+                      {item.image && <img src={`http://localhost:5000${item.image}`} alt={item.name} className="w-16 h-16 object-cover rounded-md mx-auto" />}
+                    </td>
+
+                    <td className="p-3 text-center">
+                      <button className={`${theme === "dark" ? "bg-blue-600 px-3 py-1 rounded mr-2 text-white" : "bg-blue-600 px-3 py-1 rounded mr-2 text-white"}`}onClick={() => openEditModal(item)}>Edit</button>
+                      <button className={`${theme === "dark" ? "bg-red-600 px-3 py-1 rounded mr-2 text-white" : "bg-red-600 px-3 py-1 rounded mr-2 text-white"}`} onClick={() => handleOpenDeleteModal(item)}>Delete</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
+      {/* 📌 Pagination Controls */}
+      <div className="flex justify-between items-center mt-4 w-full max-w-4xl">
+        <button className="px-4 py-2 bg-gray-600 text-white rounded disabled:opacity-50" disabled={currentPage === 1} onClick={() => setCurrentPage(currentPage - 1)}>
+          Previous
+        </button>
+        <span>Page {currentPage} of {totalPages}</span>
+        <button className="px-4 py-2 bg-gray-600 text-white rounded disabled:opacity-50" disabled={currentPage === totalPages} onClick={() => setCurrentPage(currentPage + 1)}>
+          Next
+        </button>
+      </div>
+
+      {/* ➕ Floating Add Button */}
+      <button onClick={() => setIsModalOpen(true)} className="fixed bottom-6 right-6 bg-green-500 px-5 py-3 rounded-full text-white text-lg shadow-lg hover:scale-105 transition-transform">
+        + Add Item
+      </button>
+
+      {/* 📝 Add/Edit Modal */}
       {isModalOpen && (
-        <div
-          className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50"
-          onClick={handleCloseModal} // Closes modal when clicking outside
-        >
-          <div
-            className={`p-6 rounded-lg w-96 ${theme === "dark" ? "bg-gray-800" : "bg-white"}`}
-            onClick={(e) => e.stopPropagation()} // Prevents closing when clicking inside
-          >
-            <h2 className="text-lg font-semibold mb-4">
-              {editingItem ? "Edit Item" : "Add Inventory Item"}
-            </h2>
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50" onClick={handleCloseModal}>
+          <div className={`p-6 rounded-lg w-96 ${theme === "dark" ? "bg-gray-800 text-white" : "bg-white text-gray-900"}`} onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold mb-4">{editingItem ? "Edit Item" : "Add Inventory Item"}</h2>
             <form onSubmit={handleSubmit}>
-              <input
-                type="text"
-                name="name"
-                value={newItem.name}
-                onChange={handleInputChange}
-                placeholder="Product Name"
-                className="w-full p-2 rounded mb-2"
-              />
-              <input
-                type="text"
-                name="category"
-                value={newItem.category}
-                onChange={handleInputChange}
-                placeholder="Category"
-                className="w-full p-2 rounded mb-2"
-              />
-              <input
-                type="number"
-                name="stock"
-                value={newItem.stock}
-                onChange={handleInputChange}
-                placeholder="Stock"
-                className="w-full p-2 rounded mb-2"
-              />
-              <input
-                type="file"
-                name="image"
-                onChange={handleFileChange}
-                className="w-full p-2 rounded mb-2"
-              />
+              <input type="text" name="name" value={newItem.name} onChange={handleInputChange} placeholder="Product Name" className="w-full p-2 rounded mb-2" />
+              <input type="text" name="category" value={newItem.category} onChange={handleInputChange} placeholder="Category" className="w-full p-2 rounded mb-2" />
+              <input type="number" name="stock" value={newItem.stock} onChange={handleInputChange} placeholder="Stock" className="w-full p-2 rounded mb-2" />
+              <input type="file" name="image" onChange={handleFileChange} className="w-full p-2 rounded mb-2" />
               <div className="flex justify-end mt-4">
-                <button
-                  type="button"
-                  className="bg-gray-500 px-4 py-2 rounded text-white mr-2"
-                  onClick={handleCloseModal} // Cancel button closes modal
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="bg-blue-500 px-4 py-2 rounded text-white">
-                  {editingItem ? "Update" : "Save"}
-                </button>
+                <button type="button" className="bg-gray-500 px-4 py-2 rounded text-white mr-2" onClick={handleCloseModal}>Cancel</button>
+                <button type="submit" className="bg-blue-500 px-4 py-2 rounded text-white">{editingItem ? "Update" : "Save"}</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-       {/* Delete Confirmation Modal */}
-       {isDeleteModalOpen && (
+      {/* ❌ Delete Confirmation Modal */}
+      {isDeleteModalOpen && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-gray-800 p-6 rounded-lg w-96">
             <h2 className="text-lg font-semibold text-white mb-4">Confirm Deletion</h2>
             <p className="text-gray-300 mb-4">Are you sure you want to delete <strong>{selectedItem?.name}</strong>?</p>
             <div className="flex justify-end space-x-2">
-              <button className="bg-gray-500 px-4 py-2 rounded text-white" onClick={handleCloseDeleteModal}>
-                Cancel
-              </button>
-              <button className="bg-red-500 px-4 py-2 rounded text-white" onClick={handleConfirmDelete}>
-                Confirm Delete
-              </button>
+              <button className="bg-gray-500 px-4 py-2 rounded text-white" onClick={handleCloseDeleteModal}>Cancel</button>
+              <button className="bg-red-500 px-4 py-2 rounded text-white" onClick={handleConfirmDelete}>Confirm Delete</button>
             </div>
           </div>
         </div>
       )}
-
-
-
     </div>
   );
-}
+
+}  
