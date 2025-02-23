@@ -23,46 +23,6 @@ export default function InventoryManagement() {
     setTimeout(() => setSuccessMessage(""), 3000); // Auto-close after 3 seconds
   };
 
-  const handleAddItem = async (event) => {
-    event.preventDefault();
-    try {
-      await axios.post("http://localhost:5000/api/inventory", newItem);
-      fetchInventory();
-      showSuccessPopup("Item successfully added! ✅");
-      setIsModalOpen(false);
-      setNewItem({ name: "", category: "", stock: 0 });
-    } catch (error) {
-      console.error("Error adding item:", error);
-    }
-  };
-
-  const handleUpdateItem = async (event) => {
-    event.preventDefault();
-    try {
-      await axios.put(`http://localhost:5000/api/inventory/${editingItem._id}`, newItem);
-      fetchInventory();
-      showSuccessPopup("Item successfully updated! 🔄");
-      setIsModalOpen(false);
-      setEditingItem(null);
-      setNewItem({ name: "", category: "", stock: 0 });
-    } catch (error) {
-      console.error("Error updating item:", error);
-    }
-  };
-
-  const handleDeleteItem = async () => {
-    if (selectedItemToDelete) {
-      try {
-        await axios.delete(`http://localhost:5000/api/inventory/${selectedItemToDelete._id}`);
-        fetchInventory();
-        setIsDeleteModalOpen(false);
-        showSuccessPopup("Item successfully deleted! ❌");
-      } catch (error) {
-        console.error("Error deleting item:", error);
-      }
-    }
-  };
-
   useEffect(() => {
     fetchInventory();
   }, []);
