@@ -14,6 +14,10 @@ export const initializeSockets = (server) => {
     console.log(`🟢 Socket Connected: ${socket.id}`);
    
     // Handle Custom Events
+    socket.on("message", (data) => {
+        console.log(`Message Received: ${data}`);
+    });
+
     socket.on("custom-event", (data) => {
       console.log(`Custom Event Received: ${data}`);
     });
