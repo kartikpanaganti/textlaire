@@ -3,7 +3,7 @@ import axios from "axios";
 import { 
   FiUser, FiMail, FiPhone, FiBriefcase, FiDollarSign, 
   FiCalendar, FiMapPin, FiAlertTriangle, FiClock, 
-  FiFileText, FiX, FiUpload, FiTool, FiAward
+  FiFileText, FiX, FiUpload, FiTool, FiAward, FiShield
 } from "react-icons/fi";
 
 const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) => {
@@ -26,51 +26,31 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
     skills: "",
     workingHours: "",
     attendanceRecord: "",
+    safetyCertification: "",
     imageUrl: ""
   });
 
   const [image, setImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
 
-  // Initialize form data and image preview
   useEffect(() => {
     if (editingEmployee) {
-      // Convert relative URL to absolute if needed
       const getImageUrl = (url) => {
         if (!url) return null;
         return url.startsWith('http') ? url : `http://localhost:5000/${url}`;
       };
 
       setFormData({
-        name: editingEmployee.name || "",
-        email: editingEmployee.email || "",
-        phoneNumber: editingEmployee.phoneNumber || "",
-        department: editingEmployee.department || "",
-        position: editingEmployee.position || "",
-        employeeID: editingEmployee.employeeID || "",
-        salary: editingEmployee.salary || "",
-        shiftTiming: editingEmployee.shiftTiming || "",
+        ...editingEmployee,
         joiningDate: editingEmployee.joiningDate?.split('T')[0] || "",
-        experienceLevel: editingEmployee.experienceLevel || "",
-        workType: editingEmployee.workType || "",
-        supervisor: editingEmployee.supervisor || "",
-        address: editingEmployee.address || "",
-        emergencyContact: editingEmployee.emergencyContact || "",
-        previousExperience: editingEmployee.previousExperience || "",
-        skills: editingEmployee.skills || "",
-        workingHours: editingEmployee.workingHours || "",
-        attendanceRecord: editingEmployee.attendanceRecord || "",
-        imageUrl: editingEmployee.imageUrl || ""
       });
 
-      // Set image preview with proper URL
       const imageUrl = getImageUrl(editingEmployee.imageUrl);
       setImagePreview(imageUrl);
       setImage(null);
     }
   }, [editingEmployee]);
 
-  // Handle new image uploads
   useEffect(() => {
     if (image) {
       const reader = new FileReader();
@@ -87,12 +67,10 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
     e.preventDefault();
     const formPayload = new FormData();
     
-    // Append all form data
     Object.entries(formData).forEach(([key, value]) => {
       if (value) formPayload.append(key, value);
     });
     
-    // Handle image upload
     if (image) {
       formPayload.append("image", image);
     } else if (editingEmployee?.imageUrl) {
@@ -101,16 +79,12 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
 
     try {
       const baseURL = "http://localhost:5000/api/employees";
-      const url = editingEmployee 
-        ? `${baseURL}/${editingEmployee._id}`
-        : baseURL;
+      const url = editingEmployee ? `${baseURL}/${editingEmployee._id}` : baseURL;
       
-      const method = editingEmployee ? "put" : "post";
-      await axios[method](url, formPayload, {
+      await axios[editingEmployee ? "put" : "post"](url, formPayload, {
         headers: { "Content-Type": "multipart/form-data" }
       });
       
-      // Reset form
       fetchEmployees();
       setEditingEmployee(null);
       setImage(null);
@@ -129,7 +103,6 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6">
       <form onSubmit={handleSubmit} className="max-w-2xl mx-auto space-y-6">
-        {/* Header Section */}
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
             {editingEmployee ? "Update Profile" : "New Employee"}
@@ -139,7 +112,7 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
           </p>
         </div>
 
-        {/* Profile Image Upload */}
+        {/* Image Upload Section */}
         <div className="flex flex-col items-center gap-4 mb-8">
           <div className="relative group w-32 h-32 rounded-full border-4 border-dashed border-gray-300 dark:border-gray-700 hover:border-blue-500 transition-colors">
             <input 
@@ -149,8 +122,6 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
               className="absolute inset-0 opacity-0 cursor-pointer"
               id="image-upload"
             />
-            
-            {/* Image Preview */}
             {imagePreview ? (
               <img 
                 src={imagePreview} 
@@ -163,8 +134,6 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
               </div>
             )}
           </div>
-          
-          {/* File Info */}
           <div className="flex items-center gap-2">
             <label
               htmlFor="image-upload"
@@ -178,8 +147,6 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
                "No file chosen"}
             </span>
           </div>
-          
-          {/* Existing Image Notice */}
           {editingEmployee?.imageUrl && !image && (
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Existing image will be retained
@@ -226,10 +193,27 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
                 { name: "employeeID", icon: <FiAward />, placeholder: "Employee ID" },
-                { name: "department", icon: <FiBriefcase />, placeholder: "Department" },
-                { name: "position", icon: <FiUser />, placeholder: "Position", required: true },
+                { 
+                  name: "department", 
+                  icon: <FiBriefcase />, 
+                  type: "select", 
+                  placeholder: "Department",
+                  options: ["Weaving", "Dyeing", "Printing", "Quality Control", "Packaging", "Maintenance"]
+                },
+                { 
+                  name: "position", 
+                  icon: <FiUser />, 
+                  type: "select", 
+                  placeholder: "Position",
+                  options: ["Machine Operator", "Quality Inspector", "Supervisor", "Technician", "Helper"]
+                },
                 { name: "salary", icon: <FiDollarSign />, type: "number", placeholder: "Salary" },
-                { name: "workType", type: "select", placeholder: "Employment Type" },
+                { 
+                  name: "workType", 
+                  type: "select", 
+                  placeholder: "Employment Type",
+                  options: ["Full-Time", "Part-Time", "Contract", "Seasonal", "Trainee"]
+                },
                 { name: "joiningDate", icon: <FiCalendar />, type: "date", placeholder: "Joining Date" },
               ].map((field) => (
                 <div key={field.name} className="relative">
@@ -246,8 +230,9 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
                       className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none"
                     >
                       <option value="">{field.placeholder}</option>
-                      <option value="Permanent">Permanent</option>
-                      <option value="Contract">Contract</option>
+                      {field.options.map(option => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
                     </select>
                   ) : (
                     <input
@@ -267,15 +252,30 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
           {/* Work Schedule */}
           <div className="space-y-4">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
-              <span className="w-2 h-6 bg-purple-500 rounded-full"></span>
+              <span className="w-2 h-6 bg-yellow-500 rounded-full"></span>
               Work Schedule
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
-                { name: "shiftTiming", icon: <FiClock />, placeholder: "Shift Timing" },
-                { name: "workingHours", type: "number", placeholder: "Working Hours" },
-                { name: "supervisor", icon: <FiUser />, placeholder: "Supervisor" },
-                { name: "experienceLevel", icon: <FiTool />, placeholder: "Experience Level" },
+                { 
+                  name: "shiftTiming", 
+                  icon: <FiClock />, 
+                  type: "select", 
+                  placeholder: "Shift Timing",
+                  options: ["Morning (6AM-2PM)", "Afternoon (2PM-10PM)", "Night (10PM-6AM)"]
+                },
+                { 
+                  name: "experienceLevel", 
+                  icon: <FiTool />, 
+                  type: "select", 
+                  placeholder: "Experience Level",
+                  options: ["Entry-Level", "Intermediate", "Experienced", "Expert"]
+                },
+                { 
+                  name: "safetyCertification", 
+                  icon: <FiShield />, 
+                  placeholder: "Safety Certification ID" 
+                },
               ].map((field) => (
                 <div key={field.name} className="relative">
                   {field.icon && (
@@ -283,31 +283,61 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
                       {field.icon}
                     </div>
                   )}
-                  <input
-                    type={field.type || "text"}
-                    name={field.name}
-                    placeholder={field.placeholder}
-                    value={formData[field.name]}
-                    onChange={handleChange}
-                    className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
+                  {field.type === 'select' ? (
+                    <select
+                      name={field.name}
+                      value={formData[field.name]}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none"
+                    >
+                      <option value="">{field.placeholder}</option>
+                      {field.options.map(option => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      name={field.name}
+                      placeholder={field.placeholder}
+                      value={formData[field.name]}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  )}
                 </div>
               ))}
             </div>
           </div>
+
+          {/* Skills Section */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+              <span className="w-2 h-6 bg-purple-500 rounded-full"></span>
+              Skills
+            </h2>
+            <input
+              type="text"
+              name="skills"
+              placeholder="e.g., Loom Operation, Fabric Cutting, Quality Checking"
+              value={formData.skills}
+              onChange={handleChange}
+              className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex justify-between">
-          <button
-            type="button"
-            onClick={handleCancel}
+        <div className="flex justify-between mt-6">
+          <button 
+            type="button" 
+            onClick={handleCancel} 
             className="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400"
           >
             Cancel
           </button>
-          <button
-            type="submit"
+          <button 
+            type="submit" 
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             {editingEmployee ? "Update Employee" : "Add Employee"}
