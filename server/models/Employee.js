@@ -6,7 +6,16 @@ const EmployeeSchema = new mongoose.Schema({
   phoneNumber: String,
   department: String,
   position: String,
-  employeeID: String,
+  employeeID: {
+    type: String,
+    unique: true,
+    validate: {
+      validator: function(v) {
+        return /^\d+$/.test(v);
+      },
+      message: props => `${props.value} is not a valid numeric ID!`
+    }
+  },
   salary: Number,
   shiftTiming: String,
   joiningDate: Date,
@@ -19,7 +28,12 @@ const EmployeeSchema = new mongoose.Schema({
   skills: String,
   workingHours: Number,
   attendanceRecord: String,
-  image: String, // Path to the uploaded image
+  image:String,
+  status: {
+    type: String,
+    enum: ["Active", "Inactive", "On Leave", "Terminated"],
+    default: "Active"
+  }
 });
 
 export default mongoose.model("Employee", EmployeeSchema);

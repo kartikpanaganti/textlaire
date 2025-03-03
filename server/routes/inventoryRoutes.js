@@ -2,7 +2,7 @@ import express from "express";
 import multer from "multer";
 import fs from "fs";
 import path from "path";
-import Inventory from "../models/Inventory.js";
+import Inventory from "../models/raw-materials.js";
 
 const router = express.Router();
 

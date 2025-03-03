@@ -6,6 +6,33 @@ import path from "path";
 
 const router = express.Router();
 
+// Constants for validation
+const departments = ["Weaving", "Dyeing", "Printing", "Quality Control", "Packaging", "Maintenance"];
+const positions = ["Machine Operator", "Quality Inspector", "Supervisor", "Technician", "Helper"];
+const workTypes = ["Full-Time", "Part-Time", "Contract", "Seasonal", "Trainee"];
+const statuses = ["Active", "Inactive", "On Leave", "Terminated"];
+
+// Helper function to generate next available ID
+const getNextAvailableID = async () => {
+  try {
+    const employees = await Employee.find({}, 'employeeID');
+    const numericIDs = employees
+      .map(e => parseInt(e.employeeID, 10))
+      .filter(id => !isNaN(id))
+      .sort((a, b) => a - b);
+
+    let expectedID = 1;
+    for (const id of numericIDs) {
+      if (id > expectedID) break;
+      expectedID = id + 1;
+    }
+    return expectedID.toString();
+  } catch (error) {
+    console.error("Error generating ID:", error);
+    return "1001"; // Fallback starting ID
+  }
+};
+
 // Multer Config for Image Upload
 const storage = multer.diskStorage({
   destination: "uploads/employees/",
@@ -14,6 +41,25 @@ const storage = multer.diskStorage({
   },
 });
 const upload = multer({ storage });
+
+// Validation middleware
+const validateEmployee = (req, res, next) => {
+  const { department, position, workType, status } = req.body;
+  
+  if (department && !departments.includes(department)) {
+    return res.status(400).json({ message: "Invalid department" });
+  }
+  if (position && !positions.includes(position)) {
+    return res.status(400).json({ message: "Invalid position" });
+  }
+  if (workType && !workTypes.includes(workType)) {
+    return res.status(400).json({ message: "Invalid work type" });
+  }
+  if (status && !statuses.includes(status)) {
+    return res.status(400).json({ message: "Invalid status" });
+  }
+  next();
+};
 
 // GET all employees
 router.get("/", async (req, res) => {
@@ -26,134 +72,88 @@ router.get("/", async (req, res) => {
 });
 
 // POST: Create Employee
-router.post("/", upload.single("image"), async (req, res) => {
+router.post("/", upload.single("image"), validateEmployee, async (req, res) => {
   try {
-    const {
-      name,
-      email,
-      phoneNumber,
-      department,
-      position,
-      employeeID,
-      salary,
-      shiftTiming,
-      joiningDate,
-      experienceLevel,
-      workType,
-      supervisor,
-      address,
-      emergencyContact,
-      previousExperience,
-      skills,
-      workingHours,
-      attendanceRecord,
-    } = req.body;
+    let { employeeID, ...rest } = req.body;
+    
+    // Auto-generate ID if not provided or empty
+    if (!employeeID || employeeID.trim() === "") {
+      employeeID = await getNextAvailableID();
+    }
 
-    const image = req.file ? `/uploads/employees/${req.file.filename}` : "";
+    const image = req.file ? `/uploads/employees/${req.file.filename}` : undefined;
 
     const newEmployee = new Employee({
-      name,
-      email,
-      phoneNumber,
-      department,
-      position,
       employeeID,
-      salary,
-      shiftTiming,
-      joiningDate,
-      experienceLevel,
-      workType,
-      supervisor,
-      address,
-      emergencyContact,
-      previousExperience,
-      skills,
-      workingHours,
-      attendanceRecord,
+      ...rest,
       image,
+      status: rest.status || "Active"
     });
 
     await newEmployee.save();
     res.status(201).json(newEmployee);
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ message: "Employee ID must be unique" });
+    }
     res.status(500).json({ message: err.message });
   }
 });
 
-
-
-// PUT: Update Employee (with image update)
-router.put("/:id", upload.single("image"), async (req, res) => {
+// PUT: Update Employee
+router.put("/:id", upload.single("image"), validateEmployee, async (req, res) => {
   try {
     const { 
       name, email, phoneNumber, department, position, employeeID, salary,
-      shiftTiming, joiningDate, experienceLevel, workType, supervisor, address,
-      emergencyContact, previousExperience, skills, workingHours, attendanceRecord
+      shiftTiming, joiningDate, experienceLevel, workType, status,
+      supervisor, address, emergencyContact, previousExperience,
+      skills, workingHours, attendanceRecord
     } = req.body;
 
     const employee = await Employee.findById(req.params.id);
+    if (!employee) return res.status(404).json({ message: "Employee not found" });
 
-    if (!employee) {
-      return res.status(404).json({ message: "Employee not found" });
-    }
-
-    // If a new image is uploaded, delete the old one
-    if (req.file && employee.image) {
-      const oldImagePath = path.join("uploads/employees", path.basename(employee.image));
-      if (fs.existsSync(oldImagePath)) {
-        fs.unlinkSync(oldImagePath);
+    // Handle image update
+    if (req.file) {
+      if (employee.image && !employee.image.includes("default-profile.png")) {
+        const oldImagePath = path.join("uploads/employees", path.basename(employee.image));
+        if (fs.existsSync(oldImagePath)) fs.unlinkSync(oldImagePath);
       }
+      employee.image = `/uploads/employees/${req.file.filename}`;
     }
 
     // Update fields
-    employee.name = name;
-    employee.email = email;
-    employee.phoneNumber = phoneNumber;
-    employee.department = department;
-    employee.position = position;
-    employee.employeeID = employeeID;
-    employee.salary = salary;
-    employee.shiftTiming = shiftTiming;
-    employee.joiningDate = joiningDate;
-    employee.experienceLevel = experienceLevel;
-    employee.workType = workType;
-    employee.supervisor = supervisor;
-    employee.address = address;
-    employee.emergencyContact = emergencyContact;
-    employee.previousExperience = previousExperience;
-    employee.skills = skills;
-    employee.workingHours = workingHours;
-    employee.attendanceRecord = attendanceRecord;
-    
-    // If a new image is uploaded, update it
-    if (req.file) {
-      employee.image = `/uploads/employees/${req.file.filename}`;
-    }
+    const fields = {
+      name, email, phoneNumber, department, position, employeeID,
+      salary, shiftTiming, joiningDate, experienceLevel, workType,
+      status, supervisor, address, emergencyContact, previousExperience,
+      skills, workingHours, attendanceRecord
+    };
+
+    Object.entries(fields).forEach(([key, value]) => {
+      if (value !== undefined) employee[key] = value;
+    });
 
     await employee.save();
     res.json(employee);
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ message: "Employee ID must be unique" });
+    }
     console.error("Server Error:", err);
     res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
-
-// DELETE: Delete Employee (with image removal)
+// DELETE: Delete Employee
 router.delete("/:id", async (req, res) => {
   try {
     const employee = await Employee.findByIdAndDelete(req.params.id);
+    if (!employee) return res.status(404).json({ message: "Employee not found" });
 
-    if (!employee) {
-      return res.status(404).json({ message: "Employee not found" });
-    }
-
-    // Delete image from local storage
-    if (employee.image) {
+    if (employee.image && !employee.image.includes("default-profile.png")) {
       const imagePath = path.join("uploads/employees", path.basename(employee.image));
-      if (fs.existsSync(imagePath)) {
-        fs.unlinkSync(imagePath);
-      }
+      if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
     }
 
     res.json({ message: "Employee deleted" });
@@ -162,4 +162,4 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-export default router;
+export default router;  
