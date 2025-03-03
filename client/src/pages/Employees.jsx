@@ -105,20 +105,58 @@ const Employees = () => {
   return (
     <div className="p-6 h-screen overflow-hidden relative">
       {/* Search Bar and Add Button */}
-      <div className="flex gap-4 mb-4">
+      <div className="flex flex-col md:flex-row gap-4 mb-6">
+  {/* Search Container with Filter Button */}
+  <div className="flex-1 relative group">
+    <div className="flex gap-2">
+      <div className="relative flex-1">
         <input
           type="text"
-          placeholder="Search employees..."
+          placeholder="Find team members..."
           onChange={(e) => setSearch(e.target.value)}
-          className="p-2 border w-full rounded bg-gray-100 dark:bg-gray-700 dark:text-white dark:border-gray-600"
+          className="w-full pl-6 pr-12 py-4 text-lg rounded-3xl border-2 border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-2xl shadow-black/5 hover:shadow-black/10 focus:shadow-none transition-all duration-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 dark:focus:ring-purple-900/50 outline-none"
         />
-        <button
-          onClick={() => setIsFormModalOpen(true)}
-          className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 dark:bg-green-700"
-        >
-          Add Employee
-        </button>
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex gap-2">
+          <button className="p-2 rounded-full bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+          </button>
+        </div>
       </div>
+    </div>
+    <div className="absolute -bottom-2 left-0 right-0 h-2 bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 group-focus-within:opacity-100 transition-opacity duration-300 rounded-full shadow-lg" />
+  </div>
+
+  {/* Add Button with 3D Effect */}
+  <button
+    onClick={() => setIsFormModalOpen(true)}
+    className="px-8 py-4 bg-gradient-to-b from-indigo-600 to-indigo-700 dark:from-indigo-700 dark:to-indigo-800 text-white font-bold rounded-2xl shadow-2xl shadow-indigo-500/30 dark:shadow-indigo-900/40 hover:shadow-indigo-500/40 dark:hover:shadow-indigo-900/50 hover:translate-y-[-2px] active:translate-y-0 transition-all duration-300 group/button"
+  >
+    <div className="flex items-center gap-3">
+      <span className="relative">
+        <span className="inline-block transition-transform group-hover/button:translate-y-[-1px]">Add Member</span>
+        <span className="absolute -bottom-1 left-0 w-full h-1 bg-white/10 rounded-full scale-x-0 group-hover/button:scale-x-100 transition-transform duration-300 origin-left" />
+      </span>
+      <div className="relative w-6 h-6">
+        <div className="absolute inset-0 bg-white/20 rounded-full blur-sm" />
+        <svg 
+          className="w-6 h-6 transform transition-transform group-hover/button:rotate-90"
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            strokeWidth={2} 
+            d="M12 6v6m0 0v6m0-6h6m-6 0H6" 
+          />
+        </svg>
+      </div>
+    </div>
+  </button>
+</div>
 
       {/* Employee List */}
       <div className="overflow-y-auto h-[calc(100vh-160px)] p-2 rounded shadow-md">
