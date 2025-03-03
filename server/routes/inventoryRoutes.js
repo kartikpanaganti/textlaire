@@ -8,7 +8,7 @@ const router = express.Router();
 
 // Multer Config for Image Upload
 const storage = multer.diskStorage({
-  destination: "uploads/product/", // Ensure this folder exists
+  destination: "uploads/raw-materials/", // Ensure this folder exists
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname));
   },
@@ -34,7 +34,7 @@ router.post("/", upload.single("image"), async (req, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const imagePath = req.file ? `/uploads/product/${req.file.filename}` : "";
+    const imagePath = req.file ? `/uploads/raw-materials/${req.file.filename}` : "";
 
     const newItem = new Inventory({
       name,
@@ -68,7 +68,7 @@ router.put("/:id", upload.single("image"), async (req, res) => {
           fs.unlinkSync(oldImagePath);
         }
       }
-      item.image = `/uploads/product/${req.file.filename}`;
+      item.image = `/uploads/raw-materials/${req.file.filename}`;
     }
 
     // Update fields

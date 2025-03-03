@@ -8,7 +8,7 @@ const router = express.Router();
 
 // Multer Config for Image Upload
 const storage = multer.diskStorage({
-  destination: "uploads/",
+  destination: "uploads/employees/",
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname));
   },
@@ -49,7 +49,7 @@ router.post("/", upload.single("image"), async (req, res) => {
       attendanceRecord,
     } = req.body;
 
-    const image = req.file ? `/uploads/${req.file.filename}` : "";
+    const image = req.file ? `/uploads/employees/${req.file.filename}` : "";
 
     const newEmployee = new Employee({
       name,
@@ -99,7 +99,7 @@ router.put("/:id", upload.single("image"), async (req, res) => {
 
     // If a new image is uploaded, delete the old one
     if (req.file && employee.image) {
-      const oldImagePath = path.join("uploads", path.basename(employee.image));
+      const oldImagePath = path.join("uploads/employees", path.basename(employee.image));
       if (fs.existsSync(oldImagePath)) {
         fs.unlinkSync(oldImagePath);
       }
@@ -127,7 +127,7 @@ router.put("/:id", upload.single("image"), async (req, res) => {
     
     // If a new image is uploaded, update it
     if (req.file) {
-      employee.image = `/uploads/${req.file.filename}`;
+      employee.image = `/uploads/employees/${req.file.filename}`;
     }
 
     await employee.save();
@@ -150,7 +150,7 @@ router.delete("/:id", async (req, res) => {
 
     // Delete image from local storage
     if (employee.image) {
-      const imagePath = path.join("uploads", path.basename(employee.image));
+      const imagePath = path.join("uploads/employees", path.basename(employee.image));
       if (fs.existsSync(imagePath)) {
         fs.unlinkSync(imagePath);
       }
