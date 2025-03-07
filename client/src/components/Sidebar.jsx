@@ -5,6 +5,8 @@ import {
   FaBars, FaTachometerAlt, FaIndustry, FaClipboardList, 
   FaTruck, FaCogs 
 } from "react-icons/fa";
+import { IoPersonCircleOutline } from "react-icons/io5";
+
 
 function Sidebar() {
   const navigate = useNavigate();
@@ -54,11 +56,12 @@ function Sidebar() {
             onClick={() => navigate("/inventory")} 
           />
           <SidebarItem 
-            icon={<FaIndustry />} 
-            label="Production" 
+            icon={<IoPersonCircleOutline />
+            } 
+            label="Attendace" 
             isCollapsed={isCollapsed} 
-            isActive={location.pathname === "/production"}
-            onClick={() => navigate("/production")} 
+            isActive={location.pathname === "/attendance"}
+            onClick={() => navigate("/attendance")} 
           />
           <SidebarItem 
             icon={<FaClipboardList />} 
