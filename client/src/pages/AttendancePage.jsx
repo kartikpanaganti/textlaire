@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { 
-  FaSpinner, FaEdit, FaTrash, FaPlus, FaSearch, 
+import {
+  FaSpinner, FaEdit, FaTrash, FaPlus, FaSearch,
   FaCheckCircle, FaTimesCircle, FaCalendarAlt,
-  FaFileExport, FaMapMarkerAlt 
+  FaFileExport, FaMapMarkerAlt
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -23,6 +23,7 @@ const AttendancePage = () => {
   const [showModal, setShowModal] = useState(false);
   const [editRecord, setEditRecord] = useState(null);
 
+
   useEffect(() => {
     fetchData();
   }, [selectedDate]);
@@ -34,12 +35,12 @@ const AttendancePage = () => {
         axios.get(`http://localhost:5000/api/attendance`),
         axios.get("http://localhost:5000/api/employees")
       ]);
-      
+
       // Filter attendance records for selected date
-      const filteredAttendance = attendanceRes.data.filter(record => 
+      const filteredAttendance = attendanceRes.data.filter(record =>
         record.date.substring(0, 10) === selectedDate
       );
-      
+
       setAttendance(filteredAttendance);
       setEmployees(employeesRes.data);
     } catch (error) {
@@ -47,9 +48,24 @@ const AttendancePage = () => {
     }
     setLoading(false);
   };
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateEmployee, setDuplicateEmployee] = useState(null);
 
   const handleSubmit = async (formData) => {
     try {
+      // Check for existing attendance on same date for same employee
+      const existingAttendance = attendance.find(record =>
+        record.employeeId._id === formData.employeeId &&
+        record.date.substring(0, 10) === formData.date
+      );
+
+      if (existingAttendance && !editRecord) {
+        const employee = employees.find(emp => emp._id === formData.employeeId);
+        setDuplicateEmployee(employee);
+        setShowDuplicateModal(true);
+        return;
+      }
+
       const attendanceData = {
         employeeId: formData.employeeId,
         status: formData.status,
@@ -63,7 +79,7 @@ const AttendancePage = () => {
         notes: formData.notes,
         location: formData.location
       };
-  
+
       let response;
       if (editRecord) {
         response = await axios.put(`http://localhost:5000/api/attendance/${editRecord._id}`, attendanceData);
@@ -72,25 +88,36 @@ const AttendancePage = () => {
         response = await axios.post("http://localhost:5000/api/attendance", attendanceData);
         toast.success("Attendance added successfully");
       }
-  
-      // Update local state with the populated response
-      const updatedRecord = response.data;
-      if (editRecord) {
-        setAttendance(prev => prev.map(record => 
-          record._id === updatedRecord._id ? {...updatedRecord, employeeId: employees.find(e => e._id === updatedRecord.employeeId)} : record
-        ));
-      } else {
-        setAttendance(prev => [...prev, {...updatedRecord, employeeId: employees.find(e => e._id === updatedRecord.employeeId)}]);
-      }
-  
+
+      fetchData();
       setShowModal(false);
       setEditRecord(null);
     } catch (error) {
       toast.error(error.response?.data?.message || "Operation failed");
-      console.log("Error data:", error.response?.data);
     }
   };
 
+  {
+    showDuplicateModal && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <h2 className="text-xl font-bold text-red-600 mb-4">Duplicate Attendance</h2>
+          <p className="mb-4">
+            {duplicateEmployee?.name} already has an attendance record for today.
+            Please edit the existing record instead.
+          </p>
+          <div className="flex justify-end">
+            <button
+              onClick={() => setShowDuplicateModal(false)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Okay, Got it
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
   const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this record?")) {
       try {
@@ -109,8 +136,10 @@ const AttendancePage = () => {
   };
 
   const filteredAttendance = attendance.filter(record =>
+    record.employeeId && record.employeeId.name &&
     record.employeeId.name.toLowerCase().includes(search.toLowerCase())
   );
+
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-gray-50 to-gray-100 p-4">
@@ -186,11 +215,11 @@ const AttendancePage = () => {
                     <td className="px-6 py-4 whitespace-nowrap">{record.employeeId.name}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                        ${record.status === "Present" ? "bg-green-100 text-green-800" : 
-                          record.status === "Absent" ? "bg-red-100 text-red-800" : 
-                          record.status === "Late" ? "bg-yellow-100 text-yellow-800" :
-                          record.status === "Half Day" ? "bg-orange-100 text-orange-800" :
-                          "bg-blue-100 text-blue-800"}`}>
+                        ${record.status === "Present" ? "bg-green-100 text-green-800" :
+                          record.status === "Absent" ? "bg-red-100 text-red-800" :
+                            record.status === "Late" ? "bg-yellow-100 text-yellow-800" :
+                              record.status === "Half Day" ? "bg-orange-100 text-orange-800" :
+                                "bg-blue-100 text-blue-800"}`}>
                         {record.status}
                       </span>
                     </td>
@@ -221,7 +250,41 @@ const AttendancePage = () => {
           </div>
         )}
 
-        {/* Modal */}
+        {/* Duplicate Attendance Modal */}
+        {showDuplicateModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"> {/* Increased z-index */}
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-xl font-bold text-red-600 mb-4">Duplicate Attendance</h2>
+              <p className="mb-4">
+                {duplicateEmployee?.name} already has an attendance record for {format(new Date(selectedDate), 'MMM dd, yyyy')}.
+                Please edit the existing record instead.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowDuplicateModal(false);
+                    setEditRecord(null);
+                  }}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowDuplicateModal(false);
+                    setEditRecord(existingAttendance);
+                    setShowModal(true);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Edit Existing Record
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add/Edit Attendance Modal */}
         {showModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <AttendanceForm
