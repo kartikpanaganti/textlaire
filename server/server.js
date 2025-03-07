@@ -7,6 +7,7 @@ import dotenv from "dotenv";
 import employeesRoutes from "./routes/employees.js";
 import authRoutes from "./routes/auth.js";
 import inventoryRoutes from "./routes/inventoryRoutes.js"; // Import Inventory Routes
+import AttendanceRoutes from "./routes/attendanceRoutes.js"; // Import Attendance Routes
 import path from "path";
 
 dotenv.config();
@@ -21,6 +22,7 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads"))); // Ser
 app.use("/api/employees", employeesRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/inventory", inventoryRoutes); // Add Inventory Routes
+app.use("/api/attendance", AttendanceRoutes); // Add Attendance Routes
 
 // Database Connection
 mongoose
