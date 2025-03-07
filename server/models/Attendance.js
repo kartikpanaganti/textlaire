@@ -8,12 +8,17 @@ const attendanceSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ["Present", "Absent", "On Leave", "Half Day", "Late"],
+    enum: ["Present", "Absent", "Late", "On Leave"],
     default: "Present"
   },
   checkIn: String,
   checkOut: String,
-  date: Date,
+  date: {
+    type: String,
+    set: function(date) {
+      return new Date(date).toISOString().split('T')[0];
+    }
+  },
   shift: String,
   breakTime: String,
   overtime: Number,
@@ -24,5 +29,8 @@ const attendanceSchema = new mongoose.Schema({
     lng: Number
   }
 });
+
+// Add compound unique index for employeeId and date
+attendanceSchema.index({ employeeId: 1, date: 1 }, { unique: true });
 
 export default mongoose.model("Attendance", attendanceSchema);

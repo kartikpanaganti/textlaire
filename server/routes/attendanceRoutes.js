@@ -28,6 +28,45 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+router.post('/bulk', async (req, res) => {
+  try {
+    const attendanceRecords = req.body;
+    const savedRecords = await Promise.all(
+      attendanceRecords.map(async (record) => {
+        const attendance = new Attendance({
+          employeeId: record.employeeId,
+          status: record.status,
+          checkIn: record.checkIn,
+          checkOut: record.checkOut,
+          date: record.date,
+          shift: record.shift,
+          workFromHome: record.workFromHome
+        });
+        return await attendance.save();
+      })
+    );
+    
+    res.status(201).json({
+      success: true,
+      message: 'Bulk attendance recorded successfully',
+      data: savedRecords
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      res.status(400).json({
+        success: false,
+        message: 'Attendance already exists for some employees on this date'
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Error recording bulk attendance',
+        error: error.message
+      });
+    }
+  }
+});
+
 // Create attendance record
 router.post("/", async (req, res) => {
   try {

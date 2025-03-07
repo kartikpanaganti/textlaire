@@ -3,36 +3,18 @@ import { FaTimes } from 'react-icons/fa';
 
 const AttendanceForm = ({ onSubmit, onClose, editRecord, employees }) => {
   const [formData, setFormData] = useState({
-    employeeId: '',
-    status: 'Present',
-    checkIn: '',
-    checkOut: '',
-    date: new Date().toISOString().split('T')[0],
-    shift: 'Day',
-    breakTime: '',
-    overtime: 0,
-    workFromHome: false,
-    notes: '',
-    location: { lat: 0, lng: 0 }
+    employeeId: editRecord?.employeeId._id || '',
+    status: editRecord?.status || 'Present',
+    checkIn: editRecord?.checkIn || '',
+    checkOut: editRecord?.checkOut || '',
+    date: editRecord?.date || new Date().toLocaleDateString('en-CA'),
+    shift: editRecord?.shift || '',
+    breakTime: editRecord?.breakTime || '',
+    overtime: editRecord?.overtime || 0,
+    workFromHome: editRecord?.workFromHome || false,
+    notes: editRecord?.notes || '',
+    location: editRecord?.location || { lat: 0, lng: 0 }
   });
-
-  useEffect(() => {
-    if (editRecord) {
-      setFormData({
-        employeeId: editRecord.employeeId._id,
-        status: editRecord.status,
-        checkIn: editRecord.checkIn,
-        checkOut: editRecord.checkOut,
-        date: editRecord.date.substring(0, 10),
-        shift: editRecord.shift,
-        breakTime: editRecord.breakTime,
-        overtime: editRecord.overtime,
-        workFromHome: editRecord.workFromHome,
-        notes: editRecord.notes,
-        location: editRecord.location
-      });
-    }
-  }, [editRecord]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -77,21 +59,20 @@ const AttendanceForm = ({ onSubmit, onClose, editRecord, employees }) => {
               ))}
             </select>
           </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Status</label>
-              <select
-                name="status"
-                value={formData.status}
-                onChange={handleChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              >
-                <option value="Present">Present</option>
-                <option value="Absent">Absent</option>
-                <option value="Late">Late</option>
-                <option value="Half Day">Half Day</option>
-                <option value="On Leave">On Leave</option>
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Status</label>
+            <select
+              name="status"
+              value={formData.status}
+              onChange={handleChange}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="Present">Present</option>
+              <option value="Absent">Absent</option>
+              <option value="Late">Late</option>
+              <option value="On Leave">On Leave</option>
+            </select>
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Check In</label>
             <input
