@@ -8,7 +8,7 @@ import Employees from "./pages/Employees"; // Employees Page
 import { ThemeContext } from "./context/ThemeProvider"; // Theme Context
 import InventoryManagement from "./pages/InventoryManagement";
 import AttendancePage from "./pages/AttendancePage";
-
+import ImageGeneration from "./pages/ImageGeneration";
 function App() {
   return (
     
@@ -20,6 +20,7 @@ function App() {
         <Route path="/employees" element={<ProtectedRoute component={<Employees />} />} />
         <Route path="/inventory" element={<ProtectedRoute component={<InventoryManagement />} />} />
         <Route path="/attendance" element={<ProtectedRoute component={<AttendancePage />} />} />
+        <Route path="/image-generation" element={<ProtectedRoute component={<ImageGeneration />} />} />
       </Routes>
     </Router>
   );

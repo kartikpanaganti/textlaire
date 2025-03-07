@@ -6,6 +6,7 @@ import {
   FaTruck, FaCogs 
 } from "react-icons/fa";
 import { IoPersonCircleOutline } from "react-icons/io5";
+import { IoImagesOutline} from "react-icons/io5";
 
 
 function Sidebar() {
@@ -64,11 +65,11 @@ function Sidebar() {
             onClick={() => navigate("/attendance")} 
           />
           <SidebarItem 
-            icon={<FaClipboardList />} 
-            label="Orders" 
+            icon={<IoImagesOutline />} 
+            label="Image Genration" 
             isCollapsed={isCollapsed} 
-            isActive={location.pathname === "/orders"}
-            onClick={() => navigate("/orders")} 
+            isActive={location.pathname === "/image-generation"}
+            onClick={() => navigate("/image-generation")} 
           />
           <SidebarItem 
             icon={<FaChartPie />} 
