@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
+import { ThemeContext } from "../context/ThemeProvider";
 
 function Login() {
   const navigate = useNavigate();
+  const { theme } = useContext(ThemeContext);
   const [credentials, setCredentials] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
 
@@ -32,35 +34,35 @@ function Login() {
       </div>
 
       {/* Glassmorphic Login Box */}
-      <div className="relative flex h-screen justify-center items-center z-10">
-        <div className="backdrop-blur-md bg-white/10 p-8 rounded-lg shadow-lg border border-white/20 w-96 text-white">
-          <h2 className="text-3xl font-bold mb-4 text-center text-cyan-300">Welcome</h2>
-          <p className="text-gray-300 text-center mb-6">Sign in to explore system</p>
+      <div className="relative flex h-screen justify-center items-center z-10 px-4">
+        <div className="backdrop-blur-md bg-white/10 p-6 sm:p-8 rounded-lg shadow-lg border border-white/20 w-full max-w-md text-white">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-2 sm:mb-4 text-center text-cyan-300">Welcome</h2>
+          <p className="text-gray-300 text-center mb-4 sm:mb-6">Sign in to explore system</p>
 
           {error && <p className="text-red-500 text-sm text-center mb-3">{error}</p>}
 
-          <form onSubmit={handleLogin}>
-            <div className="mb-4">
-              <label className="block text-gray-300">Username</label>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-gray-300 mb-1">Username</label>
               <input
                 type="text"
                 name="username"
                 value={credentials.username}
                 onChange={handleChange}
-                className="w-full p-3 border border-gray-600 bg-gray-900 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400 transition-all duration-300"
+                className="w-full p-3 border border-gray-600 bg-gray-900/80 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400 transition-all duration-300"
                 required
-                autocomplete="off"
+                autoComplete="off"
               />
             </div>
 
-            <div className="mb-6">
-              <label className="block text-gray-300">Password</label>
+            <div>
+              <label className="block text-gray-300 mb-1">Password</label>
               <input
                 type="password"
                 name="password"
                 value={credentials.password}
                 onChange={handleChange}
-                className="w-full p-3 border border-gray-600 bg-gray-900 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400 transition-all duration-300"
+                className="w-full p-3 border border-gray-600 bg-gray-900/80 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400 transition-all duration-300"
                 required
               />
             </div>
@@ -68,7 +70,7 @@ function Login() {
             <button
               type="submit"
               className="w-full bg-cyan-500 text-white font-bold py-3 rounded-lg shadow-lg 
-              transform transition-transform duration-300 hover:scale-105 hover:bg-cyan-600"
+              transform transition-transform duration-300 hover:scale-105 hover:bg-cyan-600 mt-4"
             >
               Login
             </button>

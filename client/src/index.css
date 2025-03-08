@@ -2,6 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Base styles for light and dark mode */
+@layer base {
+  body {
+    @apply bg-light-background dark:bg-dark-background text-light-text-primary dark:text-dark-text-primary transition-colors duration-200;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-light-text-primary dark:text-dark-text-primary;
+  }
+
+  p, span, div {
+    @apply text-light-text-primary dark:text-dark-text-primary;
+  }
+
+  a {
+    @apply text-light-primary dark:text-dark-primary hover:text-blue-700 dark:hover:text-blue-400 transition-colors;
+  }
+
+  button {
+    @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50;
+  }
+
+  input, textarea, select {
+    @apply bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-md 
+    text-light-text-primary dark:text-dark-text-primary focus:border-blue-500 dark:focus:border-blue-400
+    focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-opacity-50;
+  }
+
+  label {
+    @apply text-light-text-secondary dark:text-dark-text-secondary;
+  }
+
+  table {
+    @apply border-collapse border border-light-border dark:border-dark-border;
+  }
+
+  th {
+    @apply bg-gray-100 dark:bg-gray-800 text-light-text-primary dark:text-dark-text-primary p-2 border border-light-border dark:border-dark-border;
+  }
+
+  td {
+    @apply p-2 border border-light-border dark:border-dark-border text-light-text-primary dark:text-dark-text-primary;
+  }
+}
+
 /* Global Scrollbar Styles */
 * {
   scrollbar-width: thin; /* For Firefox */
@@ -41,35 +86,21 @@
   background-color: #333;
 }
 
-
 /* Customize autofill background */
 input:-webkit-autofill,
 textarea:-webkit-autofill {
-  background-color: #2d2d2d !important; /* Dark background to match your dark theme */
-  color: white !important; /* Ensure the text is visible */
-  transition: background-color 5000s ease-in-out 0s; /* Prevent background color change */
+  -webkit-text-fill-color: #111827 !important;
+  transition: background-color 5000s ease-in-out 0s;
+  box-shadow: 0 0 0px 1000px white inset !important;
 }
 
-/* Alternatively, for more specificity */
-input:-webkit-autofill,
-textarea:-webkit-autofill {
-  background-color: #1f2937 !important; /* Match dark background */
-  color: white !important;
+.dark input:-webkit-autofill,
+.dark textarea:-webkit-autofill {
+  -webkit-text-fill-color: #F9FAFB !important;
+  box-shadow: 0 0 0px 1000px #1F2937 inset !important;
 }
 
-/* Optional: Adjust input and textarea styles on autofill */
-input,
-textarea {
-  background-color: #2d2d2d; /* Dark background */
-  color: white; /* Ensure text is visible */
-}
-
-input:-webkit-autofill,
-textarea:-webkit-autofill {
-  background-color: #2d2d2d !important; /* Fix autofill background */
-  color: white !important; /* Ensure text remains white */
-}
-/* Add to your main CSS file */
+/* Modal animations */
 .modal-enter {
   opacity: 0;
   transform: scale(0.9);
@@ -77,16 +108,56 @@ textarea:-webkit-autofill {
 
 .modal-enter-active {
   opacity: 1;
-  transform: translateX(0);
+  transform: scale(1);
   transition: opacity 300ms, transform 300ms;
 }
 
 .modal-exit {
   opacity: 1;
+  transform: scale(1);
 }
 
 .modal-exit-active {
   opacity: 0;
   transform: scale(0.9);
   transition: opacity 300ms, transform 300ms;
+}
+
+/* Add animation for slide-in alerts */
+@keyframes slide-in {
+  0% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out forwards;
+}
+
+/* Responsive utilities */
+@layer utilities {
+  .responsive-container {
+    @apply w-full px-4 sm:px-6 md:px-8 lg:px-10 mx-auto;
+  }
+  
+  .responsive-grid {
+    @apply grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4;
+  }
+  
+  .responsive-flex {
+    @apply flex flex-col sm:flex-row;
+  }
+  
+  .responsive-text {
+    @apply text-sm sm:text-base md:text-lg;
+  }
+  
+  .responsive-heading {
+    @apply text-xl sm:text-2xl md:text-3xl lg:text-4xl;
+  }
 }

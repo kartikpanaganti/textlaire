@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import EmployeeForm from "../components/EmployeeForm";
 import Modal from "../components/Modal";
+import DeleteConfirmationModal from "../components/DeleteConfirmationModal";
 
 const Employees = () => {
   const [employees, setEmployees] = useState([]);
@@ -224,8 +225,7 @@ const Employees = () => {
         {/* Add Button */}
         <button
           onClick={() => setIsFormModalOpen(true)}
-          className="px-8 py-4 bg-gradient-to-b from-indigo-600 to-indigo-700 dark:from-indigo-700 dark:to-indigo-800 text-white font-bold rounded-2xl shadow-2xl shadow-indigo-500/30 dark:shadow-indigo-900/40 hover:shadow-indigo-500/40 dark:hover:shadow-indigo-900/50 hover:translate-y-[-2px] active:translate-y-0 transition-all duration ```jsx
--300 group/button"
+          className="px-8 py-4 bg-gradient-to-b from-indigo-600 to-indigo-700 dark:from-indigo-700 dark:to-indigo-800 text-white font-bold rounded-2xl shadow-2xl shadow-indigo-500/30 dark:shadow-indigo-900/40 hover:shadow-indigo-500/40 dark:hover:shadow-indigo-900/50 hover:translate-y-[-2px] active:translate-y-0 transition-all duration-300 group/button"
         >
           <div className="flex items-center gap-3">
             <span className="relative">
@@ -266,9 +266,9 @@ const Employees = () => {
         isOpen={isFormModalOpen}
         onClose={handleCloseModals}
         maxWidth="max-w-4xl"
-        fullHeight
+        fullHeight={true}
       >
-        <div className="p-4 h-[90vh] overflow-y-auto">
+        <div className="h-[90vh] overflow-y-auto">
           <EmployeeForm
             fetchEmployees={() => {
               fetchEmployees();
@@ -333,31 +333,15 @@ const Employees = () => {
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal isOpen={isDeleteModalOpen} onClose={handleCloseModals}>
-        <div className="p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Confirm Deletion</h2>
-          <p className="text-gray-300 mb-4">
-            Are you sure you want to delete <strong>{selectedItem?.name}'s</strong> employee details?
-          </p>
-          <div className="flex justify-end space-x-2">
-            <button
-              className="bg-gray-500 px-4 py-2 rounded text-white"
-              onClick={handleCloseModals}
-            >
-              Cancel
-            </button>
-            <button
-              className="bg-red-500 px-4 py-2 rounded text-white"
-              onClick={() => {
-                handleDelete(selectedItem?._id);
-                handleCloseModals();
-              }}
-            >
-              Confirm Delete
-            </button>
-          </div>
-        </div>
-      </Modal>
+      <DeleteConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={handleCloseModals}
+        onConfirm={() => {
+          handleDelete(selectedItem?._id);
+          handleCloseModals();
+        }}
+        itemName={selectedItem?.name}
+      />
     </div>
   );
 };

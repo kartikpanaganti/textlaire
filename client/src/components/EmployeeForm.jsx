@@ -117,7 +117,7 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee }) =
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-6 relative transition-colors duration-200">
+    <div className="bg-gray-50 dark:bg-gray-900 p-4 md:p-6 relative transition-colors duration-200 rounded-lg">
       {/* Duplicate ID Alert */}
       {showAlert && (
         <div className="fixed top-4 right-4 z-50 animate-slide-in">

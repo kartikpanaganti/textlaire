@@ -9,12 +9,11 @@ import { ThemeContext } from "./context/ThemeProvider"; // Theme Context
 import InventoryManagement from "./pages/InventoryManagement";
 import AttendancePage from "./pages/AttendancePage";
 import ImageGeneration from "./pages/ImageGeneration";
+
 function App() {
   return (
-    
     <Router>
       <Routes>
-        
         <Route path="/" element={<LoginWrapper />} />
         <Route path="/dashboard" element={<ProtectedRoute component={<Dashboard />} />} />
         <Route path="/employees" element={<ProtectedRoute component={<Employees />} />} />
@@ -32,11 +31,15 @@ function LayoutWrapper({ children }) {
   const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
 
   return (
-    <div className={`flex h-screen bg-gray-100 dark:bg-gray-900 text-black dark:text-white`}>
+    <div className={`flex flex-col md:flex-row h-screen bg-light-background dark:bg-dark-background text-light-text-primary dark:text-dark-text-primary overflow-hidden`}>
       {isAuthenticated && <Sidebar />} {/* Sidebar only for authenticated users */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {isAuthenticated && <Navbar />} {/* Navbar only for authenticated users */}
-        {children}
+        <main className="flex-1 overflow-x-hidden overflow-y-auto p-4">
+          <div className="responsive-container">
+            {children}
+          </div>
+        </main>
       </div>
     </div>
   );
