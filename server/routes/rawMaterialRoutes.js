@@ -75,6 +75,15 @@ router.post('/', upload.single('image'), async (req, res) => {
     if (materialData.unitPrice) materialData.unitPrice = Number(materialData.unitPrice);
     if (materialData.reorderLevel) materialData.reorderLevel = Number(materialData.reorderLevel);
     
+    // Parse specifications if provided as a string
+    if (materialData.specifications && typeof materialData.specifications === 'string') {
+      try {
+        materialData.specifications = JSON.parse(materialData.specifications);
+      } catch (e) {
+        console.error('Error parsing specifications JSON:', e);
+      }
+    }
+    
     // Add image path if uploaded
     if (req.file) {
       materialData.image = `/uploads/materials/${req.file.filename}`;
@@ -98,6 +107,15 @@ router.put('/:id', upload.single('image'), async (req, res) => {
     if (materialData.stock) materialData.stock = Number(materialData.stock);
     if (materialData.unitPrice) materialData.unitPrice = Number(materialData.unitPrice);
     if (materialData.reorderLevel) materialData.reorderLevel = Number(materialData.reorderLevel);
+    
+    // Parse specifications if provided as a string
+    if (materialData.specifications && typeof materialData.specifications === 'string') {
+      try {
+        materialData.specifications = JSON.parse(materialData.specifications);
+      } catch (e) {
+        console.error('Error parsing specifications JSON:', e);
+      }
+    }
     
     // Add image path if uploaded
     if (req.file) {

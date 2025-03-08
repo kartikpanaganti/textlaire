@@ -55,8 +55,12 @@ const rawMaterialSchema = new mongoose.Schema({
   },
   specifications: {
     color: String,
+    colorHex: String,
     weight: String,
-    dimensions: String,
+    weightUnit: String,
+    width: String,
+    length: String,
+    dimensionsUnit: String,
     quality: String,
     additionalInfo: String
   },

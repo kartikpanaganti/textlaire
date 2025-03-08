@@ -146,21 +146,21 @@ function Sidebar() {
             />
             <SidebarItem 
               icon={<FaTruck />} 
-              label="Suppliers" 
+              label="Production" 
               isCollapsed={isCollapsed && !isMobileMenuOpen} 
-              isActive={location.pathname === "/suppliers"}
+              isActive={location.pathname === "/production"}
               onClick={() => {
-                navigate("/suppliers");
+                navigate("/production");
                 if (isMobileView) toggleMobileMenu();
               }} 
             />
             <SidebarItem 
               icon={<FaCogs />} 
-              label="Settings" 
+              label="Payroll-System" 
               isCollapsed={isCollapsed && !isMobileMenuOpen} 
-              isActive={location.pathname === "/settings"}
+              isActive={location.pathname === "/payroll-system"}
               onClick={() => {
-                navigate("/settings");
+                navigate("/payroll-system");
                 if (isMobileView) toggleMobileMenu();
               }} 
             />

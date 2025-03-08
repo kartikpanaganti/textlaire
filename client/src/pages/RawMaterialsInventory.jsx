@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FaPlus, FaEdit, FaTrash, FaSearch, FaFilter, FaFileExport, FaArrowUp, FaArrowDown, FaSort, FaSortUp, FaSortDown, FaTimes } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaSearch, FaFilter, FaFileExport, FaArrowUp, FaArrowDown, FaSort, FaSortUp, FaSortDown, FaTimes, FaEye } from 'react-icons/fa';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
 import RawMaterialModal from '../components/RawMaterialModal';
+import RawMaterialDetailModal from '../components/RawMaterialDetailModal';
 import { CSVLink } from 'react-csv';
 
 const RawMaterialsInventory = () => {
@@ -11,6 +12,7 @@ const RawMaterialsInventory = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
+  const [categoryTypeFilter, setCategoryTypeFilter] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [materialToDelete, setMaterialToDelete] = useState(null);
@@ -22,6 +24,22 @@ const RawMaterialsInventory = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [previewImage, setPreviewImage] = useState('');
+  const [priceRange, setPriceRange] = useState({ min: '', max: '' });
+  const [stockRange, setStockRange] = useState({ min: '', max: '' });
+  const [dateRange, setDateRange] = useState({ from: '', to: '' });
+  const [restockedDateRange, setRestockedDateRange] = useState({ from: '', to: '' });
+  const [specFilter, setSpecFilter] = useState({
+    color: '',
+    quality: '',
+    weight: '',
+    weightMin: '',
+    weightMax: '',
+    dimensions: '',
+    width: '',
+    length: ''
+  });
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [detailMaterial, setDetailMaterial] = useState(null);
 
   // Fetch raw materials
   useEffect(() => {
@@ -114,6 +132,33 @@ const RawMaterialsInventory = () => {
     // Category filter
     const matchesCategory = filterType === 'all' || material.category === filterType;
     
+    // Category type filter
+    let matchesCategoryType = true;
+    if (categoryTypeFilter !== 'all') {
+      if (categoryTypeFilter === 'fabric') {
+        matchesCategoryType = material.category?.includes('Cotton') || 
+                             material.category === 'Polyester' || 
+                             material.category === 'Microfiber' || 
+                             material.category === 'Linen' || 
+                             material.category === 'Bamboo Fiber' || 
+                             material.category === 'Hemp Fiber' || 
+                             material.category?.includes('Blended');
+      } else if (categoryTypeFilter === 'towel') {
+        matchesCategoryType = material.category?.includes('Towel');
+      } else if (categoryTypeFilter === 'manufacturing') {
+        matchesCategoryType = material.category?.includes('Woven') || 
+                             material.category?.includes('Knitted') || 
+                             material.category?.includes('Terry') || 
+                             material.category?.includes('Waffle') || 
+                             material.category?.includes('Zero-Twist');
+      } else if (categoryTypeFilter === 'other') {
+        matchesCategoryType = material.category?.includes('Dyes') || 
+                             material.category?.includes('Sewing') || 
+                             material.category?.includes('Labels') || 
+                             material.category?.includes('Packaging');
+      }
+    }
+    
     // Stock filter
     let matchesStock = true;
     if (stockFilter === 'low') {
@@ -124,7 +169,47 @@ const RawMaterialsInventory = () => {
       matchesStock = material.stock > 0;
     }
     
-    return matchesSearch && matchesCategory && matchesStock;
+    // Price range filter
+    const matchesPrice = (
+      (!priceRange.min || material.unitPrice >= Number(priceRange.min)) &&
+      (!priceRange.max || material.unitPrice <= Number(priceRange.max))
+    );
+
+    // Stock range filter
+    const matchesStockRange = (
+      (!stockRange.min || material.stock >= Number(stockRange.min)) &&
+      (!stockRange.max || material.stock <= Number(stockRange.max))
+    );
+
+    // Date range filter
+    const materialDate = new Date(material.createdAt);
+    const matchesDateRange = (
+      (!dateRange.from || materialDate >= new Date(dateRange.from)) &&
+      (!dateRange.to || materialDate <= new Date(dateRange.to))
+    );
+
+    // Specifications filter
+    const matchesSpecs = (
+      (!specFilter.color || 
+        (material.specifications?.color || '').toLowerCase().includes(specFilter.color.toLowerCase())) &&
+      (!specFilter.quality || 
+        (material.specifications?.quality || '').toLowerCase().includes(specFilter.quality.toLowerCase())) &&
+      (!specFilter.weight || 
+        (material.specifications?.weight || '').toLowerCase().includes(specFilter.weight.toLowerCase())) &&
+      (!specFilter.weightMin || !material.specifications?.weight || 
+        parseFloat(material.specifications.weight) >= parseFloat(specFilter.weightMin)) &&
+      (!specFilter.weightMax || !material.specifications?.weight || 
+        parseFloat(material.specifications.weight) <= parseFloat(specFilter.weightMax)) &&
+      (!specFilter.dimensions || 
+        (material.specifications?.dimensions || '').toLowerCase().includes(specFilter.dimensions.toLowerCase())) &&
+      (!specFilter.width || !material.specifications?.width || 
+        parseFloat(material.specifications.width) >= parseFloat(specFilter.width)) &&
+      (!specFilter.length || !material.specifications?.length || 
+        parseFloat(material.specifications.length) >= parseFloat(specFilter.length))
+    );
+    
+    return matchesSearch && matchesCategory && matchesCategoryType && matchesStock && 
+           matchesPrice && matchesStockRange && matchesDateRange && matchesSpecs;
   }) : [];
 
   // Sort materials
@@ -272,6 +357,14 @@ const RawMaterialsInventory = () => {
       <FaSortDown className="ml-1 text-blue-500" />;
   };
 
+  // Handle view details
+  const handleViewDetails = (material) => {
+    console.log("Viewing material details:", material);
+    console.log("Material specifications:", material.specifications);
+    setDetailMaterial(material);
+    setShowDetailModal(true);
+  };
+
   return (
     <div className="h-screen overflow-hidden bg-gray-50 dark:bg-gray-900 transition-colors duration-200 flex flex-col">
       <div className="p-2 flex-1 flex flex-col max-h-screen">
@@ -353,66 +446,357 @@ const RawMaterialsInventory = () => {
           
           {/* Advanced Filters */}
           {showFilters && (
-            <div className="mt-1 grid grid-cols-3 gap-1 pt-1 border-t border-gray-200 dark:border-gray-700 transition-colors duration-200">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5 transition-colors duration-200">
-                  Category
-                </label>
-                <select
-                  className="w-full px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors duration-200"
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                >
-                  <option value="all">All Categories</option>
-                  <option value="Cotton">Cotton</option>
-                  <option value="Polyester">Polyester</option>
-                  <option value="Dye">Dye</option>
-                  <option value="Thread">Thread</option>
-                  <option value="Packaging">Packaging</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5 transition-colors duration-200">
-                  Stock Status
-                </label>
-                <select
-                  className="w-full px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors duration-200"
-                  value={stockFilter}
-                  onChange={(e) => setStockFilter(e.target.value)}
-                >
-                  <option value="all">All Stock Levels</option>
-                  <option value="in">In Stock</option>
-                  <option value="low">Low Stock</option>
-                  <option value="out">Out of Stock</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5 transition-colors duration-200">
-                  Sort By
-                </label>
-                <div className="flex gap-1">
+            <div className="mt-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1 pt-1 border-t border-gray-200 dark:border-gray-700">
+              {/* Category and Stock Status (existing filters) */}
+              <div className="space-y-1">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">
+                    Category
+                  </label>
                   <select
-                    className="flex-1 px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors duration-200"
-                    value={sortField}
-                    onChange={(e) => setSortField(e.target.value)}
+                    className="w-full px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value)}
                   >
-                    <option value="name">Name</option>
-                    <option value="category">Category</option>
-                    <option value="stock">Stock</option>
-                    <option value="unitPrice">Price</option>
-                    <option value="lastRestocked">Restocked</option>
+                    <option value="all">All Categories</option>
+                    
+                    {/* Fabric Material Type */}
+                    <optgroup label="Fabric Material Type">
+                      <option value="Cotton - Regular">Cotton - Regular</option>
+                      <option value="Cotton - Egyptian">Cotton - Egyptian</option>
+                      <option value="Cotton - Pima">Cotton - Pima</option>
+                      <option value="Cotton - Organic">Cotton - Organic</option>
+                      <option value="Polyester">Polyester</option>
+                      <option value="Microfiber">Microfiber</option>
+                      <option value="Linen">Linen</option>
+                      <option value="Bamboo Fiber">Bamboo Fiber</option>
+                      <option value="Hemp Fiber">Hemp Fiber</option>
+                      <option value="Blended - Cotton-Polyester">Blended - Cotton-Polyester</option>
+                      <option value="Blended - Bamboo-Cotton">Blended - Bamboo-Cotton</option>
+                    </optgroup>
+                    
+                    {/* Towel Type */}
+                    <optgroup label="Towel Type">
+                      <option value="Bath Towel">Bath Towel</option>
+                      <option value="Hand Towel">Hand Towel</option>
+                      <option value="Face Towel/Washcloth">Face Towel/Washcloth</option>
+                      <option value="Beach Towel">Beach Towel</option>
+                      <option value="Gym Towel">Gym Towel</option>
+                      <option value="Kitchen Towel">Kitchen Towel</option>
+                      <option value="Hotel & Spa Towel">Hotel & Spa Towel</option>
+                    </optgroup>
+                    
+                    {/* Manufacturing Type */}
+                    <optgroup label="Manufacturing Type">
+                      <option value="Woven Towel">Woven Towel</option>
+                      <option value="Knitted Towel">Knitted Towel</option>
+                      <option value="Terry Towel">Terry Towel</option>
+                      <option value="Waffle Towel">Waffle Towel</option>
+                      <option value="Zero-Twist Towel">Zero-Twist Towel</option>
+                    </optgroup>
+                    
+                    {/* Other Raw Materials */}
+                    <optgroup label="Other Raw Materials">
+                      <option value="Dyes & Chemicals">Dyes & Chemicals</option>
+                      <option value="Sewing Threads">Sewing Threads</option>
+                      <option value="Labels & Tags">Labels & Tags</option>
+                      <option value="Packaging Materials">Packaging Materials</option>
+                    </optgroup>
                   </select>
-                  <button
-                    onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
-                    className="px-1 py-0.5 border rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 transition-colors duration-200"
-                    aria-label={sortDirection === 'asc' ? 'Sort ascending' : 'Sort descending'}
-                  >
-                    {sortDirection === 'asc' ? <FaSortUp className="text-gray-700 dark:text-gray-300" /> : <FaSortDown className="text-gray-700 dark:text-gray-300" />}
-                  </button>
                 </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">
+                    Stock Status
+                  </label>
+                  <select
+                    className="w-full px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    value={stockFilter}
+                    onChange={(e) => setStockFilter(e.target.value)}
+                  >
+                    <option value="all">All Stock Levels</option>
+                    <option value="in">In Stock</option>
+                    <option value="low">Low Stock</option>
+                    <option value="out">Out of Stock</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Category Type and Category Filters */}
+              <div className="space-y-1">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">
+                    Category Type
+                  </label>
+                  <select
+                    className="w-full px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    value={categoryTypeFilter}
+                    onChange={(e) => setCategoryTypeFilter(e.target.value)}
+                  >
+                    <option value="all">All Types</option>
+                    <option value="fabric">Fabric Materials</option>
+                    <option value="towel">Towel Types</option>
+                    <option value="manufacturing">Manufacturing Types</option>
+                    <option value="other">Other Materials</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">
+                    Category
+                  </label>
+                  <select
+                    className="w-full px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value)}
+                  >
+                    <option value="all">All Categories</option>
+                    
+                    {/* Fabric Material Type */}
+                    <optgroup label="Fabric Material Type">
+                      <option value="Cotton - Regular">Cotton - Regular</option>
+                      <option value="Cotton - Egyptian">Cotton - Egyptian</option>
+                      <option value="Cotton - Pima">Cotton - Pima</option>
+                      <option value="Cotton - Organic">Cotton - Organic</option>
+                      <option value="Polyester">Polyester</option>
+                      <option value="Microfiber">Microfiber</option>
+                      <option value="Linen">Linen</option>
+                      <option value="Bamboo Fiber">Bamboo Fiber</option>
+                      <option value="Hemp Fiber">Hemp Fiber</option>
+                      <option value="Blended - Cotton-Polyester">Blended - Cotton-Polyester</option>
+                      <option value="Blended - Bamboo-Cotton">Blended - Bamboo-Cotton</option>
+                    </optgroup>
+                    
+                    {/* Towel Type */}
+                    <optgroup label="Towel Type">
+                      <option value="Bath Towel">Bath Towel</option>
+                      <option value="Hand Towel">Hand Towel</option>
+                      <option value="Face Towel/Washcloth">Face Towel/Washcloth</option>
+                      <option value="Beach Towel">Beach Towel</option>
+                      <option value="Gym Towel">Gym Towel</option>
+                      <option value="Kitchen Towel">Kitchen Towel</option>
+                      <option value="Hotel & Spa Towel">Hotel & Spa Towel</option>
+                    </optgroup>
+                    
+                    {/* Manufacturing Type */}
+                    <optgroup label="Manufacturing Type">
+                      <option value="Woven Towel">Woven Towel</option>
+                      <option value="Knitted Towel">Knitted Towel</option>
+                      <option value="Terry Towel">Terry Towel</option>
+                      <option value="Waffle Towel">Waffle Towel</option>
+                      <option value="Zero-Twist Towel">Zero-Twist Towel</option>
+                    </optgroup>
+                    
+                    {/* Other Raw Materials */}
+                    <optgroup label="Other Raw Materials">
+                      <option value="Dyes & Chemicals">Dyes & Chemicals</option>
+                      <option value="Sewing Threads">Sewing Threads</option>
+                      <option value="Labels & Tags">Labels & Tags</option>
+                      <option value="Packaging Materials">Packaging Materials</option>
+                    </optgroup>
+                  </select>
+                </div>
+              </div>
+
+              {/* Price Range and Stock Range */}
+              <div className="space-y-1">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">
+                    Price Range (₹)
+                  </label>
+                  <div className="flex gap-1">
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      className="w-1/2 px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      value={priceRange.min}
+                      onChange={(e) => setPriceRange(prev => ({ ...prev, min: e.target.value }))}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      className="w-1/2 px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      value={priceRange.max}
+                      onChange={(e) => setPriceRange(prev => ({ ...prev, max: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">
+                    Stock Range
+                  </label>
+                  <div className="flex gap-1">
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      className="w-1/2 px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      value={stockRange.min}
+                      onChange={(e) => setStockRange(prev => ({ ...prev, min: e.target.value }))}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      className="w-1/2 px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      value={stockRange.max}
+                      onChange={(e) => setStockRange(prev => ({ ...prev, max: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Date Range and Sort */}
+              <div className="space-y-1">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">
+                    Date Added
+                  </label>
+                  <div className="flex gap-1">
+                    <input
+                      type="date"
+                      className="w-1/2 px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      value={dateRange.from}
+                      onChange={(e) => setDateRange(prev => ({ ...prev, from: e.target.value }))}
+                    />
+                    <input
+                      type="date"
+                      className="w-1/2 px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      value={dateRange.to}
+                      onChange={(e) => setDateRange(prev => ({ ...prev, to: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">
+                    Last Restocked
+                  </label>
+                  <div className="flex gap-1">
+                    <input
+                      type="date"
+                      className="w-1/2 px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      value={restockedDateRange.from}
+                      onChange={(e) => setRestockedDateRange(prev => ({ ...prev, from: e.target.value }))}
+                    />
+                    <input
+                      type="date"
+                      className="w-1/2 px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      value={restockedDateRange.to}
+                      onChange={(e) => setRestockedDateRange(prev => ({ ...prev, to: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Specifications Filters */}
+              <div className="md:col-span-2 lg:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-1">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">
+                    Color
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Filter by color name or hex"
+                      className="w-full px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      value={specFilter.color}
+                      onChange={(e) => setSpecFilter(prev => ({ ...prev, color: e.target.value }))}
+                    />
+                    {specFilter.color && (
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border border-gray-300" 
+                           style={{ backgroundColor: specFilter.color }}></div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">
+                    Quality Grade
+                  </label>
+                  <select
+                    className="w-full px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    value={specFilter.quality}
+                    onChange={(e) => setSpecFilter(prev => ({ ...prev, quality: e.target.value }))}
+                  >
+                    <option value="">Any Quality</option>
+                    <option value="Premium">Premium</option>
+                    <option value="Standard">Standard</option>
+                    <option value="Economy">Economy</option>
+                    <option value="A-Grade">A-Grade</option>
+                    <option value="B-Grade">B-Grade</option>
+                    <option value="C-Grade">C-Grade</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">
+                    Weight (g/m², kg, etc.)
+                  </label>
+                  <div className="flex gap-1">
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      className="w-1/2 px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      value={specFilter.weightMin || ''}
+                      onChange={(e) => setSpecFilter(prev => ({ ...prev, weightMin: e.target.value, weight: e.target.value }))}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      className="w-1/2 px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      value={specFilter.weightMax || ''}
+                      onChange={(e) => setSpecFilter(prev => ({ ...prev, weightMax: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">
+                    Dimensions (cm, m, etc.)
+                  </label>
+                  <div className="flex gap-1">
+                    <input
+                      type="number"
+                      placeholder="Width"
+                      className="w-1/2 px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      value={specFilter.width || ''}
+                      onChange={(e) => setSpecFilter(prev => ({ ...prev, width: e.target.value, dimensions: e.target.value }))}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Length"
+                      className="w-1/2 px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      value={specFilter.length || ''}
+                      onChange={(e) => setSpecFilter(prev => ({ ...prev, length: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Clear Filters Button */}
+              <div className="md:col-span-2 lg:col-span-3 flex justify-between items-center pt-1 border-t border-gray-200 dark:border-gray-700 mt-1">
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  Showing {filteredMaterials.length} of {materials.length} materials
+                </div>
+                <button
+                  onClick={() => {
+                    setSearchTerm('');
+                    setPriceRange({ min: '', max: '' });
+                    setStockRange({ min: '', max: '' });
+                    setDateRange({ from: '', to: '' });
+                    setRestockedDateRange({ from: '', to: '' });
+                    setSpecFilter({ 
+                      color: '', 
+                      quality: '', 
+                      weight: '', 
+                      weightMin: '',
+                      weightMax: '',
+                      dimensions: '',
+                      width: '',
+                      length: ''
+                    });
+                    setFilterType('all');
+                    setStockFilter('all');
+                    setCategoryTypeFilter('all');
+                  }}
+                  className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg transition-colors duration-200 text-gray-700 dark:text-gray-300 flex items-center gap-1"
+                >
+                  <FaTimes size={10} />
+                  <span>Clear Filters</span>
+                </button>
               </div>
             </div>
           )}
@@ -497,26 +881,31 @@ const RawMaterialsInventory = () => {
                 ) : (
                   sortedMaterials.map((material) => (
                     <tr key={material._id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
-                      <td className="px-2 py-1">
+                      <td className="px-3 py-2">
                         <div className="flex items-center">
                           {material.image ? (
                             <img
                               src={material.image}
                               alt={material.name}
-                              className="h-5 w-5 rounded-full mr-1 object-cover border border-gray-200 dark:border-gray-700 cursor-pointer transition-colors duration-200"
+                              className="h-8 w-8 rounded-full mr-2 object-cover border border-gray-200 dark:border-gray-700 cursor-pointer transition-colors duration-200"
                               onClick={() => handleImagePreview(material.image)}
                             />
                           ) : (
-                            <div className="h-5 w-5 rounded-full mr-1 bg-gray-200 dark:bg-gray-700 flex items-center justify-center transition-colors duration-200">
-                              <span className="text-gray-500 dark:text-gray-400 text-xs font-bold transition-colors duration-200">
+                            <div className="h-8 w-8 rounded-full mr-2 bg-gray-200 dark:bg-gray-700 flex items-center justify-center transition-colors duration-200">
+                              <span className="text-gray-500 dark:text-gray-400 text-sm font-bold transition-colors duration-200">
                                 {material.name.substring(0, 2).toUpperCase()}
                               </span>
                             </div>
                           )}
                           <div>
-                            <div className="text-xs font-medium text-gray-900 dark:text-white transition-colors duration-200">{material.name}</div>
+                            <div 
+                              className="text-sm font-medium text-gray-900 dark:text-white transition-colors duration-200 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                              onClick={() => handleViewDetails(material)}
+                            >
+                              {material.name}
+                            </div>
                             {material.supplier && (
-                              <div className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-200">
+                              <div className="text-sm text-gray-500 dark:text-gray-400 transition-colors duration-200">
                                 {material.supplier}
                               </div>
                             )}
@@ -585,10 +974,10 @@ const RawMaterialsInventory = () => {
                         </div>
                       </td>
                       <td className="px-2 py-1">
-                        <div className="flex justify-center items-center space-x-1">
+                        <div className="flex justify-start items-center space-x-2">
                           <button
                             onClick={() => handleEdit(material)}
-                            className="p-0.5 rounded-full bg-indigo-100 text-indigo-800 hover:bg-indigo-200 dark:bg-indigo-900 dark:text-indigo-200 dark:hover:bg-indigo-800 transition-colors duration-200"
+                            className="p-1.5 rounded-full bg-indigo-100 text-indigo-800 hover:bg-indigo-200 dark:bg-indigo-900 dark:text-indigo-200 dark:hover:bg-indigo-800 transition-colors duration-200"
                             title="Edit"
                             aria-label="Edit material"
                           >
@@ -596,7 +985,7 @@ const RawMaterialsInventory = () => {
                           </button>
                           <button
                             onClick={() => handleDeleteConfirmation(material)}
-                            className="p-0.5 rounded-full bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800 transition-colors duration-200"
+                            className="p-1.5 rounded-full bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800 transition-colors duration-200"
                             title="Delete"
                             aria-label="Delete material"
                           >
@@ -613,7 +1002,7 @@ const RawMaterialsInventory = () => {
         </div>
       </div>
 
-      {/* Material Modal */}
+      {/* Add/Edit Material Modal */}
       <RawMaterialModal
         isOpen={showModal}
         onClose={() => {
@@ -622,6 +1011,16 @@ const RawMaterialsInventory = () => {
         }}
         material={selectedMaterial}
         onSave={handleSave}
+      />
+
+      {/* Detail View Modal */}
+      <RawMaterialDetailModal
+        isOpen={showDetailModal}
+        onClose={() => {
+          setShowDetailModal(false);
+          setDetailMaterial(null);
+        }}
+        material={detailMaterial}
       />
 
       {/* Delete Confirmation Modal */}
