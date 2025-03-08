@@ -9,6 +9,7 @@ import { ThemeContext } from "./context/ThemeProvider"; // Theme Context
 import InventoryManagement from "./pages/InventoryManagement";
 import AttendancePage from "./pages/AttendancePage";
 import ImageGeneration from "./pages/ImageGeneration";
+import RawMaterialsInventory from "./pages/RawMaterialsInventory";
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <Route path="/dashboard" element={<ProtectedRoute component={<Dashboard />} />} />
         <Route path="/employees" element={<ProtectedRoute component={<Employees />} />} />
         <Route path="/inventory" element={<ProtectedRoute component={<InventoryManagement />} />} />
+        <Route path="/raw-materials" element={<ProtectedRoute component={<RawMaterialsInventory />} />} />
         <Route path="/attendance" element={<ProtectedRoute component={<AttendancePage />} />} />
         <Route path="/image-generation" element={<ProtectedRoute component={<ImageGeneration />} />} />
       </Routes>

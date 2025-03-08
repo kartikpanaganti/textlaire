@@ -9,6 +9,7 @@ import authRoutes from "./routes/auth.js";
 import inventoryRoutes from "./routes/inventoryRoutes.js"; // Import Inventory Routes
 import AttendanceRoutes from "./routes/attendanceRoutes.js"; // Import Attendance Routes
 import path from "path";
+import rawMaterialRoutes from './routes/rawMaterialRoutes.js';
 
 dotenv.config();
 const app = express();
@@ -23,6 +24,7 @@ app.use("/api/employees", employeesRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/inventory", inventoryRoutes); // Add Inventory Routes
 app.use("/api/attendance", AttendanceRoutes); // Add Attendance Routes
+app.use('/api/raw-materials', rawMaterialRoutes);
 
 // Database Connection
 mongoose

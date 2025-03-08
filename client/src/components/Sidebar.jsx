@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { 
   FaUserCog, FaBox, FaChartPie, FaSignOutAlt, 
   FaBars, FaTachometerAlt, FaIndustry, FaClipboardList, 
-  FaTruck, FaCogs 
+  FaTruck, FaCogs, FaBoxOpen 
 } from "react-icons/fa";
 import { IoPersonCircleOutline } from "react-icons/io5";
 import { IoImagesOutline} from "react-icons/io5";
@@ -111,6 +111,16 @@ function Sidebar() {
               isActive={location.pathname === "/inventory"}
               onClick={() => {
                 navigate("/inventory");
+                if (isMobileView) toggleMobileMenu();
+              }} 
+            />
+            <SidebarItem 
+              icon={<FaBoxOpen />} 
+              label="Raw Materials" 
+              isCollapsed={isCollapsed && !isMobileMenuOpen} 
+              isActive={location.pathname === "/raw-materials"}
+              onClick={() => {
+                navigate("/raw-materials");
                 if (isMobileView) toggleMobileMenu();
               }} 
             />

@@ -7,7 +7,6 @@ function Login() {
   const { theme } = useContext(ThemeContext);
   const [credentials, setCredentials] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
-
   const handleChange = (e) => {
     setCredentials({ ...credentials, [e.target.name]: e.target.value });
   };
