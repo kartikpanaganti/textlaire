@@ -33,10 +33,10 @@
     "yargs-parser": "^21.1.1"
   },
   "scripts": {
-    "start": "concurrently \"npm run server\" \"npm run client\" \"npm run Fastest-Text-to-Image-Generator-main\"",
+    "start": "concurrently \"npm run server\" \"npm run client\"",
     "server": "cd server && npm run dev",
-    "client": "cd client && npm run dev",
-    "Fastest-Text-to-Image-Generator-main": "cd Fastest-Text-to-Image-Generator-main && npm run dev"
+    "client": "cd client && npm run dev"
+    
   },
   "repository": {
     "type": "git",

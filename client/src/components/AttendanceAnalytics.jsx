@@ -1,3 +1,5 @@
+
+
 // AttendanceAnalytics.jsx
 import { useMemo } from 'react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js';

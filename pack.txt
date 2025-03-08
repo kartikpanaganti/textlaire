@@ -1,0 +1,2 @@
+"start": "concurrently \"npm run server\" \"npm run client\" \"npm run Fastest-Text-to-Image-Generator-main\"",
+"Fastest-Text-to-Image-Generator-main": "cd Fastest-Text-to-Image-Generator-main && npm run dev"
