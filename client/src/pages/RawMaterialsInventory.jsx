@@ -15,8 +15,6 @@ const RawMaterialsInventory = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [materialToDelete, setMaterialToDelete] = useState(null);
   const [selectedMaterial, setSelectedMaterial] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
   const [sortField, setSortField] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
   const [stockFilter, setStockFilter] = useState('all');
@@ -34,10 +32,25 @@ const RawMaterialsInventory = () => {
   useEffect(() => {
     if (materials.length > 0) {
       const dataToExport = materials.map(material => ({
+        ID: material._id,
         Name: material.name,
         Category: material.category,
         Stock: material.stock,
-        ID: material._id
+        Unit: material.unit,
+        'Unit Price': `₹${material.unitPrice.toFixed(2)}`,
+        'Total Value': `₹${(material.stock * material.unitPrice).toFixed(2)}`,
+        Supplier: material.supplier || '',
+        Location: material.location || '',
+        'Reorder Level': material.reorderLevel,
+        'Last Restocked': material.lastRestocked ? new Date(material.lastRestocked).toLocaleDateString() : '',
+        'Expiry Date': material.expiryDate ? new Date(material.expiryDate).toLocaleDateString() : '',
+        'Stock Status': material.stock === 0 ? 'Out of Stock' : (material.stock < material.reorderLevel ? 'Low Stock' : 'In Stock'),
+        'Color': material.specifications?.color || '',
+        'Quality': material.specifications?.quality || '',
+        'Weight': material.specifications?.weight || '',
+        'Dimensions': material.specifications?.dimensions || '',
+        'Created At': material.createdAt ? new Date(material.createdAt).toLocaleDateString() : '',
+        'Updated At': material.updatedAt ? new Date(material.updatedAt).toLocaleDateString() : ''
       }));
       setExportData(dataToExport);
     }
@@ -88,8 +101,15 @@ const RawMaterialsInventory = () => {
 
   // Filter and search materials
   const filteredMaterials = Array.isArray(materials) ? materials.filter(material => {
-    // Search filter
-    const matchesSearch = material.name.toLowerCase().includes(searchTerm.toLowerCase());
+    // Search filter - search in name, supplier, location, and specifications
+    const matchesSearch = 
+      material.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (material.supplier && material.supplier.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (material.location && material.location.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (material.specifications && material.specifications.color && 
+        material.specifications.color.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (material.specifications && material.specifications.quality && 
+        material.specifications.quality.toLowerCase().includes(searchTerm.toLowerCase()));
     
     // Category filter
     const matchesCategory = filterType === 'all' || material.category === filterType;
@@ -97,7 +117,7 @@ const RawMaterialsInventory = () => {
     // Stock filter
     let matchesStock = true;
     if (stockFilter === 'low') {
-      matchesStock = material.stock < 10;
+      matchesStock = material.stock < material.reorderLevel;
     } else if (stockFilter === 'out') {
       matchesStock = material.stock === 0;
     } else if (stockFilter === 'in') {
@@ -121,15 +141,19 @@ const RawMaterialsInventory = () => {
       return sortDirection === 'asc'
         ? a.stock - b.stock
         : b.stock - a.stock;
+    } else if (sortField === 'unitPrice') {
+      return sortDirection === 'asc'
+        ? (a.unitPrice || 0) - (b.unitPrice || 0)
+        : (b.unitPrice || 0) - (a.unitPrice || 0);
+    } else if (sortField === 'lastRestocked') {
+      const dateA = a.lastRestocked ? new Date(a.lastRestocked) : new Date(0);
+      const dateB = b.lastRestocked ? new Date(b.lastRestocked) : new Date(0);
+      return sortDirection === 'asc'
+        ? dateA - dateB
+        : dateB - dateA;
     }
     return 0;
   });
-
-  // Pagination
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = sortedMaterials.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(sortedMaterials.length / itemsPerPage);
 
   // Handle edit
   const handleEdit = (material) => {
@@ -207,19 +231,19 @@ const RawMaterialsInventory = () => {
     }
   };
 
-  // Stock status badge
-  const StockStatusBadge = ({ stock }) => {
+  // Stock status badge - updated to use reorderLevel from the model
+  const StockStatusBadge = ({ stock, reorderLevel = 10 }) => {
     let status, colorClass;
     
     if (stock === 0) {
       status = 'Out of Stock';
-      colorClass = 'bg-red-100 text-red-800';
-    } else if (stock < 10) {
+      colorClass = 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+    } else if (stock < reorderLevel) {
       status = 'Low Stock';
-      colorClass = 'bg-yellow-100 text-yellow-800';
+      colorClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
     } else {
       status = 'In Stock';
-      colorClass = 'bg-green-100 text-green-800';
+      colorClass = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
     }
     
     return (
@@ -249,339 +273,345 @@ const RawMaterialsInventory = () => {
   };
 
   return (
-    <div className="p-4 relative min-h-screen">
-      {/* Header with Stats */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Raw Materials Inventory</h1>
-        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          Manage your textile raw materials inventory
-        </p>
-        
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border-l-4 border-blue-500">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Materials</h3>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{materials.length}</p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border-l-4 border-green-500">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">In Stock</h3>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {materials.filter(m => m.stock > 0).length}
-            </p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border-l-4 border-yellow-500">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Low Stock</h3>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {materials.filter(m => m.stock > 0 && m.stock < 10).length}
-            </p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border-l-4 border-red-500">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Out of Stock</h3>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {materials.filter(m => m.stock === 0).length}
-            </p>
+    <div className="h-screen overflow-hidden bg-gray-50 dark:bg-gray-900 transition-colors duration-200 flex flex-col">
+      <div className="p-2 flex-1 flex flex-col max-h-screen">
+        {/* Header with Stats */}
+        <div className="mb-1">
+          <h1 className="text-lg font-semibold text-gray-900 dark:text-white transition-colors duration-200">Raw Materials Inventory</h1>
+          
+          {/* Stats Cards */}
+          <div className="grid grid-cols-4 gap-1 mt-1">
+            <div className="bg-white dark:bg-gray-800 p-1.5 rounded-lg shadow-sm border-l-4 border-blue-500 transition-colors duration-200">
+              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 transition-colors duration-200">Total</h3>
+              <p className="text-base font-bold text-gray-900 dark:text-white transition-colors duration-200">{materials.length}</p>
+            </div>
+            <div className="bg-white dark:bg-gray-800 p-1.5 rounded-lg shadow-sm border-l-4 border-green-500 transition-colors duration-200">
+              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 transition-colors duration-200">In Stock</h3>
+              <p className="text-base font-bold text-gray-900 dark:text-white transition-colors duration-200">
+                {materials.filter(m => m.stock > 0).length}
+              </p>
+            </div>
+            <div className="bg-white dark:bg-gray-800 p-1.5 rounded-lg shadow-sm border-l-4 border-yellow-500 transition-colors duration-200">
+              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 transition-colors duration-200">Low</h3>
+              <p className="text-base font-bold text-gray-900 dark:text-white transition-colors duration-200">
+                {materials.filter(m => m.stock > 0 && m.stock < (m.reorderLevel || 10)).length}
+              </p>
+            </div>
+            <div className="bg-white dark:bg-gray-800 p-1.5 rounded-lg shadow-sm border-l-4 border-red-500 transition-colors duration-200">
+              <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 transition-colors duration-200">Out</h3>
+              <p className="text-base font-bold text-gray-900 dark:text-white transition-colors duration-200">
+                {materials.filter(m => m.stock === 0).length}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Search and Filter Bar */}
-      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md mb-6">
-        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-          <div className="relative flex-1 w-full">
-            <input
-              type="text"
-              placeholder="Search materials..."
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <FaSearch className="absolute left-3 top-3 text-gray-400" />
+        {/* Search and Filter Bar */}
+        <div className="bg-white dark:bg-gray-800 p-1.5 rounded-lg shadow-sm mb-1 transition-colors duration-200">
+          <div className="flex flex-row gap-1 items-center justify-between">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                placeholder="Search materials..."
+                className="w-full pl-6 pr-2 py-1 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors duration-200"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              <FaSearch className="absolute left-2 top-1.5 text-gray-400 text-xs" />
+            </div>
+            
+            <div className="flex gap-1">
+              <button 
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg transition-colors duration-200 text-gray-700 dark:text-gray-300"
+              >
+                <FaFilter size={10} />
+                <span className="hidden sm:inline">Filters</span>
+              </button>
+              
+              <CSVLink 
+                data={exportData} 
+                filename={"raw-materials.csv"}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-green-100 hover:bg-green-200 text-green-800 dark:bg-green-700 dark:hover:bg-green-600 dark:text-green-100 rounded-lg transition-colors duration-200"
+              >
+                <FaFileExport size={10} />
+                <span className="hidden sm:inline">Export</span>
+              </CSVLink>
+              
+              <button
+                onClick={() => {
+                  setSelectedMaterial(null);
+                  setShowModal(true);
+                }}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200"
+              >
+                <FaPlus size={10} />
+                <span className="hidden sm:inline">Add</span>
+              </button>
+            </div>
           </div>
           
-          <div className="flex gap-2 w-full md:w-auto">
-            <button 
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg"
-            >
-              <FaFilter />
-              <span>Filters</span>
-            </button>
-            
-            <CSVLink 
-              data={exportData} 
-              filename={"raw-materials.csv"}
-              className="flex items-center gap-2 px-4 py-2 bg-green-100 hover:bg-green-200 text-green-800 dark:bg-green-700 dark:hover:bg-green-600 dark:text-green-100 rounded-lg"
-            >
-              <FaFileExport />
-              <span>Export</span>
-            </CSVLink>
-            
-            <button
-              onClick={() => {
-                setSelectedMaterial(null);
-                setShowModal(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-            >
-              <FaPlus />
-              <span>Add New</span>
-            </button>
-          </div>
-        </div>
-        
-        {/* Advanced Filters */}
-        {showFilters && (
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Category
-              </label>
-              <select
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-              >
-                <option value="all">All Categories</option>
-                <option value="Cotton">Cotton</option>
-                <option value="Polyester">Polyester</option>
-                <option value="Dye">Dye</option>
-                <option value="Thread">Thread</option>
-                <option value="Packaging">Packaging</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Stock Status
-              </label>
-              <select
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                value={stockFilter}
-                onChange={(e) => setStockFilter(e.target.value)}
-              >
-                <option value="all">All Stock Levels</option>
-                <option value="in">In Stock</option>
-                <option value="low">Low Stock</option>
-                <option value="out">Out of Stock</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Sort By
-              </label>
-              <div className="flex gap-2">
+          {/* Advanced Filters */}
+          {showFilters && (
+            <div className="mt-1 grid grid-cols-3 gap-1 pt-1 border-t border-gray-200 dark:border-gray-700 transition-colors duration-200">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5 transition-colors duration-200">
+                  Category
+                </label>
                 <select
-                  className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  value={sortField}
-                  onChange={(e) => setSortField(e.target.value)}
+                  className="w-full px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors duration-200"
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
                 >
-                  <option value="name">Name</option>
-                  <option value="category">Category</option>
-                  <option value="stock">Stock</option>
+                  <option value="all">All Categories</option>
+                  <option value="Cotton">Cotton</option>
+                  <option value="Polyester">Polyester</option>
+                  <option value="Dye">Dye</option>
+                  <option value="Thread">Thread</option>
+                  <option value="Packaging">Packaging</option>
+                  <option value="Other">Other</option>
                 </select>
-                <button
-                  onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
-                  className="px-3 py-2 border rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600"
+              </div>
+              
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5 transition-colors duration-200">
+                  Stock Status
+                </label>
+                <select
+                  className="w-full px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors duration-200"
+                  value={stockFilter}
+                  onChange={(e) => setStockFilter(e.target.value)}
                 >
-                  {sortDirection === 'asc' ? <FaSortUp /> : <FaSortDown />}
-                </button>
+                  <option value="all">All Stock Levels</option>
+                  <option value="in">In Stock</option>
+                  <option value="low">Low Stock</option>
+                  <option value="out">Out of Stock</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5 transition-colors duration-200">
+                  Sort By
+                </label>
+                <div className="flex gap-1">
+                  <select
+                    className="flex-1 px-1 py-0.5 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-colors duration-200"
+                    value={sortField}
+                    onChange={(e) => setSortField(e.target.value)}
+                  >
+                    <option value="name">Name</option>
+                    <option value="category">Category</option>
+                    <option value="stock">Stock</option>
+                    <option value="unitPrice">Price</option>
+                    <option value="lastRestocked">Restocked</option>
+                  </select>
+                  <button
+                    onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
+                    className="px-1 py-0.5 border rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:border-gray-600 transition-colors duration-200"
+                    aria-label={sortDirection === 'asc' ? 'Sort ascending' : 'Sort descending'}
+                  >
+                    {sortDirection === 'asc' ? <FaSortUp className="text-gray-700 dark:text-gray-300" /> : <FaSortDown className="text-gray-700 dark:text-gray-300" />}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
-      {/* Materials Table */}
-      <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden mb-14">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-700">
-              <tr>
-                <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('name')}
-                >
-                  <div className="flex items-center">
-                    Material <SortIcon field="name" />
-                  </div>
-                </th>
-                <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('category')}
-                >
-                  <div className="flex items-center">
-                    Category <SortIcon field="category" />
-                  </div>
-                </th>
-                <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                  onClick={() => handleSort('stock')}
-                >
-                  <div className="flex items-center">
-                    Stock <SortIcon field="stock" />
-                  </div>
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {loading ? (
+        {/* Materials Table */}
+        <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden flex-1 transition-colors duration-200">
+          <div className="overflow-auto h-full">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 transition-colors duration-200">
+              <thead className="bg-gray-50 dark:bg-gray-700 transition-colors duration-200 sticky top-0 z-10">
                 <tr>
-                  <td colSpan="5" className="px-6 py-4 text-center">
-                    <div className="flex justify-center items-center space-x-2">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
-                      <span>Loading...</span>
+                  <th 
+                    className="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer transition-colors duration-200"
+                    onClick={() => handleSort('name')}
+                  >
+                    <div className="flex items-center">
+                      Material <SortIcon field="name" />
                     </div>
-                  </td>
-                </tr>
-              ) : currentItems.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="px-6 py-4 text-center">
-                    <div className="text-gray-500 dark:text-gray-400">
-                      No materials found
+                  </th>
+                  <th 
+                    className="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer transition-colors duration-200"
+                    onClick={() => handleSort('category')}
+                  >
+                    <div className="flex items-center">
+                      Cat <SortIcon field="category" />
                     </div>
-                    <button
-                      onClick={() => {
-                        setSelectedMaterial(null);
-                        setShowModal(true);
-                      }}
-                      className="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-                    >
-                      Add your first material
-                    </button>
-                  </td>
+                  </th>
+                  <th 
+                    className="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer transition-colors duration-200"
+                    onClick={() => handleSort('stock')}
+                  >
+                    <div className="flex items-center">
+                      Stock <SortIcon field="stock" />
+                    </div>
+                  </th>
+                  <th 
+                    className="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer transition-colors duration-200 hidden sm:table-cell"
+                    onClick={() => handleSort('unitPrice')}
+                  >
+                    <div className="flex items-center">
+                      Price <SortIcon field="unitPrice" />
+                    </div>
+                  </th>
+                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider transition-colors duration-200">
+                    Status
+                  </th>
+                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider transition-colors duration-200 hidden md:table-cell">
+                    Specs
+                  </th>
+                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider transition-colors duration-200">
+                    Actions
+                  </th>
                 </tr>
-              ) : (
-                currentItems.map((material) => (
-                  <tr key={material._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        {material.image ? (
-                          <img
-                            src={material.image}
-                            alt={material.name}
-                            className="h-10 w-10 rounded-full mr-3 object-cover border border-gray-200 dark:border-gray-700 cursor-pointer"
-                            onClick={() => handleImagePreview(material.image)}
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded-full mr-3 bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                            <span className="text-gray-500 dark:text-gray-400 text-xs font-bold">
-                              {material.name.substring(0, 2).toUpperCase()}
-                            </span>
-                          </div>
-                        )}
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">{material.name}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                        {material.category}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleStockChange(material._id, -1)}
-                          className="p-1 rounded-full bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800"
-                          disabled={material.stock <= 0}
-                        >
-                          <FaArrowDown className="text-xs" />
-                        </button>
-                        <span className="text-sm font-medium text-gray-900 dark:text-white w-10 text-center">
-                          {material.stock}
-                        </span>
-                        <button
-                          onClick={() => handleStockChange(material._id, 1)}
-                          className="p-1 rounded-full bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800"
-                        >
-                          <FaArrowUp className="text-xs" />
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <StockStatusBadge stock={material.stock} />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleEdit(material)}
-                          className="p-1 rounded-full bg-indigo-100 text-indigo-800 hover:bg-indigo-200 dark:bg-indigo-900 dark:text-indigo-200 dark:hover:bg-indigo-800"
-                          title="Edit"
-                        >
-                          <FaEdit />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteConfirmation(material)}
-                          className="p-1 rounded-full bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800"
-                          title="Delete"
-                        >
-                          <FaTrash />
-                        </button>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700 transition-colors duration-200">
+                {loading ? (
+                  <tr>
+                    <td colSpan="7" className="px-2 py-2 text-center">
+                      <div className="flex justify-center items-center space-x-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                        <span className="text-gray-700 dark:text-gray-300 transition-colors duration-200 text-xs">Loading...</span>
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : sortedMaterials.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="px-2 py-2 text-center">
+                      <div className="text-gray-500 dark:text-gray-400 transition-colors duration-200 text-xs">
+                        No materials found
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedMaterial(null);
+                          setShowModal(true);
+                        }}
+                        className="mt-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200 text-xs"
+                      >
+                        Add material
+                      </button>
+                    </td>
+                  </tr>
+                ) : (
+                  sortedMaterials.map((material) => (
+                    <tr key={material._id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
+                      <td className="px-2 py-1">
+                        <div className="flex items-center">
+                          {material.image ? (
+                            <img
+                              src={material.image}
+                              alt={material.name}
+                              className="h-5 w-5 rounded-full mr-1 object-cover border border-gray-200 dark:border-gray-700 cursor-pointer transition-colors duration-200"
+                              onClick={() => handleImagePreview(material.image)}
+                            />
+                          ) : (
+                            <div className="h-5 w-5 rounded-full mr-1 bg-gray-200 dark:bg-gray-700 flex items-center justify-center transition-colors duration-200">
+                              <span className="text-gray-500 dark:text-gray-400 text-xs font-bold transition-colors duration-200">
+                                {material.name.substring(0, 2).toUpperCase()}
+                              </span>
+                            </div>
+                          )}
+                          <div>
+                            <div className="text-xs font-medium text-gray-900 dark:text-white transition-colors duration-200">{material.name}</div>
+                            {material.supplier && (
+                              <div className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-200">
+                                {material.supplier}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-2 py-1">
+                        <span className="px-1 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 transition-colors duration-200">
+                          {material.category}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1">
+                        <div className="flex items-center space-x-1">
+                          <button
+                            onClick={() => handleStockChange(material._id, -1)}
+                            className="p-0.5 rounded-full bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800 transition-colors duration-200"
+                            disabled={material.stock <= 0}
+                            aria-label="Decrease stock"
+                          >
+                            <FaArrowDown className="text-xs" />
+                          </button>
+                          <span className="text-xs font-medium text-gray-900 dark:text-white w-5 text-center transition-colors duration-200">
+                            {material.stock}
+                          </span>
+                          <button
+                            onClick={() => handleStockChange(material._id, 1)}
+                            className="p-0.5 rounded-full bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800 transition-colors duration-200"
+                            aria-label="Increase stock"
+                          >
+                            <FaArrowUp className="text-xs" />
+                          </button>
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-200">
+                          {material.unit}
+                        </div>
+                      </td>
+                      <td className="px-2 py-1 hidden sm:table-cell">
+                        <div className="text-xs text-gray-900 dark:text-white transition-colors duration-200">
+                          ₹{material.unitPrice.toFixed(2)}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-200">
+                          ₹{(material.stock * material.unitPrice).toFixed(2)}
+                        </div>
+                      </td>
+                      <td className="px-2 py-1">
+                        <StockStatusBadge stock={material.stock} reorderLevel={material.reorderLevel} />
+                        {material.reorderLevel > 0 && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-200">
+                            Min: {material.reorderLevel}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-2 py-1 hidden md:table-cell">
+                        <div className="text-xs text-gray-900 dark:text-white transition-colors duration-200">
+                          {material.specifications?.color && (
+                            <div className="flex items-center">
+                              <span className="w-2 h-2 rounded-full mr-1" style={{ backgroundColor: material.specifications.color }}></span>
+                              <span className="text-xs">{material.specifications.color}</span>
+                            </div>
+                          )}
+                          {material.specifications?.quality && (
+                            <div className="text-xs text-gray-600 dark:text-gray-400 transition-colors duration-200">
+                              {material.specifications.quality}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-2 py-1">
+                        <div className="flex justify-center items-center space-x-1">
+                          <button
+                            onClick={() => handleEdit(material)}
+                            className="p-0.5 rounded-full bg-indigo-100 text-indigo-800 hover:bg-indigo-200 dark:bg-indigo-900 dark:text-indigo-200 dark:hover:bg-indigo-800 transition-colors duration-200"
+                            title="Edit"
+                            aria-label="Edit material"
+                          >
+                            <FaEdit size={12} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteConfirmation(material)}
+                            className="p-0.5 rounded-full bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800 transition-colors duration-200"
+                            title="Delete"
+                            aria-label="Delete material"
+                          >
+                            <FaTrash size={12} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-
-      {/* Pagination */}
-      {!loading && filteredMaterials.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-300 dark:border-gray-700 text-sm flex justify-between items-center shadow-md">
-          <button
-            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-            disabled={currentPage === 1}
-            className="px-4 py-2 border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
-          >
-            Previous
-          </button>
-          <div className="flex items-center space-x-1">
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              // Show pages around current page
-              let pageNum;
-              if (totalPages <= 5) {
-                pageNum = i + 1;
-              } else if (currentPage <= 3) {
-                pageNum = i + 1;
-              } else if (currentPage >= totalPages - 2) {
-                pageNum = totalPages - 4 + i;
-              } else {
-                pageNum = currentPage - 2 + i;
-              }
-              
-              return (
-                <button
-                  key={i}
-                  onClick={() => setCurrentPage(pageNum)}
-                  className={`w-8 h-8 rounded-full ${
-                    currentPage === pageNum
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              );
-            })}
-          </div>
-          <button
-            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-            disabled={currentPage === totalPages}
-            className="px-4 py-2 border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
-          >
-            Next
-          </button>
-        </div>
-      )}
 
       {/* Material Modal */}
       <RawMaterialModal
@@ -597,21 +627,21 @@ const RawMaterialsInventory = () => {
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Confirm Delete</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-3 max-w-xs w-full transition-colors duration-200">
+            <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2 transition-colors duration-200">Confirm Delete</h3>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mb-3 transition-colors duration-200">
               Are you sure you want to delete {materialToDelete?.name}? This action cannot be undone.
             </p>
-            <div className="flex justify-end space-x-3">
+            <div className="flex justify-end space-x-2">
               <button
                 onClick={() => setShowDeleteModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                className="px-2 py-1 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors duration-200"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                className="px-2 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
               >
                 Delete
               </button>
@@ -623,17 +653,18 @@ const RawMaterialsInventory = () => {
       {/* Image Preview Modal */}
       {showImagePreview && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" onClick={() => setShowImagePreview(false)}>
-          <div className="relative max-w-3xl max-h-[90vh] overflow-auto" onClick={e => e.stopPropagation()}>
+          <div className="relative max-w-xl max-h-[80vh] overflow-auto" onClick={e => e.stopPropagation()}>
             <button 
-              className="absolute top-2 right-2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75"
+              className="absolute top-2 right-2 bg-black bg-opacity-50 text-white p-1.5 rounded-full hover:bg-opacity-75 transition-colors duration-200"
               onClick={() => setShowImagePreview(false)}
+              aria-label="Close preview"
             >
-              <FaTimes />
+              <FaTimes size={12} />
             </button>
             <img 
               src={previewImage} 
               alt="Preview" 
-              className="max-w-full max-h-[90vh] object-contain"
+              className="max-w-full max-h-[80vh] object-contain"
             />
           </div>
         </div>

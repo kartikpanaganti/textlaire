@@ -105,16 +105,6 @@ function Sidebar() {
               }} 
             />
             <SidebarItem 
-              icon={<FaBox />} 
-              label="Inventory" 
-              isCollapsed={isCollapsed && !isMobileMenuOpen} 
-              isActive={location.pathname === "/inventory"}
-              onClick={() => {
-                navigate("/inventory");
-                if (isMobileView) toggleMobileMenu();
-              }} 
-            />
-            <SidebarItem 
               icon={<FaBoxOpen />} 
               label="Raw Materials" 
               isCollapsed={isCollapsed && !isMobileMenuOpen} 
