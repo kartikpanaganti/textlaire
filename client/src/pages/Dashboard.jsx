@@ -163,9 +163,9 @@ function Dashboard() {
   };
 
   return (
-    <div className="flex-1 bg-gray-50 dark:bg-gray-900 transition-colors duration-200 flex flex-col">
+    <div className="flex-1 bg-gray-50 dark:bg-gray-900 transition-colors duration-200 flex flex-col h-screen">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-3 m-2 sm:m-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-3 m-2 sm:m-4 mb-2">
         <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row sm:items-center">
           <div className="flex items-center">
             <FaTh className="text-blue-500 mr-2" /> 
@@ -204,11 +204,11 @@ function Dashboard() {
       </div>
 
       {/* Main Content and Side Panel */}
-      <div className="flex-1 flex flex-col lg:flex-row gap-3 m-2 sm:m-4 mt-0 sm:mt-0">
+      <div className="flex-1 flex flex-col lg:flex-row gap-3 mx-2 sm:mx-4 mb-2 sm:mb-4 min-h-0">
         {/* Main Dashboard Content */}
         <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow-md p-3 overflow-auto scrollbar-thin">
           {activeTab === 'attendance' && (
-            <div className="flex flex-col">
+            <div className="flex flex-col h-full">
               <div className="flex flex-wrap gap-2 justify-between items-center mb-3">
                 <h2 className="text-lg font-semibold flex items-center text-gray-800 dark:text-white">
                   <FaChartBar className="mr-2 text-blue-500" /> Attendance Overview
@@ -253,21 +253,23 @@ function Dashboard() {
                 </div>
               </div>
               
-              <div className="flex-1">
+              <div className="flex-1 flex items-stretch">
                 {loading ? (
-                  <div className="flex justify-center items-center py-10">
+                  <div className="flex justify-center items-center py-10 w-full">
                     <FaSpinner className="animate-spin text-3xl text-blue-500" />
                   </div>
                 ) : attendance.length > 0 ? (
-                  <AttendanceAnalytics 
-                    attendanceData={attendance} 
-                    isDarkMode={isDarkMode}
-                    dateRange={dateRange}
-                    departmentFilter={departmentFilter}
-                    onRefresh={fetchAttendanceData}
-                  />
+                  <div className="w-full">
+                    <AttendanceAnalytics 
+                      attendanceData={attendance} 
+                      isDarkMode={isDarkMode}
+                      dateRange={dateRange}
+                      departmentFilter={departmentFilter}
+                      onRefresh={fetchAttendanceData}
+                    />
+                  </div>
                 ) : (
-                  <div className="flex items-center justify-center py-10">
+                  <div className="flex items-center justify-center py-10 w-full">
                     <div className="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200 p-3 rounded-lg text-center max-w-lg text-sm">
                       No attendance records found for {selectedDate}. Please select a different date or add attendance records.
                     </div>
@@ -279,11 +281,11 @@ function Dashboard() {
 
           {/* Workforce Tab */}
           {activeTab === 'workforce' && (
-            <div className="flex flex-col">
+            <div className="flex flex-col h-full">
               <h2 className="text-lg font-semibold flex items-center text-gray-800 dark:text-white mb-3">
                 <FaUsers className="mr-2 text-blue-500" /> Workforce Management
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1">
                 <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                   <h3 className="text-base font-semibold mb-2 text-gray-800 dark:text-white">Employee Distribution</h3>
                   <div className="h-56 flex items-center justify-center">
@@ -302,11 +304,11 @@ function Dashboard() {
 
           {/* Raw Material Inventory Tab */}
           {activeTab === 'rawmaterialinventory' && (
-            <div className="flex flex-col">
+            <div className="flex flex-col h-full">
               <h2 className="text-lg font-semibold flex items-center text-gray-800 dark:text-white mb-3">
                 <FaBoxes className="mr-2 text-blue-500" /> Raw Material Inventory
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1">
                 <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                   <h3 className="text-base font-semibold mb-2 text-gray-800 dark:text-white">Inventory Levels</h3>
                   <div className="h-56 flex items-center justify-center">
@@ -327,7 +329,7 @@ function Dashboard() {
         {/* Side Panel with Activity and Status */}
         <div className="lg:w-72 flex flex-col gap-3">
           {/* Recent Activity */}
-          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-md">
+          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-md flex-1">
             <h2 className="text-base font-semibold mb-2 text-gray-800 dark:text-white flex items-center">
               <FaHistory className="mr-2 text-blue-500" /> Recent Activity
             </h2>

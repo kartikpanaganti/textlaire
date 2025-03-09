@@ -14,7 +14,7 @@ const AttendanceAnalytics = ({
   onRefresh 
 }) => {
   const chartContainerRef = useRef(null);
-  const [chartHeight, setChartHeight] = useState(200);
+  const [chartHeight, setChartHeight] = useState(180);
   const [chartWidth, setChartWidth] = useState(0);
 
   // Calculate chart dimensions based on container size
@@ -30,11 +30,11 @@ const AttendanceAnalytics = ({
       // Adjust height based on screen size
       const screenHeight = window.innerHeight;
       if (screenHeight < 800) {
-        setChartHeight(180);
+        setChartHeight(160);
       } else if (screenHeight < 1000) {
-        setChartHeight(200);
+        setChartHeight(180);
       } else {
-        setChartHeight(220);
+        setChartHeight(200);
       }
     };
 
@@ -214,7 +214,7 @@ const AttendanceAnalytics = ({
   };
 
   return (
-    <div className="flex flex-col" ref={chartContainerRef}>
+    <div className="flex flex-col w-full h-full" ref={chartContainerRef}>
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
         <div className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-sm flex items-center">
@@ -286,10 +286,10 @@ const AttendanceAnalytics = ({
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 flex-1">
         {/* Pie Chart */}
-        <div className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-sm">
-          <div className="chart-container" style={{ height: `${chartHeight}px` }}>
+        <div className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-sm h-full">
+          <div className="chart-container h-full">
             <Pie 
               data={pieChartData} 
               options={pieChartOptions} 
@@ -298,8 +298,8 @@ const AttendanceAnalytics = ({
         </div>
 
         {/* Bar Chart */}
-        <div className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-sm">
-          <div className="chart-container" style={{ height: `${chartHeight}px` }}>
+        <div className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-sm h-full">
+          <div className="chart-container h-full">
             <Bar 
               data={barChartData} 
               options={barChartOptions}
