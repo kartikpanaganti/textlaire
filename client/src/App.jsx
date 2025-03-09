@@ -35,7 +35,7 @@ function LayoutWrapper({ children }) {
       {isAuthenticated && <Sidebar />} {/* Sidebar only for authenticated users */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {isAuthenticated && <Navbar />} {/* Navbar only for authenticated users */}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto p-4">
+        <main className="flex-1 overflow-auto scrollbar-thin">
           <div className="responsive-container">
             {children}
           </div>

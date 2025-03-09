@@ -2,20 +2,22 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import {
   FaSpinner, FaEdit, FaTrash, FaPlus, FaSearch,
-  FaFileExport, FaTimes
+  FaFileExport, FaTimes, FaUserCheck, FaMoon, FaSun, FaCalendarAlt, FaChartBar
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 import { format, startOfWeek } from 'date-fns';
-import AttendanceAnalytics from '../components/AttendanceAnalytics';
 import AttendanceFilters from '../components/AttendanceFilters';
 import { exportToExcel, exportToPDF } from '../utils/exportUtils';
 import AttendanceForm from '../components/AttendanceForm';
 import QuickAttendanceForm from '../components/QuickAttendanceForm';
+import { submitBulkAttendance } from '../api/attendance';
+import { useNavigate } from "react-router-dom";
 
 import Select from 'react-select';
 const AttendancePage = () => {
+  const navigate = useNavigate();
   const [attendance, setAttendance] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +40,35 @@ const AttendancePage = () => {
   const [sortField, setSortField] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
   const [selectedEmployees, setSelectedEmployees] = useState([]);
+  
+  // Add dark mode state
+  const [isDarkMode, setIsDarkMode] = useState(
+    localStorage.getItem('darkMode') === 'true' || 
+    (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  );
+
+  // Toggle dark mode
+  const toggleDarkMode = () => {
+    const newMode = !isDarkMode;
+    setIsDarkMode(newMode);
+    localStorage.setItem('darkMode', newMode);
+    
+    // Apply dark mode class to document
+    if (newMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
+
+  // Initialize dark mode on component mount
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -130,6 +161,7 @@ const AttendancePage = () => {
 
   const handleFilterChange = (filters) => {
     console.log("Filters applied:", filters);
+    // Implement filter logic here
   };
 
   const filteredAttendance = attendance.filter(record => {
@@ -151,11 +183,23 @@ const AttendancePage = () => {
 
   const handleBulkSubmit = async (attendanceData) => {
     try {
+      // Show loading toast
+      const toastId = toast.loading('Submitting attendance data...');
+      
       const response = await submitBulkAttendance(attendanceData);
-      toast.success('Bulk attendance recorded successfully');
+      
+      // Update toast to success
+      toast.update(toastId, { 
+        render: `Successfully recorded attendance for ${attendanceData.length} employees`, 
+        type: 'success',
+        isLoading: false,
+        autoClose: 3000
+      });
+      
       fetchData();
       setShowQuickAttendance(false);
     } catch (error) {
+      console.error('Bulk attendance submission error:', error);
       toast.error(error.message || 'Failed to record bulk attendance');
     }
   };
@@ -170,31 +214,220 @@ const AttendancePage = () => {
     }
   };
 
+  // Theme-aware button classes
+  const buttonClasses = {
+    primary: isDarkMode 
+      ? "bg-blue-600 hover:bg-blue-700 text-white" 
+      : "bg-blue-600 hover:bg-blue-700 text-white",
+    success: isDarkMode 
+      ? "bg-green-600 hover:bg-green-700 text-white" 
+      : "bg-green-500 hover:bg-green-600 text-white",
+    danger: isDarkMode 
+      ? "bg-red-600 hover:bg-red-700 text-white" 
+      : "bg-red-500 hover:bg-red-600 text-white",
+    info: isDarkMode 
+      ? "bg-purple-600 hover:bg-purple-700 text-white" 
+      : "bg-purple-500 hover:bg-purple-600 text-white",
+  };
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-6 flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-800">Attendance Management</h1>
-        <div className="flex gap-4">
+    <div className="container mx-auto px-4 py-8 transition-colors duration-200">
+      <div className="mb-8 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-4">
+            <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Attendance Management</h1>
+            <button
+              onClick={toggleDarkMode}
+              className="p-2 rounded-full hover:bg-opacity-20 hover:bg-gray-500 focus:outline-none"
+              aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {isDarkMode ? <FaSun className="text-yellow-300" /> : <FaMoon className="text-gray-600" />}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 shadow-md transition-all duration-200 hover:shadow-lg"
+            >
+              <FaChartBar /> Dashboard
+            </button>
           <button
             onClick={() => setShowQuickAttendance(true)}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 shadow-md transition-all duration-200 hover:shadow-lg ${buttonClasses.success}`}
           >
-            Quick Attendance
+              <FaUserCheck /> Quick Attendance
           </button>
           <button
             onClick={() => setShowDateView(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 ${buttonClasses.info}`}
+            >
+              <FaCalendarAlt /> View By Date
+            </button>
+            <button
+              onClick={() => setShowModal(true)}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 ${buttonClasses.primary}`}
+            >
+              <FaPlus /> Add Attendance
+            </button>
+          </div>
+        </div>
+
+        {/* Search and Date Selection */}
+        <div className="flex flex-wrap gap-4 mb-6">
+          <div className="relative flex-1 min-w-[200px]">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <FaSearch className="text-gray-400" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search employees..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10 w-full rounded-md border-2 border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <span className="font-medium">Date:</span>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="rounded-md border-2 border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+          </div>
+        </div>
+
+        {/* Attendance Filters */}
+        <div className="mb-6">
+          <AttendanceFilters onFilterChange={handleFilterChange} />
+        </div>
+
+        {/* Attendance Table */}
+        {loading ? (
+          <div className="flex justify-center items-center h-64">
+            <FaSpinner className="animate-spin text-4xl text-blue-500" />
+          </div>
+        ) : filteredAttendance.length > 0 ? (
+          <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+            <table className="min-w-full divide-y attendance-table">
+              <thead>
+                <tr className="bg-gray-100 dark:bg-gray-800">
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase">Employee</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase">Shift</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase">Check In</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase">Check Out</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase">WFH</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
+                {filteredAttendance.map(record => {
+                  // Determine status class
+                  let statusClass = '';
+                  switch(record.status) {
+                    case 'Present':
+                      statusClass = 'attendance-status-present';
+                      break;
+                    case 'Absent':
+                      statusClass = 'attendance-status-absent';
+                      break;
+                    case 'Late':
+                      statusClass = 'attendance-status-late';
+                      break;
+                    case 'On Leave':
+                      statusClass = 'attendance-status-leave';
+                      break;
+                    case 'Half Day':
+                      statusClass = 'attendance-status-half-day';
+                      break;
+                    default:
+                      statusClass = '';
+                  }
+                  
+                  return (
+                    <tr key={record._id} className="hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors duration-150">
+                      <td className="px-6 py-4 font-medium">{record.employeeId?.name}</td>
+                      <td className={`px-6 py-4 ${statusClass}`}>{record.status}</td>
+                      <td className="px-6 py-4">{record.shift}</td>
+                      <td className="px-6 py-4">{record.checkIn}</td>
+                      <td className="px-6 py-4">{record.checkOut}</td>
+                      <td className="px-6 py-4">
+                        {record.workFromHome ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                            WFH
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">
+                            Office
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setEditRecord(record);
+                              setShowModal(true);
+                            }}
+                            className="p-1 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                            title="Edit"
+                          >
+                            <FaEdit />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(record._id)}
+                            className="p-1 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                            title="Delete"
+                          >
+                            <FaTrash />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200 p-4 rounded-lg text-center">
+            No attendance records found for the selected date.
+          </div>
+        )}
+
+        {/* Export Buttons */}
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            onClick={() => exportToExcel(filteredAttendance, `attendance_${selectedDate}`)}
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-2"
+            disabled={filteredAttendance.length === 0}
           >
-            View By Date
+            <FaFileExport /> Export Excel
           </button>
           <button
-            onClick={() => setShowModal(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+            onClick={() => exportToPDF(filteredAttendance, `attendance_${selectedDate}`)}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 flex items-center gap-2"
+            disabled={filteredAttendance.length === 0}
           >
-            <FaPlus /> Add Attendance
+            <FaFileExport /> Export PDF
           </button>
         </div>
       </div>
+
+      {/* Modals */}
+      {showQuickAttendance && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-7xl max-h-[90vh] overflow-y-auto">
+            <QuickAttendanceForm
+              employees={employees}
+              onSubmit={handleBulkSubmit}
+              onClose={() => setShowQuickAttendance(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {showDateView && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -343,57 +576,6 @@ const AttendancePage = () => {
         </div>
       )}
 
-      {showQuickAttendance && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-y-auto">
-            <QuickAttendanceForm
-              employees={employees}
-              onSubmit={handleBulkSubmit}
-              onClose={() => setShowQuickAttendance(false)}
-            />
-          </div>
-        </div>
-      )}
-
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Attendance Dashboard</h1>
-        <div className="flex gap-4">
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="border rounded-lg px-4 py-2"
-          />
-          <div className="relative">
- <input
-              type="text"
-              placeholder="Search employees..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 pr-4 py-2 border rounded-lg"
-            />
-            <FaSearch className="absolute left-3 top-3 text-gray-400" />
-          </div>
-          <button
-            onClick={() => exportToExcel(attendance)}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
-          >
-            <FaFileExport /> Export Excel
-          </button>
-          <button
-            onClick={() => exportToPDF(attendance)}
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
-          >
-            <FaFileExport /> Export PDF
-          </button>
-        </div>
-      </div>
-
-      <div className="mb-6">
-        <AttendanceAnalytics attendanceData={attendance} />
-        <AttendanceFilters onFilterChange={handleFilterChange} />
-      </div>
-
       {showDuplicateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
@@ -434,4 +616,5 @@ const AttendancePage = () => {
     </div>
   );
 };
+
 export default AttendancePage;
