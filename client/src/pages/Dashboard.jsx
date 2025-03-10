@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { format } from 'date-fns';
@@ -7,7 +7,7 @@ import {
   FaUsers, FaBoxes, FaMoneyBillWave, FaChartLine, FaTachometerAlt,
   FaUsersCog, FaWarehouse, FaChartPie, FaTh, FaHistory
 } from "react-icons/fa";
-import AttendanceAnalytics from "../components/AttendanceAnalytics";
+import AttendanceAnalytics from "../components/dashboard/AttendanceAnalytics";
 import { toast } from "react-toastify";
 
 function Dashboard() {
@@ -21,6 +21,9 @@ function Dashboard() {
   const [isDarkMode, setIsDarkMode] = useState(
     document.documentElement.classList.contains('dark')
   );
+  const [contentHeight, setContentHeight] = useState(null);
+  const dashboardRef = useRef(null);
+  const headerRef = useRef(null);
 
   // Listen for theme changes
   useEffect(() => {
@@ -162,20 +165,40 @@ function Dashboard() {
     }
   };
 
+  // Calculate available content height
+  useEffect(() => {
+    const updateContentHeight = () => {
+      if (dashboardRef.current && headerRef.current) {
+        const viewportHeight = window.innerHeight;
+        const headerHeight = headerRef.current.offsetHeight;
+        // Reduce margin to give more space to content
+        const availableHeight = viewportHeight - headerHeight - 12; // Reduced from 16px
+        setContentHeight(availableHeight);
+      }
+    };
+
+    updateContentHeight();
+    window.addEventListener('resize', updateContentHeight);
+    
+    return () => {
+      window.removeEventListener('resize', updateContentHeight);
+    };
+  }, []);
+
   return (
-    <div className="flex-1 bg-gray-50 dark:bg-gray-900 transition-colors duration-200 flex flex-col h-screen">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-3 m-2 sm:m-4 mb-2">
-        <div className="flex flex-col space-y-2 sm:space-y-0 sm:flex-row sm:items-center">
+    <div className="flex-1 bg-gray-50 dark:bg-gray-900 transition-colors duration-200 flex flex-col h-screen-dynamic responsive-height-container" ref={dashboardRef}>
+      {/* Header - Make it more compact */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-2 m-1 sm:m-2 mb-1 responsive-height-header reduce-padding-on-small-height" ref={headerRef}>
+        <div className="flex flex-col space-y-1 sm:space-y-0 sm:flex-row sm:items-center">
           <div className="flex items-center">
-            <FaTh className="text-blue-500 mr-2" /> 
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">
+            <FaTh className="text-blue-500 mr-1" /> 
+            <h1 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white compact-on-small-height">
               Management Dashboard
             </h1>
           </div>
           
           {/* Tabs in header */}
-          <div className="flex overflow-x-auto sm:ml-6 no-scrollbar">
+          <div className="flex overflow-x-auto sm:ml-4 no-scrollbar">
             {dashboardTabs.map(tab => (
               <button
                 key={tab.id}
@@ -185,7 +208,7 @@ function Dashboard() {
                     fetchAttendanceData();
                   }
                 }}
-                className={`px-3 py-1 mr-2 rounded-full flex items-center gap-1 text-sm transition-colors relative whitespace-nowrap
+                className={`px-2 py-0.5 mr-1 rounded-full flex items-center gap-1 text-xs transition-colors relative whitespace-nowrap
                   ${activeTab === tab.id 
                     ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' 
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
@@ -195,7 +218,7 @@ function Dashboard() {
                 {tab.icon}
                 <span>{tab.label}</span>
                 {tab.comingSoon && (
-                  <span className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs px-1 rounded-full">Soon</span>
+                  <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs px-1 rounded-full text-[0.6rem]">Soon</span>
                 )}
               </button>
             ))}
@@ -204,22 +227,25 @@ function Dashboard() {
       </div>
 
       {/* Main Content and Side Panel */}
-      <div className="flex-1 flex flex-col lg:flex-row gap-3 mx-2 sm:mx-4 mb-2 sm:mb-4 min-h-0">
+      <div 
+        className="flex-1 flex flex-col lg:flex-row gap-2 mx-1 sm:mx-2 mb-1 sm:mb-2 overflow-hidden responsive-height-content reduce-margin-on-small-height"
+        style={{ height: contentHeight ? `${contentHeight}px` : 'auto' }}
+      >
         {/* Main Dashboard Content */}
-        <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow-md p-3 overflow-auto scrollbar-thin">
+        <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow-md p-2 overflow-y-auto overflow-x-hidden scrollbar-thin reduce-padding-on-small-height min-w-0">
           {activeTab === 'attendance' && (
-            <div className="flex flex-col h-full">
-              <div className="flex flex-wrap gap-2 justify-between items-center mb-3">
-                <h2 className="text-lg font-semibold flex items-center text-gray-800 dark:text-white">
-                  <FaChartBar className="mr-2 text-blue-500" /> Attendance Overview
+            <div className="flex flex-col h-full min-w-0">
+              <div className="flex flex-wrap gap-1 justify-between items-center mb-1 responsive-height-header">
+                <h2 className="text-base font-semibold flex items-center text-gray-800 dark:text-white compact-on-small-height">
+                  <FaChartBar className="mr-1 text-blue-500" /> Attendance Overview
                 </h2>
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1 flex-wrap">
                   <div className="flex items-center gap-1">
-                    <FaCalendarAlt className="text-blue-500 dark:text-blue-400" />
+                    <FaCalendarAlt className="text-blue-500 dark:text-blue-400" size={10} />
                     <select
                       value={dateRange}
                       onChange={(e) => setDateRange(e.target.value)}
-                      className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs py-1 px-2"
+                      className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs py-0.5 px-1"
                     >
                       <option value="today">Today</option>
                       <option value="week">Last 7 Days</option>
@@ -230,12 +256,12 @@ function Dashboard() {
                     type="date"
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
-                    className="rounded-md border border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs py-1 px-2"
+                    className="rounded-md border border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs py-0.5 px-1"
                   />
                   <select
                     value={departmentFilter}
                     onChange={(e) => setDepartmentFilter(e.target.value)}
-                    className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs py-1 px-2"
+                    className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs py-0.5 px-1"
                   >
                     <option value="all">All Departments</option>
                     <option value="it">IT</option>
@@ -246,26 +272,27 @@ function Dashboard() {
                   </select>
                   <button
                     onClick={() => navigate('/attendance')}
-                    className="px-2 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-1 text-xs whitespace-nowrap"
+                    className="px-1.5 py-0.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-1 text-xs whitespace-nowrap"
                   >
                     <FaUserCheck size={10} /> Manage
                   </button>
                 </div>
               </div>
               
-              <div className="flex-1 flex items-stretch">
+              <div className="flex-1 flex items-stretch overflow-y-auto overflow-x-hidden responsive-height-content min-w-0">
                 {loading ? (
                   <div className="flex justify-center items-center py-10 w-full">
                     <FaSpinner className="animate-spin text-3xl text-blue-500" />
                   </div>
                 ) : attendance.length > 0 ? (
-                  <div className="w-full">
+                  <div className="w-full min-w-0">
                     <AttendanceAnalytics 
                       attendanceData={attendance} 
                       isDarkMode={isDarkMode}
                       dateRange={dateRange}
                       departmentFilter={departmentFilter}
                       onRefresh={fetchAttendanceData}
+                      containerHeight={contentHeight ? contentHeight - 70 : undefined} // Reduced from 100 to give more space to charts
                     />
                   </div>
                 ) : (
@@ -326,49 +353,49 @@ function Dashboard() {
           )}
         </div>
 
-        {/* Side Panel with Activity and Status */}
-        <div className="lg:w-72 flex flex-col gap-3">
+        {/* Side Panel with Activity and Status - Make it narrower */}
+        <div className="lg:w-64 flex flex-col gap-2 overflow-hidden min-w-0">
           {/* Recent Activity */}
-          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-md flex-1">
-            <h2 className="text-base font-semibold mb-2 text-gray-800 dark:text-white flex items-center">
-              <FaHistory className="mr-2 text-blue-500" /> Recent Activity
+          <div className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-md flex-1 overflow-hidden flex flex-col reduce-padding-on-small-height">
+            <h2 className="text-sm font-semibold mb-1 text-gray-800 dark:text-white flex items-center compact-on-small-height">
+              <FaHistory className="mr-1 text-blue-500" size={12} /> Recent Activity
             </h2>
-            <div className="space-y-2 overflow-y-auto max-h-[200px] scrollbar-thin">
-              <div className="border-l-4 border-green-500 pl-2 py-1">
+            <div className="space-y-1 overflow-y-auto flex-1 scrollbar-thin">
+              <div className="border-l-4 border-green-500 pl-2 py-0.5">
                 <p className="text-xs text-gray-600 dark:text-gray-300">Today</p>
-                <p className="text-sm text-gray-800 dark:text-white">Attendance recorded for {attendance.length} employees</p>
+                <p className="text-xs text-gray-800 dark:text-white">Attendance recorded for {attendance.length} employees</p>
               </div>
-              <div className="border-l-4 border-blue-500 pl-2 py-1">
+              <div className="border-l-4 border-blue-500 pl-2 py-0.5">
                 <p className="text-xs text-gray-600 dark:text-gray-300">Yesterday</p>
-                <p className="text-sm text-gray-800 dark:text-white">New employee added to the system</p>
+                <p className="text-xs text-gray-800 dark:text-white">New employee added to the system</p>
               </div>
-              <div className="border-l-4 border-purple-500 pl-2 py-1">
+              <div className="border-l-4 border-purple-500 pl-2 py-0.5">
                 <p className="text-xs text-gray-600 dark:text-gray-300">Last Week</p>
-                <p className="text-sm text-gray-800 dark:text-white">Monthly attendance report generated</p>
+                <p className="text-xs text-gray-800 dark:text-white">Monthly attendance report generated</p>
               </div>
             </div>
           </div>
           
           {/* System Status */}
-          <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-md">
-            <h2 className="text-base font-semibold mb-2 text-gray-800 dark:text-white flex items-center">
-              <FaTachometerAlt className="mr-2 text-blue-500" /> System Status
+          <div className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-md reduce-padding-on-small-height">
+            <h2 className="text-sm font-semibold mb-1 text-gray-800 dark:text-white flex items-center compact-on-small-height">
+              <FaTachometerAlt className="mr-1 text-blue-500" size={12} /> System Status
             </h2>
-            <div className="space-y-2">
+            <div className="space-y-1">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-700 dark:text-gray-300">Database</span>
-                <span className="px-2 py-0.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full text-xs">Online</span>
+                <span className="text-xs text-gray-700 dark:text-gray-300">Database</span>
+                <span className="px-1.5 py-0.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full text-xs">Online</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-700 dark:text-gray-300">API Services</span>
-                <span className="px-2 py-0.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full text-xs">Online</span>
+                <span className="text-xs text-gray-700 dark:text-gray-300">API Services</span>
+                <span className="px-1.5 py-0.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full text-xs">Online</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-700 dark:text-gray-300">Notification System</span>
-                <span className="px-2 py-0.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full text-xs">Online</span>
+                <span className="text-xs text-gray-700 dark:text-gray-300">Notification System</span>
+                <span className="px-1.5 py-0.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full text-xs">Online</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-700 dark:text-gray-300">Last Update</span>
+                <span className="text-xs text-gray-700 dark:text-gray-300">Last Update</span>
                 <span className="text-xs text-gray-600 dark:text-gray-400">{new Date().toLocaleString()}</span>
               </div>
             </div>

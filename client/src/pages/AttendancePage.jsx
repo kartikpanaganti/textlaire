@@ -8,10 +8,10 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 import { format, startOfWeek } from 'date-fns';
-import AttendanceFilters from '../components/AttendanceFilters';
+import AttendanceFilters from '../components/attendance/AttendanceFilters';
 import { exportToExcel, exportToPDF } from '../utils/exportUtils';
-import AttendanceForm from '../components/AttendanceForm';
-import QuickAttendanceForm from '../components/QuickAttendanceForm';
+import AttendanceForm from '../components/attendance/AttendanceForm';
+import QuickAttendanceForm from '../components/attendance/QuickAttendanceForm';
 import { submitBulkAttendance } from '../api/attendance';
 import { useNavigate } from "react-router-dom";
 

@@ -3,8 +3,8 @@ import axios from 'axios';
 import { FaPlus, FaEdit, FaTrash, FaSearch, FaFilter, FaFileExport, FaArrowUp, FaArrowDown, FaSort, FaSortUp, FaSortDown, FaTimes, FaEye } from 'react-icons/fa';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
-import RawMaterialModal from '../components/RawMaterialModal';
-import RawMaterialDetailModal from '../components/RawMaterialDetailModal';
+import RawMaterialModal from '../components/rawMaterials/RawMaterialModal';
+import RawMaterialDetailModal from '../components/rawMaterials/RawMaterialDetailModal';
 import { CSVLink } from 'react-csv';
 
 const RawMaterialsInventory = () => {
@@ -76,9 +76,9 @@ const RawMaterialsInventory = () => {
 
   const fetchMaterials = async () => {
     try {
-      console.log('Fetching materials...');
+      // console.log('Fetching materials...');
       const response = await axios.get('/api/raw-materials');
-      console.log('API response:', response.data);
+      // console.log('API response:', response.data);
       
       // Ensure that materials is always an array
       const materialsData = Array.isArray(response.data) ? response.data : [];

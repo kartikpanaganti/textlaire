@@ -407,3 +407,90 @@ textarea:-webkit-autofill {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
+
+/* Ensure charts resize properly */
+.chart-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* Prevent any overflow */
+  max-width: 100%; /* Ensure it doesn't exceed parent width */
+  min-height: 260px; /* Increased from 220px */
+}
+
+/* Prevent horizontal scrolling */
+.overflow-x-hidden {
+  overflow-x: hidden !important;
+}
+
+/* Allow vertical scrolling */
+.overflow-y-auto {
+  overflow-y: auto !important;
+}
+
+/* Ensure flex items don't shrink below their minimum content size */
+.min-w-0 {
+  min-width: 0;
+}
+
+/* Ensure content fits within container */
+.fit-content {
+  width: fit-content;
+  max-width: 100%;
+}
+
+/* Responsive chart containers */
+@media (max-width: 768px) {
+  .chart-container {
+    height: auto !important;
+    min-height: 260px; /* Increased from 220px */
+  }
+  
+  /* Stack charts on small screens */
+  .flex-col-on-small {
+    flex-direction: column !important;
+  }
+  
+  /* Reduce padding on small screens */
+  .reduce-padding-on-small {
+    padding: 0.5rem !important;
+  }
+}
+
+/* Ensure charts have enough space on larger screens */
+@media (min-width: 1024px) {
+  .chart-container {
+    min-height: 300px; /* Increased from 250px */
+  }
+}
+
+/* Optimize layout for charts */
+.chart-optimized-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.chart-optimized-container > .chart-header {
+  flex-shrink: 0;
+  margin-bottom: 0.25rem;
+}
+
+.chart-optimized-container > .chart-content {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Make summary cards more compact */
+.compact-summary-card {
+  padding: 0.5rem !important;
+}
+
+.compact-summary-card h3 {
+  font-size: 0.7rem;
+  margin-bottom: 0;
+}
+
+.compact-summary-card p {
+  font-size: 0.9rem;
+}

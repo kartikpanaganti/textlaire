@@ -1,10 +1,10 @@
 import { BrowserRouter as Router, Route, Routes, Navigate } from "react-router-dom";
 import { useContext } from "react";
-import Sidebar from "./components/Sidebar";
-import Navbar from "./components/Navbar";
+import Sidebar from "./components/layout/Sidebar";
+import Navbar from "./components/layout/Navbar";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
-import Employees from "./pages/Employees"; // Employees Page
+import EmployeePage from "./pages/EmployeePage"; // Updated to use our new EmployeePage
 import { ThemeContext } from "./context/ThemeProvider"; // Theme Context
 import AttendancePage from "./pages/AttendancePage";
 import ImageGeneration from "./pages/ImageGeneration";
@@ -16,7 +16,7 @@ function App() {
       <Routes>
         <Route path="/" element={<LoginWrapper />} />
         <Route path="/dashboard" element={<ProtectedRoute component={<Dashboard />} />} />
-        <Route path="/employees" element={<ProtectedRoute component={<Employees />} />} />
+        <Route path="/employees" element={<ProtectedRoute component={<EmployeePage />} />} />
         <Route path="/raw-materials" element={<ProtectedRoute component={<RawMaterialsInventory />} />} />
         <Route path="/attendance" element={<ProtectedRoute component={<AttendancePage />} />} />
         <Route path="/image-generation" element={<ProtectedRoute component={<ImageGeneration />} />} />
