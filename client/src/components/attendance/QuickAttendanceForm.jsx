@@ -9,6 +9,7 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
+  const [shiftFilter, setShiftFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [presetTimes, setPresetTimes] = useState({
     checkIn: '',
@@ -18,6 +19,7 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
   const [templateName, setTemplateName] = useState('');
   const [templates, setTemplates] = useState([]);
   const [showTemplateList, setShowTemplateList] = useState(false);
+  const [applyDefaultShifts, setApplyDefaultShifts] = useState(true);
 
   // Add theme state
   const [isDarkMode, setIsDarkMode] = useState(
@@ -65,18 +67,24 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
 
     useEffect(() => {
       if (employees?.length) {
-        const initialData = employees.map(emp => ({
-          employeeId: emp._id,
-          employeeName: emp.name,
-        department: emp.department || 'N/A',
-          status: 'Present',
-        date: selectedDate,
-          shift: 'Day',
-          checkIn: '',
-          checkOut: '',
-        workFromHome: false,
-        notes: ''
-        }));
+        const initialData = employees.map(emp => {
+          // Get employee's default shift if available
+          const defaultShift = emp.defaultShift || 'Day';
+          
+          return {
+            employeeId: emp._id,
+            employeeName: emp.name,
+            department: emp.department || 'N/A',
+            status: 'Present',
+            date: selectedDate,
+            // Apply default shift if applyDefaultShifts is true, otherwise use 'Day'
+            shift: applyDefaultShifts ? defaultShift : 'Day',
+            checkIn: '',
+            checkOut: '',
+            workFromHome: false,
+            notes: ''
+          };
+        });
         setAttendanceData(initialData);
       
         const initialSelected = {};
@@ -85,7 +93,7 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
         });
         setSelectedEmployees(initialSelected);
       }
-  }, [employees, selectedDate]);
+  }, [employees, selectedDate, applyDefaultShifts]);
 
       const handleSubmit = async (e) => {
         e.preventDefault();
@@ -142,6 +150,31 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
       );
     };
 
+    // Function to determine shift based on check-in time
+    const determineShiftFromTime = (checkInTime) => {
+      if (!checkInTime) return null;
+      
+      // Parse the hours from the check-in time
+      const hours = parseInt(checkInTime.split(':')[0], 10);
+      const minutes = parseInt(checkInTime.split(':')[1], 10);
+      
+      // Check if this is one of our predefined times
+      if (checkInTime === '09:00') return 'Day';
+      if (checkInTime === '21:00') return 'Night';
+      if (checkInTime === '06:00') return 'Morning';
+      if (checkInTime === '14:00') return 'Evening';
+      
+      // For standard time ranges
+      if (hours >= 5 && hours < 8) return 'Morning';
+      if (hours >= 8 && hours < 12) return 'Day';
+      if (hours >= 12 && hours < 17) return 'Evening';
+      if (hours >= 17 || hours < 5) return 'Night';
+      
+      // If it's a custom time that doesn't fit the patterns, mark as Flexible
+      return 'Flexible';
+    };
+
+    // Modified handleIndividualChange to update shift when check-in changes
     const handleIndividualChange = (index, field, value) => {
       setAttendanceData(prev => {
         const newData = [...prev];
@@ -149,27 +182,100 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
           ...newData[index],
           [field]: value
         };
+        
+        // If check-in time is changed, update the shift accordingly
+        if (field === 'checkIn' && value) {
+          // Check if this is a custom time input
+          const isCustomTime = !Object.values(quickTimes).some(
+            times => times.in === value
+          );
+          
+          // If it's a custom time, set shift to Flexible, otherwise determine from time
+          if (isCustomTime) {
+            // Check if it's within standard ranges first
+            const detectedShift = determineShiftFromTime(value);
+            newData[index].shift = detectedShift;
+          } else {
+            // It's one of our predefined times
+            const detectedShift = determineShiftFromTime(value);
+            newData[index].shift = detectedShift;
+          }
+        }
+        
         return newData;
       });
     };
 
-  // Apply preset times to selected employees
-  const applyPresetTimes = () => {
-    if (presetTimes.checkIn || presetTimes.checkOut) {
+    // Add new state for quick time buttons
+    const [quickTimes, setQuickTimes] = useState({
+      morning: { in: '09:00', out: '17:00' },
+      afternoon: { in: '13:00', out: '21:00' },
+      night: { in: '21:00', out: '05:00' }
+    });
+
+    // Function to handle quick status change
+    const handleQuickStatusChange = (index, status) => {
+      handleIndividualChange(index, 'status', status);
+      
+      // Auto-clear times for Absent and On Leave
+      if (status === 'Absent' || status === 'On Leave') {
+        handleIndividualChange(index, 'checkIn', '');
+        handleIndividualChange(index, 'checkOut', '');
+      }
+    };
+
+    // Function to apply quick time
+    const handleQuickTime = (index, timeType) => {
+      const record = attendanceData[index];
+      if (record.status === 'Absent' || record.status === 'On Leave') return;
+
+      // Get the check-in time for this time type
+      const checkInTime = quickTimes[timeType].in;
+      const checkOutTime = quickTimes[timeType].out;
+      
+      // Determine shift based on check-in time
+      let shift = record.shift;
+      const hours = parseInt(checkInTime.split(':')[0], 10);
+      
+      // Set shift based on time
+      if (hours >= 5 && hours < 10) shift = 'Morning';
+      else if (hours >= 10 && hours < 14) shift = 'Day';
+      else if (hours >= 14 && hours < 18) shift = 'Evening';
+      else if (hours >= 18 || hours < 5) shift = 'Night';
+      
+      // Update the record with new times and shift
+      setAttendanceData(prev => {
+        const newData = [...prev];
+        newData[index] = {
+          ...newData[index],
+          checkIn: checkInTime,
+          checkOut: checkOutTime,
+          shift: shift
+        };
+        return newData;
+      });
+    };
+
+    // Add a function to update shifts based on current check-in times
+    const updateShiftsFromTimes = () => {
       setAttendanceData(prev => 
         prev.map(record => {
-          if (selectedEmployees[record.employeeId]) {
-            return {
-              ...record,
-              ...(presetTimes.checkIn && { checkIn: presetTimes.checkIn }),
-              ...(presetTimes.checkOut && { checkOut: presetTimes.checkOut })
-            };
+          if (selectedEmployees[record.employeeId] && record.checkIn) {
+            const detectedShift = determineShiftFromTime(record.checkIn);
+            if (detectedShift) {
+              return {
+                ...record,
+                shift: detectedShift
+              };
+            }
           }
           return record;
         })
       );
-    }
-  };
+      
+      // Show success message
+      alert('Shifts updated based on check-in times!');
+    };
 
   // Set all selected employees to present
   const markAllPresent = () => {
@@ -241,11 +347,12 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
     }
   };
 
-  // Filter attendance data based on search and department filter
+  // Filter attendance data based on search, department and shift filter
   const filteredAttendanceData = attendanceData.filter(record => {
     const matchesSearch = record.employeeName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDepartment = !departmentFilter || record.department === departmentFilter;
-    return matchesSearch && matchesDepartment;
+    const matchesShift = !shiftFilter || record.shift === shiftFilter;
+    return matchesSearch && matchesDepartment && matchesShift;
   });
 
   // Count selected employees
@@ -305,6 +412,18 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
     actionButton: isDarkMode
       ? 'bg-blue-700 text-white hover:bg-blue-600'
       : 'bg-blue-500 text-white hover:bg-blue-600',
+  };
+
+  // Add a function to set shift as Flexible
+  const setFlexibleShift = (index) => {
+    setAttendanceData(prev => {
+      const newData = [...prev];
+      newData[index] = {
+        ...newData[index],
+        shift: 'Flexible'
+      };
+      return newData;
+    });
   };
 
     return (
@@ -407,35 +526,68 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
         </div>
       )}
 
-      {/* Search and Filter */}
-      <div className="mb-6 p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-        <div className="flex flex-wrap gap-4 items-center">
-          <div className="relative flex-1 min-w-[200px]">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <FaSearch className="text-gray-400" />
-            </div>
-            <input
-              type="text"
-              placeholder="Search employees..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className={`pl-10 w-full rounded-md ${themeClasses.input} border-2 focus:border-blue-500`}
-            />
+      {/* Search and Filters */}
+      <div className="mb-6 flex flex-wrap gap-4 items-center">
+        <div className="relative flex-1 min-w-[200px]">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <FaSearch className="text-gray-400" />
           </div>
-          
+          <input
+            type="text"
+            placeholder="Search employees..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className={`pl-10 w-full rounded-md ${themeClasses.input} border-2 focus:border-blue-500`}
+          />
+        </div>
+        
+        <div className="flex-1 min-w-[200px]">
+          <select
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            className={`w-full rounded-md ${themeClasses.input} border-2 focus:border-blue-500`}
+          >
+            <option value="">All Departments</option>
+            {departments.map(dept => (
+              <option key={dept} value={dept}>{dept}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex-1 min-w-[200px]">
+          <select
+            value={shiftFilter}
+            onChange={(e) => setShiftFilter(e.target.value)}
+            className={`w-full rounded-md ${themeClasses.input} border-2 focus:border-blue-500`}
+          >
+            <option value="">All Shifts</option>
+            <option value="Day">Day</option>
+            <option value="Night">Night</option>
+            <option value="Morning">Morning</option>
+            <option value="Evening">Evening</option>
+            <option value="Flexible">Flexible</option>
+          </select>
+        </div>
+        
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setSearchTerm('');
+              setDepartmentFilter('');
+              setShiftFilter('');
+            }}
+            className={`px-3 py-2 rounded-md text-sm ${themeClasses.button.secondary}`}
+          >
+            Reset Filters
+          </button>
           <button
             type="button"
             onClick={() => setShowFilters(!showFilters)}
-            className={`px-3 py-2 rounded-md flex items-center gap-2 shadow-sm ${themeClasses.filterButton}`}
+            className={`px-3 py-2 rounded-md text-sm flex items-center gap-1 ${themeClasses.button.primary}`}
           >
-            <FaFilter /> {showFilters ? 'Hide Filters' : 'Show Filters'}
+            <FaFilter /> {showFilters ? 'Hide Filters' : 'More Filters'}
           </button>
-          
-          <div className="flex items-center gap-2 bg-blue-100 dark:bg-blue-900 px-3 py-1 rounded-md">
-            <span className={`text-sm font-medium ${isDarkMode ? 'text-blue-200' : 'text-blue-700'}`}>
-              {selectedCount} of {employees?.length || 0} employees selected
-            </span>
-          </div>
         </div>
       </div>
       
@@ -446,20 +598,6 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
             <FaFilter className="mr-2 text-blue-500" /> Advanced Filters
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div>
-              <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Department</label>
-              <select
-                value={departmentFilter}
-                onChange={(e) => setDepartmentFilter(e.target.value)}
-                className={`w-full rounded-md ${themeClasses.input} border-2 focus:border-blue-500`}
-              >
-                <option value="">All Departments</option>
-                {departments.map(dept => (
-                  <option key={dept} value={dept}>{dept}</option>
-                ))}
-              </select>
-            </div>
-            
             <div>
               <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Preset Check-In</label>
               <input
@@ -479,6 +617,22 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
                 className={`w-full rounded-md ${themeClasses.input} border-2 focus:border-blue-500`}
               />
             </div>
+
+            <div>
+              <label className={`block text-sm font-medium mb-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Default Shifts</label>
+              <div className="flex items-center mt-2">
+                <input
+                  type="checkbox"
+                  id="applyDefaultShifts"
+                  checked={applyDefaultShifts}
+                  onChange={(e) => setApplyDefaultShifts(e.target.checked)}
+                  className={`rounded mr-2 h-5 w-5 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'border-gray-300'}`}
+                />
+                <label htmlFor="applyDefaultShifts" className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Apply employee default shifts
+                </label>
+              </div>
+            </div>
           </div>
           
           <div className="mt-4 flex flex-wrap gap-2">
@@ -491,6 +645,26 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               Apply Preset Times
+            </button>
+            <button
+              type="button"
+              onClick={applyShiftPatterns}
+              className={`px-3 py-2 rounded-md text-sm flex items-center gap-1 ${themeClasses.actionButton}`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Apply Shift Times
+            </button>
+            <button
+              type="button"
+              onClick={updateShiftsFromTimes}
+              className={`px-3 py-2 rounded-md text-sm flex items-center gap-1 ${themeClasses.actionButton}`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Update Shifts From Times
             </button>
             <button
               type="button"
@@ -525,21 +699,21 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
 
       <form onSubmit={handleSubmit}>
         <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-          <table className={`min-w-full divide-y attendance-table ${isDarkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
+          <table className={`w-full divide-y attendance-table ${isDarkMode ? 'divide-gray-700' : 'divide-gray-200'} table-fixed`}>
             <thead className={themeClasses.table.header}>
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase">Select</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase">Employee</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase">Department</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase">Shift</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase">Check In</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase">Check Out</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tooltip-container">
+                <th className="px-2 py-3 text-left text-xs font-medium uppercase w-[60px]">Select</th>
+                <th className="px-2 py-3 text-left text-xs font-medium uppercase">Employee</th>
+                <th className="px-2 py-3 text-left text-xs font-medium uppercase">Dept</th>
+                <th className="px-2 py-3 text-left text-xs font-medium uppercase">Status</th>
+                <th className="px-2 py-3 text-left text-xs font-medium uppercase">Shift</th>
+                <th className="px-2 py-3 text-left text-xs font-medium uppercase">Check In</th>
+                <th className="px-2 py-3 text-left text-xs font-medium uppercase">Check Out</th>
+                <th className="px-2 py-3 text-left text-xs font-medium uppercase tooltip-container w-[60px]">
                   WFH
                   <span className="tooltip">Work From Home</span>
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase">Notes</th>
+                <th className="px-2 py-3 text-left text-xs font-medium uppercase">Notes</th>
               </tr>
             </thead>
             <tbody className={`divide-y ${isDarkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
@@ -547,32 +721,10 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
                 filteredAttendanceData.map((record, index) => {
                   const originalIndex = attendanceData.findIndex(r => r.employeeId === record.employeeId);
                   
-                  // Determine status class
-                  let statusClass = '';
-                  switch(record.status) {
-                    case 'Present':
-                      statusClass = 'attendance-status-present';
-                      break;
-                    case 'Absent':
-                      statusClass = 'attendance-status-absent';
-                      break;
-                    case 'Late':
-                      statusClass = 'attendance-status-late';
-                      break;
-                    case 'On Leave':
-                      statusClass = 'attendance-status-leave';
-                      break;
-                    case 'Half Day':
-                      statusClass = 'attendance-status-half-day';
-                      break;
-                    default:
-                      statusClass = '';
-                  }
-                  
                   return (
                     <tr key={record.employeeId} 
                         className={`${!selectedEmployees[record.employeeId] ? 'opacity-50' : ''} ${themeClasses.table.row} transition-colors duration-150`}>
-                      <td className="px-6 py-4">
+                      <td className="px-2 py-2">
                         <input
                           type="checkbox"
                           checked={selectedEmployees[record.employeeId] || false}
@@ -580,27 +732,74 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
                           className={`rounded h-5 w-5 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'border-gray-300'}`}
                         />
                       </td>
-                      <td className={`px-6 py-4 font-medium ${themeClasses.table.cell}`}>{record.employeeName}</td>
-                      <td className={`px-6 py-4 ${themeClasses.table.cell}`}>{record.department}</td>
-                      <td className="px-6 py-4">
-                        <select
-                          value={record.status}
-                          onChange={(e) => handleIndividualChange(originalIndex, 'status', e.target.value)}
-                          className={`rounded-md ${themeClasses.input} ${statusClass} border-2 focus:border-blue-500`}
-                          disabled={!selectedEmployees[record.employeeId]}
-                        >
-                          <option value="Present">Present</option>
-                          <option value="Absent">Absent</option>
-                          <option value="Late">Late</option>
-                          <option value="On Leave">On Leave</option>
-                          <option value="Half Day">Half Day</option>
-                        </select>
+                      <td className={`px-2 py-2 font-medium ${themeClasses.table.cell}`}>{record.employeeName}</td>
+                      <td className={`px-2 py-2 ${themeClasses.table.cell}`}>{record.department}</td>
+                      <td className="px-2 py-2">
+                        <div className="flex flex-wrap gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleQuickStatusChange(originalIndex, 'Present')}
+                            className={`px-1 py-1 rounded text-xs ${
+                              record.status === 'Present' 
+                                ? 'bg-green-600 text-white' 
+                                : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                            } hover:opacity-80`}
+                            disabled={!selectedEmployees[record.employeeId]}
+                            title="Present"
+                          >
+                            P
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleQuickStatusChange(originalIndex, 'Absent')}
+                            className={`px-1 py-1 rounded text-xs ${
+                              record.status === 'Absent' 
+                                ? 'bg-red-600 text-white' 
+                                : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                            } hover:opacity-80`}
+                            disabled={!selectedEmployees[record.employeeId]}
+                            title="Absent"
+                          >
+                            A
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleQuickStatusChange(originalIndex, 'Late')}
+                            className={`px-1 py-1 rounded text-xs ${
+                              record.status === 'Late' 
+                                ? 'bg-yellow-600 text-white' 
+                                : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                            } hover:opacity-80`}
+                            disabled={!selectedEmployees[record.employeeId]}
+                            title="Late"
+                          >
+                            L
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleQuickStatusChange(originalIndex, 'On Leave')}
+                            className={`px-1 py-1 rounded text-xs ${
+                              record.status === 'On Leave' 
+                                ? 'bg-purple-600 text-white' 
+                                : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                            } hover:opacity-80`}
+                            disabled={!selectedEmployees[record.employeeId]}
+                            title="On Leave"
+                          >
+                            O
+                          </button>
+                        </div>
+                        <div className="text-xs mt-1 font-medium">
+                          {record.status}
+                        </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-2 py-2">
                         <select
                           value={record.shift}
                           onChange={(e) => handleIndividualChange(originalIndex, 'shift', e.target.value)}
-                          className={`rounded-md ${themeClasses.input} border-2 focus:border-blue-500`}
+                          className={`rounded-md text-sm ${themeClasses.input} border focus:border-blue-500 w-full ${
+                            record.shift === 'Flexible' ? 'bg-purple-100 dark:bg-purple-900' : ''
+                          }`}
                           disabled={!selectedEmployees[record.employeeId]}
                         >
                           <option value="Day">Day</option>
@@ -609,47 +808,120 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
                           <option value="Evening">Evening</option>
                           <option value="Flexible">Flexible</option>
                         </select>
+                        {selectedEmployees[record.employeeId] && (
+                          <button
+                            type="button"
+                            onClick={() => setFlexibleShift(originalIndex)}
+                            className="mt-1 px-1 py-0.5 text-xs bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200 rounded hover:bg-purple-200 dark:hover:bg-purple-800 w-full"
+                            title="Set as Flexible Shift"
+                          >
+                            Flexible
+                          </button>
+                        )}
                       </td>
-                      <td className="px-6 py-4">
-                        <input
-                          type="time"
-                          value={record.checkIn}
-                          onChange={(e) => handleIndividualChange(originalIndex, 'checkIn', e.target.value)}
-                          className={`rounded-md ${themeClasses.input} border-2 focus:border-blue-500`}
-                          disabled={!selectedEmployees[record.employeeId] || record.status === 'Absent' || record.status === 'On Leave'}
-                        />
-                      </td>
-                      <td className="px-6 py-4">
-                        <input
-                          type="time"
-                          value={record.checkOut}
-                          onChange={(e) => handleIndividualChange(originalIndex, 'checkOut', e.target.value)}
-                          className={`rounded-md ${themeClasses.input} border-2 focus:border-blue-500`}
-                          disabled={!selectedEmployees[record.employeeId] || record.status === 'Absent' || record.status === 'On Leave'}
-                        />
-                      </td>
-                      <td className="px-6 py-4 relative group">
-                        <div className="flex items-center">
+                      <td className="px-2 py-2">
+                        <div className="flex flex-col gap-1">
                           <input
-                            type="checkbox"
-                            checked={record.workFromHome}
-                            onChange={(e) => handleIndividualChange(originalIndex, 'workFromHome', e.target.checked)}
-                            className={`rounded h-5 w-5 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'border-gray-300'}`}
+                            type="time"
+                            value={record.checkIn}
+                            onChange={(e) => handleIndividualChange(originalIndex, 'checkIn', e.target.value)}
+                            className={`rounded-md w-full text-sm ${themeClasses.input} border focus:border-blue-500 ${
+                              !Object.values(quickTimes).some(times => times.in === record.checkIn) && record.checkIn 
+                                ? 'bg-purple-100 dark:bg-purple-900' : ''
+                            }`}
                             disabled={!selectedEmployees[record.employeeId] || record.status === 'Absent' || record.status === 'On Leave'}
                           />
-                          <div className="absolute left-full ml-2 invisible group-hover:visible bg-gray-800 text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
-                            Work From Home
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleQuickTime(originalIndex, 'morning')}
+                              className={`px-1 py-1 rounded text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 hover:opacity-80 flex-1`}
+                              disabled={!selectedEmployees[record.employeeId] || record.status === 'Absent' || record.status === 'On Leave'}
+                              title="Morning (9:00)"
+                            >
+                              M
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleQuickTime(originalIndex, 'afternoon')}
+                              className={`px-1 py-1 rounded text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 hover:opacity-80 flex-1`}
+                              disabled={!selectedEmployees[record.employeeId] || record.status === 'Absent' || record.status === 'On Leave'}
+                              title="Afternoon (13:00)"
+                            >
+                              A
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleQuickTime(originalIndex, 'night')}
+                              className={`px-1 py-1 rounded text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 hover:opacity-80 flex-1`}
+                              disabled={!selectedEmployees[record.employeeId] || record.status === 'Absent' || record.status === 'On Leave'}
+                              title="Night (21:00)"
+                            >
+                              N
+                            </button>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-2 py-2">
+                        <div className="flex flex-col gap-1">
+                          <input
+                            type="time"
+                            value={record.checkOut}
+                            onChange={(e) => handleIndividualChange(originalIndex, 'checkOut', e.target.value)}
+                            className={`rounded-md w-full text-sm ${themeClasses.input} border focus:border-blue-500 ${
+                              !Object.values(quickTimes).some(times => times.out === record.checkOut) && record.checkOut 
+                                ? 'bg-purple-100 dark:bg-purple-900' : ''
+                            }`}
+                            disabled={!selectedEmployees[record.employeeId] || record.status === 'Absent' || record.status === 'On Leave'}
+                          />
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleQuickTime(originalIndex, 'morning')}
+                              className={`px-1 py-1 rounded text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 hover:opacity-80 flex-1`}
+                              disabled={!selectedEmployees[record.employeeId] || record.status === 'Absent' || record.status === 'On Leave'}
+                              title="Morning (17:00)"
+                            >
+                              M
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleQuickTime(originalIndex, 'afternoon')}
+                              className={`px-1 py-1 rounded text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 hover:opacity-80 flex-1`}
+                              disabled={!selectedEmployees[record.employeeId] || record.status === 'Absent' || record.status === 'On Leave'}
+                              title="Afternoon (21:00)"
+                            >
+                              A
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleQuickTime(originalIndex, 'night')}
+                              className={`px-1 py-1 rounded text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 hover:opacity-80 flex-1`}
+                              disabled={!selectedEmployees[record.employeeId] || record.status === 'Absent' || record.status === 'On Leave'}
+                              title="Night (5:00)"
+                            >
+                              N
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-2 py-2 relative group">
+                        <input
+                          type="checkbox"
+                          checked={record.workFromHome}
+                          onChange={(e) => handleIndividualChange(originalIndex, 'workFromHome', e.target.checked)}
+                          className={`rounded h-5 w-5 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'border-gray-300'}`}
+                          disabled={!selectedEmployees[record.employeeId]}
+                        />
+                      </td>
+                      <td className="px-2 py-2">
                         <input
                           type="text"
-                          value={record.notes || ''}
+                          value={record.notes}
                           onChange={(e) => handleIndividualChange(originalIndex, 'notes', e.target.value)}
-                          className={`rounded-md w-full ${themeClasses.input} border-2 focus:border-blue-500`}
-                          placeholder="Add notes..."
+                          className={`rounded-md w-full text-sm ${themeClasses.input} border focus:border-blue-500`}
                           disabled={!selectedEmployees[record.employeeId]}
+                          placeholder="Notes"
                         />
                       </td>
                     </tr>
@@ -657,8 +929,8 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
                 })
               ) : (
                 <tr>
-                  <td colSpan="9" className={`px-6 py-4 text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                    No employees match your search criteria
+                  <td colSpan="9" className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                    No employees found matching your filters.
                   </td>
                 </tr>
               )}
