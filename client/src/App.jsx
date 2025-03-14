@@ -7,8 +7,9 @@ import Login from "./pages/Login";
 import EmployeePage from "./pages/EmployeePage"; // Updated to use our new EmployeePage
 import { ThemeContext } from "./context/ThemeProvider"; // Theme Context
 import AttendancePage from "./pages/AttendancePage";
-import ImageGeneration from "./pages/ImageGeneration";
+import ImageGeneration from "./pages/ImageGenerator";
 import RawMaterialsInventory from "./pages/RawMaterialsInventory";
+
 
 function App() {
   return (
@@ -19,16 +20,19 @@ function App() {
         <Route path="/employees" element={<ProtectedRoute component={<EmployeePage />} />} />
         <Route path="/raw-materials" element={<ProtectedRoute component={<RawMaterialsInventory />} />} />
         <Route path="/attendance" element={<ProtectedRoute component={<AttendancePage />} />} />
-        <Route path="/image-generation" element={<ProtectedRoute component={<ImageGeneration />} />} />
+        <Route path="/image-generation" element={<ProtectedRoute component={<ImageGeneration/>} noContainer={true} />} />
       </Routes>
     </Router>
   );
 }
 
 // 🔹 Wrapper for Layout (Handles Sidebar & Navbar)
-function LayoutWrapper({ children }) {
+function LayoutWrapper({ children, noContainer = false }) {
   const { theme } = useContext(ThemeContext);
   const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
+  
+  // Check if the current component is ImageGeneration
+  const isImageGenerator = children.type === ImageGeneration;
 
   return (
     <div className={`flex flex-col md:flex-row h-screen bg-light-background dark:bg-dark-background text-light-text-primary dark:text-dark-text-primary overflow-hidden`}>
@@ -36,9 +40,13 @@ function LayoutWrapper({ children }) {
       <div className="flex-1 flex flex-col overflow-hidden">
         {isAuthenticated && <Navbar />} {/* Navbar only for authenticated users */}
         <main className="flex-1 overflow-auto scrollbar-thin">
-          <div className="responsive-container">
-            {children}
-          </div>
+          {noContainer ? (
+            children
+          ) : (
+            <div className="responsive-container">
+              {children}
+            </div>
+          )}
         </main>
       </div>
     </div>
@@ -46,9 +54,9 @@ function LayoutWrapper({ children }) {
 }
 
 // 🔹 Wrapper to protect routes
-function ProtectedRoute({ component }) {
+function ProtectedRoute({ component, noContainer = false }) {
   const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
-  return isAuthenticated ? <LayoutWrapper>{component}</LayoutWrapper> : <Navigate to="/" />;
+  return isAuthenticated ? <LayoutWrapper noContainer={noContainer}>{component}</LayoutWrapper> : <Navigate to="/" />;
 }
 
 // 🔹 Separate Login Wrapper (No Sidebar/Navbar)
