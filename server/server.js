@@ -38,7 +38,7 @@ app.get('/health', (req, res) => {
 app.use(errorHandler);
 // Database Connection
 mongoose
-  .connect(process.env.MONGO_URI)
+  .connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => console.log(err));
 
