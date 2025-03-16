@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FiPlus, FiEdit, FiTrash2, FiSearch, FiFilter, FiRefreshCw, FiX } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiSearch, FiFilter, FiRefreshCw, FiX, FiEye } from 'react-icons/fi';
 import EmployeeForm from '../components/employee/EmployeeForm';
+import { useNavigate } from 'react-router-dom';
 
 const EmployeePage = () => {
+  const navigate = useNavigate();
   // State management
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -392,17 +394,26 @@ const EmployeePage = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end space-x-2">
                         <button
+                          onClick={() => navigate(`/employees/${employee._id}`)}
+                          className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                          title="View Details"
+                        >
+                          <FiEye className="w-5 h-5" />
+                        </button>
+                        <button
                           onClick={() => {
                             setEditingEmployee(employee);
                             setShowForm(true);
                           }}
                           className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                          title="Edit"
                         >
                           <FiEdit className="w-5 h-5" />
                         </button>
                         <button
                           onClick={() => setConfirmDelete(employee._id)}
                           className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                          title="Delete"
                         >
                           <FiTrash2 className="w-5 h-5" />
                         </button>

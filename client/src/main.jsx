@@ -4,7 +4,7 @@ import { ThemeProvider } from "./context/ThemeProvider"; // Import ThemeProvider
 
 import './index.css'
 import App from './App.jsx'
-
+import './api/axiosConfig'; // Import axios config globally
 
 // Emit a test message after connection
 
