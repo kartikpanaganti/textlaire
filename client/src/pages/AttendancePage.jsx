@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import axios from "axios";
 import {
   FaSpinner, FaEdit, FaTrash, FaPlus, FaSearch,
@@ -6,6 +6,7 @@ import {
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { ThemeContext } from '../context/ThemeProvider';
 
 import { format, startOfWeek, endOfWeek, addDays } from 'date-fns';
 import AttendanceFilters from '../components/attendance/AttendanceFilters';
@@ -43,34 +44,25 @@ const AttendancePage = () => {
   const [sortDirection, setSortDirection] = useState('asc');
   const [selectedEmployees, setSelectedEmployees] = useState([]);
   
-  // Add dark mode state
-  const [isDarkMode, setIsDarkMode] = useState(
-    localStorage.getItem('darkMode') === 'true' || 
-    (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
-  );
+  // Use global theme context instead of local state
+  const { theme } = useContext(ThemeContext);
+  const isDarkMode = theme === 'dark';
 
-  // Toggle dark mode
-  const toggleDarkMode = () => {
-    const newMode = !isDarkMode;
-    setIsDarkMode(newMode);
-    localStorage.setItem('darkMode', newMode);
-    
-    // Apply dark mode class to document
-    if (newMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+  // Theme-aware button classes
+  const buttonClasses = {
+    primary: isDarkMode 
+      ? "bg-blue-600 hover:bg-blue-700 text-white" 
+      : "bg-blue-600 hover:bg-blue-700 text-white",
+    success: isDarkMode 
+      ? "bg-green-600 hover:bg-green-700 text-white" 
+      : "bg-green-500 hover:bg-green-600 text-white",
+    danger: isDarkMode 
+      ? "bg-red-600 hover:bg-red-700 text-white" 
+      : "bg-red-500 hover:bg-red-600 text-white",
+    info: isDarkMode 
+      ? "bg-purple-600 hover:bg-purple-700 text-white" 
+      : "bg-purple-500 hover:bg-purple-600 text-white",
   };
-
-  // Initialize dark mode on component mount
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, []);
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -250,22 +242,6 @@ const AttendancePage = () => {
     }
   };
 
-  // Theme-aware button classes
-  const buttonClasses = {
-    primary: isDarkMode 
-      ? "bg-blue-600 hover:bg-blue-700 text-white" 
-      : "bg-blue-600 hover:bg-blue-700 text-white",
-    success: isDarkMode 
-      ? "bg-green-600 hover:bg-green-700 text-white" 
-      : "bg-green-500 hover:bg-green-600 text-white",
-    danger: isDarkMode 
-      ? "bg-red-600 hover:bg-red-700 text-white" 
-      : "bg-red-500 hover:bg-red-600 text-white",
-    info: isDarkMode 
-      ? "bg-purple-600 hover:bg-purple-700 text-white" 
-      : "bg-purple-500 hover:bg-purple-600 text-white",
-  };
-
   // Function to determine shift based on check-in time
   const determineShiftFromTime = (checkInTime) => {
     if (!checkInTime) return null;
@@ -354,13 +330,6 @@ const AttendancePage = () => {
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-4">
             <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Attendance Management</h1>
-            <button
-              onClick={toggleDarkMode}
-              className="p-2 rounded-full hover:bg-opacity-20 hover:bg-gray-500 focus:outline-none"
-              aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
-            >
-              {isDarkMode ? <FaSun className="text-yellow-300" /> : <FaMoon className="text-gray-600" />}
-            </button>
           </div>
           <div className="flex flex-wrap gap-3">
             <button

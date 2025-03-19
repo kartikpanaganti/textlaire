@@ -1,69 +1,45 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { format } from 'date-fns';
 import { FaSearch, FaFilter, FaCalendarAlt, FaUserCheck, FaUserTimes, FaSave, FaList, FaMoon, FaSun } from 'react-icons/fa';
+import { ThemeContext } from '../../context/ThemeProvider';
 
 const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
     const [attendanceData, setAttendanceData] = useState([]);
     const [selectedEmployees, setSelectedEmployees] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [searchTerm, setSearchTerm] = useState('');
-  const [departmentFilter, setDepartmentFilter] = useState('');
-  const [shiftFilter, setShiftFilter] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-  const [presetTimes, setPresetTimes] = useState({
-    checkIn: '',
-    checkOut: ''
-  });
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [templateName, setTemplateName] = useState('');
-  const [templates, setTemplates] = useState([]);
-  const [showTemplateList, setShowTemplateList] = useState(false);
-  const [applyDefaultShifts, setApplyDefaultShifts] = useState(true);
+    const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+    const [searchTerm, setSearchTerm] = useState('');
+    const [departmentFilter, setDepartmentFilter] = useState('');
+    const [shiftFilter, setShiftFilter] = useState('');
+    const [showFilters, setShowFilters] = useState(false);
+    const [presetTimes, setPresetTimes] = useState({
+      checkIn: '',
+      checkOut: ''
+    });
+    const [showTemplateModal, setShowTemplateModal] = useState(false);
+    const [templateName, setTemplateName] = useState('');
+    const [templates, setTemplates] = useState([]);
+    const [showTemplateList, setShowTemplateList] = useState(false);
+    const [applyDefaultShifts, setApplyDefaultShifts] = useState(true);
 
-  // Add theme state
-  const [isDarkMode, setIsDarkMode] = useState(
-    localStorage.getItem('darkMode') === 'true' || 
-    (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
-  );
+    // Use global theme context instead of local state
+    const { theme } = useContext(ThemeContext);
+    const isDarkMode = theme === 'dark';
 
-  // Listen for system theme changes
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e) => setIsDarkMode(e.matches);
-    
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
+    // Get unique departments from employees
+    const departments = [...new Set(employees?.map(emp => emp.department).filter(Boolean))];
 
-  // Toggle theme manually
-  const toggleTheme = () => {
-    const newMode = !isDarkMode;
-    setIsDarkMode(newMode);
-    localStorage.setItem('darkMode', newMode);
-    
-    // Apply dark mode class to document
-    if (newMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  };
-
-  // Get unique departments from employees
-  const departments = [...new Set(employees?.map(emp => emp.department).filter(Boolean))];
-
-  // Load saved templates on component mount
-  useEffect(() => {
-    const savedTemplates = localStorage.getItem('attendanceTemplates');
-    if (savedTemplates) {
-      try {
-        setTemplates(JSON.parse(savedTemplates));
-      } catch (e) {
-        console.error('Error loading templates:', e);
+    // Load saved templates on component mount
+    useEffect(() => {
+      const savedTemplates = localStorage.getItem('attendanceTemplates');
+      if (savedTemplates) {
+        try {
+          setTemplates(JSON.parse(savedTemplates));
+        } catch (e) {
+          console.error('Error loading templates:', e);
+        }
       }
-    }
-  }, []);
+    }, []);
 
     useEffect(() => {
       if (employees?.length) {
@@ -93,26 +69,26 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
         });
         setSelectedEmployees(initialSelected);
       }
-  }, [employees, selectedDate, applyDefaultShifts]);
+    }, [employees, selectedDate, applyDefaultShifts]);
 
-      const handleSubmit = async (e) => {
-        e.preventDefault();
-        setIsSubmitting(true);
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+      setIsSubmitting(true);
 
-        const selectedAttendance = attendanceData.filter(record => 
-          selectedEmployees[record.employeeId]
-        );
+      const selectedAttendance = attendanceData.filter(record => 
+        selectedEmployees[record.employeeId]
+      );
 
-    try {
-      await onSubmit(selectedAttendance);
-      // Success is handled by the parent component
-        } catch (error) {
-          console.error('Submission error:', error);
-          alert('Failed to submit attendance. Please try again.');
-        } finally {
-          setIsSubmitting(false);
-        }
-  };
+      try {
+        await onSubmit(selectedAttendance);
+        // Success is handled by the parent component
+      } catch (error) {
+        console.error('Submission error:', error);
+        alert('Failed to submit attendance. Please try again.');
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
 
     const handleSelectAll = (checked) => {
       const newSelected = {};
@@ -431,13 +407,6 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
       <div className={`flex justify-between items-center mb-6 pb-4 border-b ${themeClasses.header}`}>
         <h2 className="text-2xl font-bold">Quick Attendance</h2>
         <div className="flex items-center gap-3">
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-full hover:bg-opacity-20 hover:bg-gray-500"
-            title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            {isDarkMode ? <FaSun className="text-yellow-300" /> : <FaMoon className="text-gray-600" />}
-          </button>
           <button 
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
