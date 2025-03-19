@@ -38,7 +38,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import apiClient from '../../api/axiosConfig';
+import apiClient from '../../lib/api';
 
 const AttendanceTracker = ({ employeeId, startDate, endDate, onAttendanceUpdate }) => {
   const [attendance, setAttendance] = useState([]);

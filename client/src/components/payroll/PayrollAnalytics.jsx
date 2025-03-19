@@ -41,7 +41,7 @@ import {
   BarChart,
   Bar
 } from 'recharts';
-import apiClient from '../../api/axiosConfig';
+import apiClient from '../../lib/api';
 
 const PayrollAnalytics = () => {
   const theme = useTheme();

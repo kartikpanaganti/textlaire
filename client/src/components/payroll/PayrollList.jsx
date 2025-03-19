@@ -34,7 +34,7 @@ import {
   Search as SearchIcon,
   MoreVert as MoreVertIcon
 } from '@mui/icons-material';
-import apiClient from '../../api/axiosConfig';
+import apiClient from '../../lib/api';
 
 const PayrollList = ({ onViewDetails }) => {
   const theme = useTheme();

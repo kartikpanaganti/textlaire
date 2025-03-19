@@ -1,8 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
-import { configureClient, connectRealtime } from '../api/falClient';
 import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence } from 'framer-motion';
-import axios from 'axios';
+import * as fal from '@fal-ai/serverless-client';
+import { randomSeed } from '../components/image-gen/utils';
+
+// Import API client
+import { 
+  configureFalClient, 
+  getWebSocketDetails,
+  getAllPatterns,
+  savePattern as savePatternToServer,
+  deletePattern as deletePatternFromServer
+} from '../lib/api';
 
 // Import components
 import DesignControls from '../components/image-gen/DesignControls';
@@ -30,8 +39,32 @@ import {
   INPUT_DEFAULTS
 } from '../components/image-gen/constants';
 
-function randomSeed() {
-  return Math.floor(Math.random() * 10000000).toFixed(0);
+// Add a custom hook for viewport detection
+function useViewportSize() {
+  const [viewportSize, setViewportSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+    isMobile: window.innerWidth < 768,
+    isTablet: window.innerWidth >= 768 && window.innerWidth < 1024,
+    isDesktop: window.innerWidth >= 1024
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setViewportSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+        isMobile: window.innerWidth < 768,
+        isTablet: window.innerWidth >= 768 && window.innerWidth < 1024,
+        isDesktop: window.innerWidth >= 1024
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return viewportSize;
 }
 
 function ImageGenerator() {
@@ -93,23 +126,61 @@ function ImageGenerator() {
   const [previewRotation, setPreviewRotation] = useState(0);
   const [previewLayout, setPreviewLayout] = useState('grid'); // 'grid' or 'continuous'
 
+  // Add image adjustment states
+  const [brightness, setBrightness] = useState(100);
+  const [contrast, setContrast] = useState(100);
+  const [saturation, setSaturation] = useState(100);
+
   // Configure API URL based on hostname or env var
   const API_URL = import.meta.env.VITE_API_URL || 
     (window.location.hostname === 'localhost' ? 
       'http://localhost:5000' : 
       `http://${window.location.hostname}:5000`);
 
-  useEffect(() => {
-    // Configure the fal client
-    configureClient();
+  // Add viewport size hook
+  const viewport = useViewportSize();
+  
+  // Add state for mobile panel navigation
+  const [activeMobilePanel, setActiveMobilePanel] = useState('preview');
 
-    // Connect to the fal.ai realtime API
-    const initConnection = async () => {
+  useEffect(() => {
+    // Update prompt when pattern selection changes
+    updatePromptFromMetadata();
+  }, [selectedPattern, seamlessType, designStyle, customColor, application, textileFinish, 
+      patternScale, patternDensity, personalization, personalizationText, textPlacement, customPrompt]);
+
+  useEffect(() => {
+    // Configure the fal client and setup connection
+    const initializeClient = async () => {
       try {
         setIsLoading(true);
-        const conn = await connectRealtime('fal-ai/fast-lightning-sdxl', {
+        
+        // Configure the client using our API
+        await configureFalClient();
+        
+        // Get WebSocket details from the server
+        const { wsUrl, apiKey } = await getWebSocketDetails();
+        
+        // Setup fal client with the obtained configuration
+        fal.config({
+          proxyUrl: `${API_URL}/api/proxy`,
+          requestOptionsTransformer: (options) => ({
+            ...options,
+            headers: {
+              ...options.headers,
+              'x-fal-target-url': options.url,
+            },
+          }),
+        });
+        
+        // Connect to realtime API
+        const conn = await fal.realtime.connect('fal-ai/fast-lightning-sdxl', {
           connectionKey: 'lightning-sdxl',
           throttleInterval: 64,
+          credentials: {
+            baseUrl: wsUrl,
+            key: apiKey,
+          },
           onResult: (result) => {
             const blob = new Blob([result.images[0].content], { type: 'image/jpeg' });
             setImageBlob(blob);
@@ -127,16 +198,14 @@ function ImageGenerator() {
       }
     };
 
-    initConnection();
+    initializeClient();
 
     // Load saved images from server API
     const loadSavedImages = async () => {
       try {
-        const response = await axios.get(`${API_URL}/api/patterns`);
-        if (response.data && Array.isArray(response.data)) {
-          setSavedImages(response.data);
-          console.log(`Loaded ${response.data.length} patterns from server`);
-        }
+        const products = await getAllPatterns();
+        setSavedImages(products);
+        console.log(`Loaded ${products.length} patterns from server`);
       } catch (error) {
         console.error('Error loading patterns from server:', error);
         showNotification("Could not load patterns from server");
@@ -201,6 +270,8 @@ function ImageGenerator() {
   };
 
   const generateImage = () => {
+    // Ensure prompt is updated with latest pattern selection before generating
+    updatePromptFromMetadata();
     generateImageWithParams(prompt, seed);
   };
 
@@ -276,30 +347,77 @@ function ImageGenerator() {
       return;
     }
     
-    // Create form data to send file
-    const formData = new FormData();
+    // Apply filters to the image if any are modified from defaults
+    if (brightness !== 100 || contrast !== 100 || saturation !== 100) {
+      const applyFiltersAndSave = () => {
+        const img = new Image();
+        img.onload = () => {
+          // Create canvas to apply filters
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          
+          // Apply CSS filters to canvas
+          ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`;
+          
+          // Draw the image with filters applied
+          ctx.drawImage(img, 0, 0, img.width, img.height);
+          
+          // Convert canvas to blob
+          canvas.toBlob((filteredBlob) => {
+            // Now save with the filtered blob
+            saveImageWithBlob(filteredBlob);
+          }, 'image/jpeg', 1.0);
+        };
+        
+        img.src = URL.createObjectURL(imageBlob);
+      };
+      
+      applyFiltersAndSave();
+    } else {
+      // No filters to apply, save the original image
+      saveImageWithBlob(imageBlob);
+    }
+  };
+  
+  // Helper function to save image with given blob
+  const saveImageWithBlob = (blob) => {
+    // Prepare the product data with all details
+    const productData = {
+      id: uuidv4(),
+      name: productName,
+      code: productCode || `PRD-${Date.now().toString().slice(-6)}`,
+      type: towelType,
+      material: towelMaterial,
+      color: towelColor,
+      dimensions: dimensions || '50cm x 100cm',
+      price: price || '$29.99',
+      application: application,
+      finish: textileFinish,
+      prompt: prompt,
+      seed: seed,
+      createdAt: new Date().toISOString(),
+      pattern: selectedPattern?.name || 'Custom Pattern',
+      style: designStyle,
+      scale: patternScale,
+      density: patternDensity,
+      // Store filter values for future reference
+      filters: {
+        brightness,
+        contrast,
+        saturation
+      }
+    };
     
-    // Add product metadata
-    formData.append('id', uuidv4());
-    formData.append('name', productName);
-    formData.append('code', productCode);
-    formData.append('type', towelType);
-    formData.append('material', towelMaterial);
-    formData.append('color', towelColor);
-    formData.append('dimensions', dimensions);
-    formData.append('price', price);
-    formData.append('prompt', prompt);
-    formData.append('seed', seed);
+    // Convert blob to file
+    const file = new File([blob], `pattern-${Date.now()}.jpg`, { type: 'image/jpeg' });
     
-    // Convert blob to file and append to form
-    const file = new File([imageBlob], `pattern-${Date.now()}.jpg`, { type: 'image/jpeg' });
-    formData.append('image', file);
-    
-    // Save to server
-    axios.post(`${API_URL}/api/patterns`, formData)
+    // Save pattern using API
+    savePatternToServer(productData, file)
       .then(response => {
         // Update local state with server response
-        const newProduct = response.data.product;
+        const newProduct = response.product;
         const updatedProducts = [...savedImages, newProduct];
         setSavedImages(updatedProducts);
         
@@ -313,13 +431,13 @@ function ImageGenerator() {
       })
       .catch(error => {
         console.error('Error saving product:', error);
-        showNotification(`Error saving product: ${error.response?.data?.error || 'Unknown error'}`);
+        showNotification(`Error saving product: ${error.message || 'Unknown error'}`);
       });
   };
 
   const deleteProduct = async (productId) => {
     try {
-      await axios.delete(`${API_URL}/api/patterns/${productId}`);
+      await deletePatternFromServer(productId);
       
       // Update local state
       const updatedProducts = savedImages.filter(product => product.id !== productId);
@@ -328,7 +446,29 @@ function ImageGenerator() {
       showNotification("Product deleted successfully");
     } catch (error) {
       console.error('Error deleting product:', error);
-      showNotification(`Error deleting product: ${error.response?.data?.error || 'Unknown error'}`);
+      showNotification(`Error deleting product: ${error.message || 'Unknown error'}`);
+    }
+  };
+
+  const updateProduct = async (updatedProduct) => {
+    try {
+      // You would typically make an API call to update the product
+      // This is a placeholder for that functionality
+      console.log("Updating product:", updatedProduct);
+      
+      // For now we'll just update our local state
+      const updatedProducts = savedImages.map(product => 
+        product.id === updatedProduct.id ? updatedProduct : product
+      );
+      
+      setSavedImages(updatedProducts);
+      showNotification("Product updated successfully");
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating product:', error);
+      showNotification(`Error updating product: ${error.message || 'Unknown error'}`);
+      return false;
     }
   };
 
@@ -336,11 +476,18 @@ function ImageGenerator() {
   const renderImage = (product) => {
     // Check if product has imageUrl (server-based) or imageData (base64)
     if (product.imageUrl) {
-      return `${API_URL}${product.imageUrl}`;
+      return product.imageUrl.startsWith('http') 
+        ? product.imageUrl 
+        : `${API_URL}${product.imageUrl}`;
     } else if (product.imageData) {
       return product.imageData;
+    } else if (product.image) {
+      // Already has the full image URL (from memory)
+      return product.image;
     }
-    return '';
+    
+    // Fallback to placeholder image if none available
+    return 'https://via.placeholder.com/300?text=No+Image';
   };
 
   const openPreview = (imageUrl) => {
@@ -458,71 +605,86 @@ function ImageGenerator() {
     setShowTileLines,
     generateImage,
     saveImage,
-    openPreview
+    openPreview,
+    // Add filter controls
+    brightness,
+    setBrightness,
+    contrast,
+    setContrast,
+    saturation,
+    setSaturation
   };
 
   const galleryProps = {
     savedImages,
     deleteProduct,
     openPreview,
-    renderImage
+    renderImage,
+    updateProduct
   };
 
   return (
     <motion.div 
+      className="relative h-full flex flex-col bg-[#0F1115]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="bg-[#0A0C10] text-gray-100 min-h-screen overflow-hidden"
+      exit={{ opacity: 0 }}
     >
-      {/* Compact Header */}
+      {/* Modern Header with Glass Effect */}
       <motion.header 
-        initial={{ y: -20 }}
-        animate={{ y: 0 }}
-        className="sticky top-0 left-0 right-0 z-50 px-2 py-1.5 bg-[#0A0C10]"
+        className="sticky top-0 z-10 bg-[#0F1115]/80 backdrop-blur-md border-b border-[#2A2F38] shadow-md"
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.1 }}
       >
-        <div className="max-w-[1200px] mx-auto">
-          <div className="bg-[#1A1D24]/90 backdrop-blur-xl rounded-lg px-3 py-1.5 flex justify-between items-center border border-[#2A2F38] shadow-xl">
-            <motion.h1 
-              className="text-base font-semibold"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+        <div className="max-w-[1200px] mx-auto px-3 py-2 flex items-center justify-between">
+          <div className="flex items-center">
+            <motion.div
+              className="w-8 h-8 mr-2 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg"
+              whileHover={{ scale: 1.05, rotate: 5 }}
+              whileTap={{ scale: 0.95 }}
             >
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-[#60A5FA] via-[#A78BFA] to-[#F472B6]">
-                AI Pattern Designer
-              </span>
-            </motion.h1>
-            <div className="flex space-x-1.5">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
+              </svg>
+            </motion.div>
+            <h1 className="text-lg font-semibold text-white">Pattern Generator</h1>
+          </div>
+
+          <div className="flex gap-2">
+            {/* Tab Switching - Modern Pill Style */}
+            <div className="bg-[#1A1D24] p-1 rounded-full shadow-inner flex">
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setActiveTab('generate')}
-                className={`px-3 py-1 rounded-md transition-all text-xs ${
+                className={`px-4 py-1.5 rounded-full transition-all text-xs font-medium ${
                   activeTab === 'generate' 
-                    ? 'bg-gradient-to-r from-[#2563EB] to-[#7C3AED] text-white' 
-                    : 'bg-[#1E2128] text-gray-300 hover:bg-[#2A2F38]'
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg' 
+                    : 'bg-transparent text-gray-400 hover:text-white'
                 }`}
               >
-                Design
+                Design Studio
               </motion.button>
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setActiveTab('saved')}
-                className={`px-3 py-1 rounded-md transition-all text-xs ${
+                className={`px-4 py-1.5 rounded-full transition-all text-xs font-medium ${
                   activeTab === 'saved' 
-                    ? 'bg-gradient-to-r from-[#2563EB] to-[#7C3AED] text-white' 
-                    : 'bg-[#1E2128] text-gray-300 hover:bg-[#2A2F38]'
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg' 
+                    : 'bg-transparent text-gray-400 hover:text-white'
                 }`}
               >
-                Gallery
+                Pattern Gallery
               </motion.button>
             </div>
           </div>
         </div>
       </motion.header>
 
-      {/* Main Content with Proper Scrolling */}
-      <div className="px-2 pb-2 pt-2 h-[calc(100vh-3rem)] overflow-hidden">
+      {/* Main Content with Responsive Layout */}
+      <div className="flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
           {activeTab === 'generate' ? (
             <motion.div
@@ -530,36 +692,141 @@ function ImageGenerator() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="max-w-[1200px] mx-auto h-full"
+              className="h-full mx-auto max-w-[1400px] p-2"
             >
-              <div className="grid grid-cols-12 gap-2 h-full">
-                {/* Design Controls - Left Panel */}
-                <motion.div
-                  className="col-span-3 h-full overflow-y-auto pr-1"
-                  initial={{ x: -20, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                >
-                  <DesignControls {...designControlsProps} />
-                </motion.div>
-
-                {/* Main Preview Area - Center */}
-                <motion.div
-                  className="col-span-6 h-full overflow-y-auto pr-1"
-                  initial={{ y: 20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                >
-                  <PatternPreview {...patternPreviewProps} />
-                </motion.div>
-
-                {/* Product Details - Right Panel */}
-                <motion.div
-                  className="col-span-3 h-full overflow-y-auto pr-1"
-                  initial={{ x: 20, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                >
-                  <ProductDetails {...productDetailsProps} />
-                </motion.div>
-              </div>
+              {viewport.isMobile ? (
+                // Mobile Layout - Swipeable Panels
+                <div className="h-full flex flex-col">
+                  {/* Mobile Panel Navigation */}
+                  <div className="bg-[#1A1D24] p-1.5 rounded-lg mb-2 flex justify-between items-center shadow-md">
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setActiveMobilePanel('preview')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                          activeMobilePanel === 'preview' 
+                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' 
+                            : 'bg-[#232830] text-gray-400'
+                        }`}
+                      >
+                        Preview
+                      </button>
+                      <button
+                        onClick={() => setActiveMobilePanel('controls')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                          activeMobilePanel === 'controls' 
+                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' 
+                            : 'bg-[#232830] text-gray-400'
+                        }`}
+                      >
+                        Controls
+                      </button>
+                      <button
+                        onClick={() => setActiveMobilePanel('details')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                          activeMobilePanel === 'details' 
+                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' 
+                            : 'bg-[#232830] text-gray-400'
+                        }`}
+                      >
+                        Details
+                      </button>
+                    </div>
+                    {activeMobilePanel === 'preview' && !isLoading && image && (
+                      <div className="flex gap-1">
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={generateImage}
+                          className="p-1.5 rounded-md bg-blue-600 text-white text-xs shadow-md"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={saveImage}
+                          className="p-1.5 rounded-md bg-green-600 text-white text-xs shadow-md"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                          </svg>
+                        </motion.button>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Mobile Panels Content */}
+                  <div className="flex-1 overflow-hidden">
+                    <AnimatePresence mode="wait">
+                      {activeMobilePanel === 'preview' && (
+                        <motion.div
+                          key="preview"
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 10 }}
+                          className="h-full"
+                        >
+                          <PatternPreview {...patternPreviewProps} />
+                        </motion.div>
+                      )}
+                      
+                      {activeMobilePanel === 'controls' && (
+                        <motion.div
+                          key="controls"
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 10 }}
+                          className="h-full overflow-y-auto"
+                        >
+                          <DesignControls {...designControlsProps} />
+                        </motion.div>
+                      )}
+                      
+                      {activeMobilePanel === 'details' && (
+                        <motion.div
+                          key="details"
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 10 }}
+                          className="h-full overflow-y-auto"
+                        >
+                          <ProductDetails {...productDetailsProps} />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              ) : viewport.isTablet ? (
+                // Tablet Layout - Two Column
+                <div className="h-full grid grid-cols-5 gap-3">
+                  <div className="col-span-2 grid grid-rows-2 gap-3 h-full">
+                    <div className="overflow-y-auto bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50">
+                      <DesignControls {...designControlsProps} />
+                    </div>
+                    <div className="overflow-y-auto bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50">
+                      <ProductDetails {...productDetailsProps} />
+                    </div>
+                  </div>
+                  <div className="col-span-3 h-full bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50 overflow-hidden">
+                    <PatternPreview {...patternPreviewProps} />
+                  </div>
+                </div>
+              ) : (
+                // Desktop Layout - Three Column
+                <div className="h-full grid grid-cols-12 gap-3">
+                  <div className="col-span-3 h-full bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50 overflow-y-auto">
+                    <DesignControls {...designControlsProps} />
+                  </div>
+                  <div className="col-span-6 h-full bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50 overflow-hidden">
+                    <PatternPreview {...patternPreviewProps} />
+                  </div>
+                  <div className="col-span-3 h-full bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50 overflow-y-auto">
+                    <ProductDetails {...productDetailsProps} />
+                  </div>
+                </div>
+              )}
             </motion.div>
           ) : (
             <motion.div
@@ -567,9 +834,11 @@ function ImageGenerator() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="max-w-[1200px] mx-auto h-full overflow-y-auto"
+              className="max-w-[1400px] mx-auto h-full overflow-y-auto p-2"
             >
-              <GalleryGrid {...galleryProps} />
+              <div className="bg-[#1A1D24] rounded-xl p-4 shadow-lg border border-[#2A2F38]/50 h-full">
+                <GalleryGrid {...galleryProps} />
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

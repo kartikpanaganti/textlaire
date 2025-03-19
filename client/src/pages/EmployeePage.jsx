@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { FiPlus, FiEdit, FiTrash2, FiSearch, FiFilter, FiRefreshCw, FiX, FiEye } from 'react-icons/fi';
 import EmployeeForm from '../components/employee/EmployeeForm';
 import { useNavigate } from 'react-router-dom';
-import apiClient from '../api/axiosConfig';
+import apiClient from '../lib/api';
 
 const EmployeePage = () => {
   const navigate = useNavigate();

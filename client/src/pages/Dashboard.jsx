@@ -9,7 +9,7 @@ import {
 } from "react-icons/fa";
 import AttendanceAnalytics from "../components/dashboard/AttendanceAnalytics";
 import { toast } from "react-toastify";
-import apiClient from "../api/axiosConfig";
+import apiClient from "../lib/api";
 
 function Dashboard() {
   const navigate = useNavigate();

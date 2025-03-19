@@ -26,7 +26,7 @@ import {
   Payment as PaymentIcon
 } from '@mui/icons-material';
 import PaymentDetails from '../components/payroll/PaymentDetails';
-import apiClient from '../api/axiosConfig';
+import apiClient from '../lib/api';
 
 const PaymentsPage = () => {
   const theme = useTheme();

@@ -1,3 +1,5 @@
+import { randomSeed } from './utils';
+
 const SEAMLESS_PATTERN_TYPES = [
   {
     id: "continuous",

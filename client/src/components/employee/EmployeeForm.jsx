@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react";
-import apiClient from '../../api/axiosConfig';
+import apiClient from '../../lib/api';
 import { 
   FiUser, FiMail, FiPhone, FiBriefcase, FiDollarSign, 
   FiCalendar, FiMapPin, FiAlertTriangle, FiClock, 

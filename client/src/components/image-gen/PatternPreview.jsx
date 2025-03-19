@@ -17,7 +17,13 @@ const PatternPreview = ({
   setShowTileLines,
   generateImage,
   saveImage,
-  openPreview
+  openPreview,
+  brightness,
+  setBrightness,
+  contrast,
+  setContrast,
+  saturation,
+  setSaturation
 }) => {
   const singlePreviewRef = useRef(null);
   const tiledPreviewRef = useRef(null);
@@ -45,12 +51,6 @@ const PatternPreview = ({
   const [fullscreenZoom, setFullscreenZoom] = useState(100);
   const [fullscreenPan, setFullscreenPan] = useState({ x: 0, y: 0 });
 
-  // Add image adjustment states
-  const [brightness, setBrightness] = useState(100);
-  const [contrast, setContrast] = useState(100);
-  const [saturation, setSaturation] = useState(100);
-  const [showControls, setShowControls] = useState(false);
-
   // Add custom tile layout states
   const [tileRows, setTileRows] = useState(2); // Default 2 rows
   const [tileColumns, setTileColumns] = useState(2); // Default 2 columns
@@ -59,6 +59,9 @@ const PatternPreview = ({
   const [showCustomTileForm, setShowCustomTileForm] = useState(false);
   const [customRowsInput, setCustomRowsInput] = useState('');
   const [customColumnsInput, setCustomColumnsInput] = useState('');
+
+  // Just add back the UI control state
+  const [showControls, setShowControls] = useState(false);
 
   // Create tiled canvas with optimized rendering
   const createTiledCanvas = useCallback(() => {

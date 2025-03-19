@@ -31,7 +31,7 @@ import {
   Delete as DeleteIcon,
   Payment as PaymentIcon
 } from '@mui/icons-material';
-import apiClient from '../../api/axiosConfig';
+import apiClient from '../../lib/api';
 import { useParams, useNavigate } from 'react-router-dom';
 import PaymentDialog from './PaymentDialog';
 

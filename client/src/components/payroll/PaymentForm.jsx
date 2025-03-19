@@ -22,7 +22,7 @@ import {
   Receipt as ReceiptIcon,
   Save as SaveIcon
 } from '@mui/icons-material';
-import apiClient from '../../api/axiosConfig';
+import apiClient from '../../lib/api';
 
 const generateTransactionId = (paymentMethod) => {
   const timestamp = new Date().getTime();

@@ -1,10 +1,11 @@
 import express from 'express';
-import fetch from 'node-fetch';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import Product from '../models/ProductPattern.js';
+import { proxyFalRequest, getWebSocketDetails } from '../api/falService.js';
+import { getAllPatterns, getPatternById, savePattern, deletePattern, saveImageFromBase64 } from '../api/patternService.js';
+import { submitBulkAttendance } from '../api/attendanceService.js';
 
 const router = express.Router();
 
@@ -49,42 +50,7 @@ router.post('/proxy', async (req, res) => {
       return res.status(404).json({ error: 'Target URL is required' });
     }
 
-    // Check if the URL is allowed
-    const URL_ALLOW_LIST = [
-      "https://rest.alpha.fal.ai",
-      "wss://realtime.fal.ai",
-      "https://realtime.fal.ai"
-    ];
-    
-    // Check if URL starts with any of the allowed URLs
-    const isAllowed = URL_ALLOW_LIST.some(allowedUrl => targetUrl.startsWith(allowedUrl));
-    
-    if (!isAllowed) {
-      console.log('URL not in allow list:', targetUrl);
-      return res.status(403).json({ error: 'URL not allowed', allowedUrls: URL_ALLOW_LIST });
-    }
-
-    console.log('Making request to:', targetUrl);
-    const response = await fetch(targetUrl, {
-      method: req.method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Key ${process.env.FAL_KEY}`
-      },
-      body: JSON.stringify(req.body)
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.log('Fal.ai API error:', response.status, errorText);
-      return res.status(response.status).json({ 
-        error: 'Fal.ai API error',
-        details: errorText,
-        status: response.status
-      });
-    }
-
-    const data = await response.json();
+    const data = await proxyFalRequest(req.body, targetUrl);
     console.log('Successfully proxied request');
     res.json(data);
   } catch (error) {
@@ -101,19 +67,23 @@ router.post('/proxy', async (req, res) => {
 router.get('/ws-proxy', (req, res) => {
   try {
     console.log('Received WebSocket proxy request');
-    if (!process.env.FAL_KEY) {
-      console.error('FAL_KEY not found in environment variables');
-      return res.status(500).json({ error: 'Server configuration error' });
-    }
-    
-    res.json({ 
-      wsUrl: 'wss://realtime.fal.ai/handler',
-      apiKey: process.env.FAL_KEY
-    });
+    const wsDetails = getWebSocketDetails();
+    res.json(wsDetails);
     console.log('Successfully sent WebSocket configuration');
   } catch (error) {
     console.error('WebSocket proxy error:', error);
     res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+});
+
+// Submit bulk attendance route
+router.post('/attendance/bulk', async (req, res) => {
+  try {
+    const result = await submitBulkAttendance(req.body);
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Error processing attendance data:', error);
+    res.status(400).json({ error: error.message });
   }
 });
 
@@ -127,20 +97,8 @@ router.post('/patterns', upload.single('image'), async (req, res) => {
       // Image was uploaded as a file
       imageUrl = `/uploads/patterns/${req.file.filename}`;
     } else if (req.body.imageData && req.body.imageData.startsWith('data:image')) {
-      // Image was sent as base64 data
-      // Extract the base64 data and save it as a file
-      const base64Data = req.body.imageData.split(';base64,').pop();
-      const fileName = `${Date.now()}-${uuidv4()}.jpg`;
-      const filePath = path.join(process.cwd(), 'uploads/patterns', fileName);
-      
-      // Ensure directory exists
-      const uploadDir = path.join(process.cwd(), 'uploads/patterns');
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-      
-      fs.writeFileSync(filePath, base64Data, { encoding: 'base64' });
-      imageUrl = `/uploads/patterns/${fileName}`;
+      // Image was sent as base64 data - use the service to save it
+      imageUrl = await saveImageFromBase64(req.body.imageData);
       
       // Remove the base64 data from the request body to avoid storing it in DB
       delete req.body.imageData;
@@ -148,20 +106,8 @@ router.post('/patterns', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: 'No image provided' });
     }
     
-    // Create a new product pattern in MongoDB
-    const productData = {
-      ...req.body,
-      imageUrl,
-      createdAt: new Date()
-    };
-    
-    // Ensure an ID exists
-    if (!productData.id) {
-      productData.id = uuidv4();
-    }
-    
-    const newProduct = new Product(productData);
-    await newProduct.save();
+    // Use the service to save the pattern data
+    const newProduct = await savePattern(req.body, imageUrl);
     
     // Return the saved product
     res.status(201).json({
@@ -180,7 +126,7 @@ router.post('/patterns', upload.single('image'), async (req, res) => {
 // Get all patterns
 router.get('/patterns', async (req, res) => {
   try {
-    const products = await Product.find().sort({ createdAt: -1 });
+    const products = await getAllPatterns();
     res.json(products);
   } catch (error) {
     console.error('Error fetching patterns:', error);
@@ -191,12 +137,12 @@ router.get('/patterns', async (req, res) => {
 // Get a specific pattern
 router.get('/patterns/:id', async (req, res) => {
   try {
-    const product = await Product.findOne({ id: req.params.id });
-    if (!product) {
-      return res.status(404).json({ error: 'Pattern not found' });
-    }
+    const product = await getPatternById(req.params.id);
     res.json(product);
   } catch (error) {
+    if (error.message === 'Pattern not found') {
+      return res.status(404).json({ error: 'Pattern not found' });
+    }
     console.error('Error fetching pattern:', error);
     res.status(500).json({ error: 'Internal server error', details: error.message });
   }
@@ -205,27 +151,12 @@ router.get('/patterns/:id', async (req, res) => {
 // Delete a pattern
 router.delete('/patterns/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    
-    // Find the product to get the image path
-    const product = await Product.findOne({ id });
-    if (!product) {
+    const result = await deletePattern(req.params.id);
+    res.json(result);
+  } catch (error) {
+    if (error.message === 'Pattern not found') {
       return res.status(404).json({ error: 'Pattern not found' });
     }
-    
-    // Delete the image file if it exists
-    if (product.imageUrl) {
-      const filePath = path.join(process.cwd(), product.imageUrl.replace(/^\//, ''));
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    }
-    
-    // Delete the product from the database
-    await Product.deleteOne({ id });
-    
-    res.json({ success: true, message: 'Pattern deleted successfully' });
-  } catch (error) {
     console.error('Error deleting pattern:', error);
     res.status(500).json({ error: 'Internal server error', details: error.message });
   }

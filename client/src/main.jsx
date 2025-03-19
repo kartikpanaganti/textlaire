@@ -4,7 +4,7 @@ import { ThemeProvider } from "./context/ThemeProvider"; // Import ThemeProvider
 
 import './index.css'
 import App from './App.jsx'
-import './api/axiosConfig'; // Import axios config globally
+import './lib/api'; // Updated import path
 
 // Polyfill for crypto and its methods if not available
 if (typeof crypto === 'undefined') {

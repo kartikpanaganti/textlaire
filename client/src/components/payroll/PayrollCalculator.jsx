@@ -51,7 +51,7 @@ import {
   MonetizationOn as MonetizationOnIcon,
   PriceCheck as PriceCheckIcon
 } from '@mui/icons-material';
-import apiClient from '../../api/axiosConfig';
+import apiClient from '../../lib/api';
 import { useNavigate } from 'react-router-dom';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';

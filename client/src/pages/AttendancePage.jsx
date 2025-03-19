@@ -12,11 +12,11 @@ import AttendanceFilters from '../components/attendance/AttendanceFilters';
 import { exportToExcel, exportToPDF } from '../utils/exportUtils';
 import AttendanceForm from '../components/attendance/AttendanceForm';
 import QuickAttendanceForm from '../components/attendance/QuickAttendanceForm';
-import { submitBulkAttendance } from '../api/attendance';
+import { submitBulkAttendance } from '../lib/api';
 import { useNavigate } from "react-router-dom";
 
 import Select from 'react-select';
-import apiClient from '../api/axiosConfig';
+import apiClient from '../lib/api';
 
 const AttendancePage = () => {
   const navigate = useNavigate();

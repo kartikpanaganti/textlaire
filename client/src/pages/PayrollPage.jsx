@@ -22,7 +22,7 @@ import PayrollList from '../components/payroll/PayrollList';
 import PayrollDetails from '../components/payroll/PayrollDetails';
 import PayrollAnalytics from '../components/payroll/PayrollAnalytics';
 import PayrollExport from '../components/payroll/PayrollExport';
-import apiClient from '../api/axiosConfig';
+import apiClient from '../lib/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const PayrollPage = () => {
