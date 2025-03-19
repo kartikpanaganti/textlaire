@@ -708,7 +708,7 @@ function ImageGenerator() {
                             : 'bg-[#232830] text-gray-400'
                         }`}
                       >
-                        Preview
+                       IMG Preview
                       </button>
                       <button
                         onClick={() => setActiveMobilePanel('controls')}
@@ -718,7 +718,7 @@ function ImageGenerator() {
                             : 'bg-[#232830] text-gray-400'
                         }`}
                       >
-                        Controls
+                        Design Controls
                       </button>
                       <button
                         onClick={() => setActiveMobilePanel('details')}
@@ -728,7 +728,7 @@ function ImageGenerator() {
                             : 'bg-[#232830] text-gray-400'
                         }`}
                       >
-                        Details
+                        Product Details
                       </button>
                     </div>
                     {activeMobilePanel === 'preview' && !isLoading && image && (
@@ -766,7 +766,7 @@ function ImageGenerator() {
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
                           exit={{ opacity: 0, x: 10 }}
-                          className="h-full"
+                          className="h-full overflow-y-auto pb-24"
                         >
                           <PatternPreview {...patternPreviewProps} />
                         </motion.div>

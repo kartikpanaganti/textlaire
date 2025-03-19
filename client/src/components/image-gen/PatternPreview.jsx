@@ -63,6 +63,9 @@ const PatternPreview = ({
   // Just add back the UI control state
   const [showControls, setShowControls] = useState(false);
 
+  // Add mobile view state
+  const [mobileView, setMobileView] = useState('single'); // 'single' or 'tiled'
+
   // Create tiled canvas with optimized rendering
   const createTiledCanvas = useCallback(() => {
     if (!image || !tiledPreviewRef.current) return;
@@ -537,7 +540,7 @@ const PatternPreview = ({
   };
 
   return (
-<div className="bg-[#1A1D24] rounded-lg border border-[#2A2F38] shadow-lg p-2 h-[calc(100vh-100px)] overflow-auto flex flex-col">
+<div className="bg-[#1A1D24] rounded-lg border border-[#2A2F38] shadow-lg p-2 h-full overflow-visible flex flex-col">
 <div className="space-y-1 flex flex-col h-full">
         <div className="flex justify-between items-center">
           <h3 className="text-xs font-semibold text-white">Pattern Preview</h3>
@@ -571,12 +574,50 @@ const PatternPreview = ({
           </div>
         </div>
 
+        {/* Mobile View Switcher */}
+        <div className="block sm:hidden mb-2">
+          <div className="bg-[#232830] p-1 rounded-md flex">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setMobileView('single')}
+              className={`flex-1 py-2 rounded-md flex items-center justify-center gap-1.5 ${
+                mobileView === 'single' 
+                  ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white' 
+                  : 'bg-[#1A1D24] text-gray-400'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2H5z" />
+              </svg>
+              <span className="text-xs font-medium">Single</span>
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setMobileView('tiled')}
+              className={`flex-1 py-2 rounded-md flex items-center justify-center gap-1.5 ${
+                mobileView === 'tiled' 
+                  ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white' 
+                  : 'bg-[#1A1D24] text-gray-400'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+              </svg>
+              <span className="text-xs font-medium">Tiled</span>
+            </motion.button>
+          </div>
+        </div>
+
         {/* Preview Content */}
-        <div className="flex-1 grid grid-cols-2 gap-1 min-h-0 max-h-[calc(100vh-16rem)]">
+        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-1 min-h-0 overflow-visible">
           {/* Single Pattern Preview */}
           <motion.div 
             ref={singlePreviewRef}
-            className="relative rounded-lg overflow-hidden bg-[#2A2F38] h-[calc(100vh-18rem)]"
+            className={`relative rounded-lg overflow-hidden bg-[#2A2F38] min-h-[250px] h-[min(50vh,400px)] ${
+              mobileView === 'tiled' ? 'hidden sm:block' : 'block'
+            }`}
             onHoverStart={() => setPreviewHovered(true)}
             onHoverEnd={() => setPreviewHovered(false)}
             onMouseDown={(e) => handleMouseDown(e, true)}
@@ -725,7 +766,9 @@ const PatternPreview = ({
           {/* Tiled Pattern Preview */}
           <motion.div 
             ref={tiledPreviewRef}
-            className="relative rounded-lg overflow-hidden bg-[#2A2F38] h-[calc(100vh-18rem)]"
+            className={`relative rounded-lg overflow-hidden bg-[#2A2F38] min-h-[250px] h-[min(50vh,400px)] ${
+              mobileView === 'single' ? 'hidden sm:block' : 'block'
+            }`}
             onHoverStart={() => setTiledHovered(true)}
             onHoverEnd={() => setTiledHovered(false)}
             onMouseDown={(e) => handleMouseDown(e, false)}
@@ -1065,6 +1108,136 @@ const PatternPreview = ({
             </AnimatePresence>
           </motion.div>
         )}
+      </div>
+
+      {/* Mobile Image Controls - Always Visible on Small Screens */}
+      <div className="block sm:hidden mt-2 p-2 bg-[#232830] rounded-lg">
+        <div className="mb-2">
+          <h4 className="text-xs font-semibold text-white mb-1">Image Adjustments</h4>
+          <div className="text-xs text-gray-400">Adjust image properties with the sliders below.</div>
+        </div>
+        
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-300">Brightness</span>
+              <span className="text-xs text-gray-400">{brightness}%</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="200"
+              value={brightness}
+              onChange={(e) => setBrightness(e.target.value)}
+              className="w-full h-1.5 bg-[#2A2F38] rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+          
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-300">Contrast</span>
+              <span className="text-xs text-gray-400">{contrast}%</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="200"
+              value={contrast}
+              onChange={(e) => setContrast(e.target.value)}
+              className="w-full h-1.5 bg-[#2A2F38] rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+          
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-300">Saturation</span>
+              <span className="text-xs text-gray-400">{saturation}%</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="200"
+              value={saturation}
+              onChange={(e) => setSaturation(e.target.value)}
+              className="w-full h-1.5 bg-[#2A2F38] rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+          
+          {mobileView === 'tiled' && (
+            <div className="pt-2 border-t border-[#3A4149]/30">
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="text-xs font-semibold text-white">Tile Controls</h4>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowTileLines(!showTileLines)}
+                  className={`px-2 py-1 text-xs rounded ${
+                    showTileLines ? 'bg-blue-500 text-white' : 'bg-[#2A2F38] text-gray-300'
+                  }`}
+                >
+                  {showTileLines ? 'Hide Grid' : 'Show Grid'}
+                </motion.button>
+              </div>
+              <div className="flex items-center justify-center space-x-2 mb-2">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => { setTileRows(1); setTileColumns(1); }}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium ${
+                    tileRows === 1 && tileColumns === 1 
+                      ? 'bg-blue-500 text-white' 
+                      : 'bg-[#2A2F38] text-gray-300'
+                  }`}
+                >
+                  1×1
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => { setTileRows(2); setTileColumns(2); }}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium ${
+                    tileRows === 2 && tileColumns === 2 
+                      ? 'bg-blue-500 text-white' 
+                      : 'bg-[#2A2F38] text-gray-300'
+                  }`}
+                >
+                  2×2
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => { setTileRows(3); setTileColumns(3); }}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium ${
+                    tileRows === 3 && tileColumns === 3 
+                      ? 'bg-blue-500 text-white' 
+                      : 'bg-[#2A2F38] text-gray-300'
+                  }`}
+                >
+                  3×3
+                </motion.button>
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setPreviewRotation((prev) => (prev + 90) % 360)}
+                className="w-full py-1.5 rounded-md bg-[#2A2F38] text-gray-300 text-xs font-medium mb-2"
+              >
+                Rotate Pattern
+              </motion.button>
+            </div>
+          )}
+          
+          <div className="flex justify-end">
+            <motion.button
+              whileHover={{ backgroundColor: 'rgba(239, 68, 68, 0.2)' }}
+              whileTap={{ scale: 0.95 }}
+              onClick={resetImageAdjustments}
+              className="px-3 py-1 rounded bg-[#3A4149] text-gray-300 text-xs"
+            >
+              Reset
+            </motion.button>
+          </div>
+        </div>
       </div>
 
       {/* Fullscreen Preview */}
