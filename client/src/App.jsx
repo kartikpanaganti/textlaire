@@ -11,7 +11,6 @@ import { UserContext } from "./context/UserProvider"; // User Context
 import AttendancePage from "./pages/AttendancePage";
 import ImageGeneration from "./pages/ImageGenerator";
 import RawMaterialsInventory from "./pages/RawMaterialsInventory";
-import PayrollPage from "./pages/PayrollPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
 import NotificationsPage from "./pages/NotificationsPage";
@@ -27,7 +26,6 @@ function App() {
         <Route path="/raw-materials" element={<ProtectedRoute component={<RawMaterialsInventory />} />} />
         <Route path="/attendance" element={<ProtectedRoute component={<AttendancePage />} />} />
         <Route path="/image-generation" element={<ProtectedRoute component={<ImageGeneration/>} noContainer={true} />} />
-        <Route path="/payroll" element={<ProtectedRoute component={<PayrollPage />} />} />
         <Route path="/profile" element={<ProtectedRoute component={<ProfilePage />} />} />
         <Route path="/settings" element={<ProtectedRoute component={<SettingsPage />} />} />
         <Route path="/notifications" element={<ProtectedRoute component={<NotificationsPage />} />} />

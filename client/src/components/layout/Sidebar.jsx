@@ -165,17 +165,6 @@ function Sidebar() {
               colors={colors}
             />
             <SidebarItem 
-              icon={<FaMoneyBillWave className={colors.icon} />} 
-              label="Payroll" 
-              isCollapsed={isCollapsed && !isMobileMenuOpen} 
-              isActive={location.pathname.startsWith("/payroll")}
-              onClick={() => {
-                navigate("/payroll");
-                if (isMobileView) toggleMobileMenu();
-              }}
-              colors={colors}
-            />
-            <SidebarItem 
               icon={<FaChartPie className={colors.icon} />} 
               label="Analytics" 
               isCollapsed={isCollapsed && !isMobileMenuOpen} 
