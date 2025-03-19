@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-const GalleryGrid = ({ savedImages, deleteProduct, openPreview }) => {
+const GalleryGrid = ({ savedImages, deleteProduct, openPreview, renderImage }) => {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 p-1">
       {savedImages.length === 0 ? (
@@ -26,10 +26,10 @@ const GalleryGrid = ({ savedImages, deleteProduct, openPreview }) => {
           >
             <div className="relative aspect-square">
               <img 
-                src={product.imageData} 
+                src={renderImage(product)} 
                 alt={product.name} 
                 className="w-full h-full object-cover cursor-pointer transition-transform duration-300 group-hover:scale-105"
-                onClick={() => openPreview(product.imageData)}
+                onClick={() => openPreview(renderImage(product))}
               />
               <motion.button 
                 whileHover={{ scale: 1.1 }}

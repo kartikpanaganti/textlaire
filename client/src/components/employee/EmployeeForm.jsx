@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react";
-import axios from "axios";
+import apiClient from '../../api/axiosConfig';
 import { 
   FiUser, FiMail, FiPhone, FiBriefcase, FiDollarSign, 
   FiCalendar, FiMapPin, FiAlertTriangle, FiClock, 
@@ -84,7 +84,7 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee, onC
       const mergedData = { ...initialFormState, ...editingEmployee };
       const getImageUrl = (url) => {
         if (!url) return null;
-        return url.startsWith('http') ? url : `http://localhost:5000${url}`;
+        return url.startsWith('http') ? url : `http://${window.location.hostname}:5000${url}`;
       };
 
       setFormData({
@@ -172,41 +172,20 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee, onC
     
     try {
       const formPayload = new FormData();
-      
-      // Add all form fields to FormData
-      Object.entries(formData).forEach(([key, value]) => {
-        // Skip empty values except employeeID (which can be empty for auto-generation)
-        if (value !== undefined && (value !== '' || key === 'employeeID')) {
-          formPayload.append(key, value);
-        }
+      Object.keys(formData).forEach(key => {
+        formPayload.append(key, formData[key]);
       });
-      
-      // Handle image upload
       if (image) {
         formPayload.append("image", image);
       }
 
-      // Log form data for debugging
-      console.log("Form Data:", Object.fromEntries(formPayload.entries()));
-
-      // Required fields validation
-      const requiredFields = ['name', 'phoneNumber', 'department', 'position', 'salary', 'workType', 'joiningDate'];
-      const missingFields = requiredFields.filter(field => !formData[field]);
-      
-      if (missingFields.length > 0) {
-        setAlertType("error");
-        setAlertMessage(`Please fill in all required fields: ${missingFields.join(', ')}`);
-        setShowAlert(true);
-        setIsSubmitting(false);
-        return;
-      }
-
-      const baseURL = "http://localhost:5000/api/employees";
-      const url = editingEmployee ? `${baseURL}/${editingEmployee._id}` : baseURL;
-      
-      const response = await axios[editingEmployee ? "put" : "post"](url, formPayload, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
+      const response = await apiClient[editingEmployee ? "put" : "post"](
+        editingEmployee ? `/employees/${editingEmployee._id}` : '/employees', 
+        formPayload, 
+        {
+          headers: { "Content-Type": "multipart/form-data" }
+        }
+      );
       
       // Show success message
       setAlertType("success");

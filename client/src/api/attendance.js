@@ -1,4 +1,4 @@
-import axios from 'axios';
+import apiClient from './axiosConfig';
 
 /**
  * Submit bulk attendance data for multiple employees
@@ -12,12 +12,7 @@ export const submitBulkAttendance = async (attendanceData) => {
       throw new Error('Invalid attendance data format');
     }
     
-    const response = await axios.post('http://localhost:5000/api/attendance/bulk', attendanceData, {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      }
-    });
+    const response = await apiClient.post('/attendance/bulk', attendanceData);
     
     return response.data;
   } catch (error) {

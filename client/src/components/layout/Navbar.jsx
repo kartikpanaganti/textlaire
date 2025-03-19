@@ -29,7 +29,7 @@ function Navbar() {
   return (
     <nav className="bg-white dark:bg-dark-surface shadow-md p-4 flex justify-between items-center transition-all duration-300">
       {/* Logo */}
-      <h2 className="text-2xl md:text-4xl font-semibold text-light-text-primary dark:text-dark-text-primary" style={{fontFamily: "Style Script, serif", fontWeight: "600px" }}>Texlaire</h2>
+      <h2 className="text-2xl md:text-4xl font-semibold text-light-text-primary dark:text-dark-text-primary ml-12 md:ml-0" style={{fontFamily: "Style Script, serif", fontWeight: "600px" }}>Textlaire</h2>
 
       {/* Right Side - Icons & User */}
       <div className="flex items-center gap-2 md:gap-4">

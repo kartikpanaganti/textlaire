@@ -9,6 +9,7 @@ import {
 } from "react-icons/fa";
 import AttendanceAnalytics from "../components/dashboard/AttendanceAnalytics";
 import { toast } from "react-toastify";
+import apiClient from "../api/axiosConfig";
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -53,7 +54,7 @@ function Dashboard() {
     
     setLoading(true);
     try {
-      const response = await axios.get(`http://localhost:5000/api/attendance`);
+      const response = await apiClient.get('/attendance');
       
       // Filter attendance data based on selected filters
       let filteredAttendance = [...response.data];

@@ -16,6 +16,8 @@ import { submitBulkAttendance } from '../api/attendance';
 import { useNavigate } from "react-router-dom";
 
 import Select from 'react-select';
+import apiClient from '../api/axiosConfig';
+
 const AttendancePage = () => {
   const navigate = useNavigate();
   const [attendance, setAttendance] = useState([]);
@@ -87,8 +89,8 @@ const AttendancePage = () => {
     setLoading(true);
     try {
       const [attendanceRes, employeesRes] = await Promise.all([
-        axios.get(`http://localhost:5000/api/attendance`),
-        axios.get("http://localhost:5000/api/employees")
+        apiClient.get('/attendance'),
+        apiClient.get('/employees')
       ]);
 
       const filteredAttendance = attendanceRes.data.filter(record =>
@@ -123,10 +125,10 @@ const AttendancePage = () => {
 
       let response;
       if (editRecord) {
-        response = await axios.put(`http://localhost:5000/api/attendance/${editRecord._id}`, attendanceData);
+        response = await apiClient.put(`/attendance/${editRecord._id}`, attendanceData);
         toast.success("Attendance updated successfully");
       } else {
-        response = await axios.post("http://localhost:5000/api/attendance", attendanceData);
+        response = await apiClient.post("/attendance", attendanceData);
         toast.success("Attendance added successfully");
       }
 
@@ -150,7 +152,7 @@ const AttendancePage = () => {
   const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this record?")) {
       try {
-        await axios.delete(`http://localhost:5000/api/attendance/${id}`);
+        await apiClient.delete(`/attendance/${id}`);
         toast.success("Record deleted successfully");
         fetchData();
       } catch (error) {
@@ -220,7 +222,7 @@ const AttendancePage = () => {
   const fetchAttendanceByDateRange = async (startDate, endDate) => {
     setLoading(true);
     try {
-      const response = await axios.get(`http://localhost:5000/api/attendance`);
+      const response = await apiClient.get('/attendance');
       const filteredData = response.data.filter(record => {
         const recordDate = record.date.substring(0, 10);
         return recordDate >= startDate && recordDate <= endDate;
@@ -236,7 +238,7 @@ const AttendancePage = () => {
   const fetchAttendanceByDate = async (date) => {
     setLoading(true);
     try {
-      const response = await axios.get(`http://localhost:5000/api/attendance`);
+      const response = await apiClient.get('/attendance');
       const filteredData = response.data.filter(record => 
         record.date.substring(0, 10) === date
       );

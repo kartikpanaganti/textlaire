@@ -1,10 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Tabs, Tab, useTheme, Button, IconButton, Paper, Container, useMediaQuery } from '@mui/material';
-import { ArrowBack } from '@mui/icons-material';
+import {
+  Box,
+  Tabs,
+  Tab,
+  useTheme,
+  Button,
+  IconButton,
+  Paper,
+  Container,
+  useMediaQuery,
+  Tooltip
+} from '@mui/material';
+import {
+  ArrowBack,
+  Analytics as AnalyticsIcon,
+  Description as ExportIcon
+} from '@mui/icons-material';
 import PayrollDashboard from '../components/payroll/PayrollDashboard';
 import PayrollCalculator from '../components/payroll/PayrollCalculator';
 import PayrollList from '../components/payroll/PayrollList';
 import PayrollDetails from '../components/payroll/PayrollDetails';
+import PayrollAnalytics from '../components/payroll/PayrollAnalytics';
+import PayrollExport from '../components/payroll/PayrollExport';
 import apiClient from '../api/axiosConfig';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -26,9 +43,8 @@ const PayrollPage = () => {
       setSelectedPayrollId(null);
       setPayrollData(null);
       navigate('/payroll');
-    } else {
-      setActiveTab(newValue);
     }
+    setActiveTab(newValue);
   };
 
   // Handle view payroll details
@@ -140,6 +156,10 @@ const PayrollPage = () => {
         }} />;
       case 2:
         return <PayrollList onViewDetails={handleViewPayroll} />;
+      case 3:
+        return <PayrollAnalytics />;
+      case 4:
+        return <PayrollExport />;
       default:
         return <PayrollDashboard />;
     }
@@ -193,6 +213,16 @@ const PayrollPage = () => {
           />
           <Tab 
             label="Payroll List" 
+          />
+          <Tab
+            icon={<AnalyticsIcon />}
+            label="Analytics"
+            disabled={!!selectedPayrollId}
+          />
+          <Tab
+            icon={<ExportIcon />}
+            label="Export"
+            disabled={!!selectedPayrollId}
           />
         </Tabs>
       </Paper>

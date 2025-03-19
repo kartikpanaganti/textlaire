@@ -5,7 +5,7 @@ const EmployeeCard = ({ employee }) => {
   return (
     <div className="p-4 border shadow-md rounded flex flex-col sm:flex-row items-center gap-4 bg-white dark:bg-gray-800 dark:text-white dark:border-gray-600 transition-transform hover:scale-[1.02]">
       <img
-        src={employee.image ? `http://localhost:5000${employee.image}` : "/default-profile.png"}
+        src={employee.image ? `http://${window.location.hostname}:5000${employee.image}` : "/default-profile.png"}
         className="w-20 h-20 object-cover rounded-full border dark:border-gray-500"
         alt={employee.name}
       />

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { configureClient, connectRealtime } from '../api/falClient';
 import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios';
 
 // Import components
 import DesignControls from '../components/image-gen/DesignControls';
@@ -92,6 +93,12 @@ function ImageGenerator() {
   const [previewRotation, setPreviewRotation] = useState(0);
   const [previewLayout, setPreviewLayout] = useState('grid'); // 'grid' or 'continuous'
 
+  // Configure API URL based on hostname or env var
+  const API_URL = import.meta.env.VITE_API_URL || 
+    (window.location.hostname === 'localhost' ? 
+      'http://localhost:5000' : 
+      `http://${window.location.hostname}:5000`);
+
   useEffect(() => {
     // Configure the fal client
     configureClient();
@@ -122,15 +129,17 @@ function ImageGenerator() {
 
     initConnection();
 
-    // Load saved images from localStorage
-    const loadSavedImages = () => {
+    // Load saved images from server API
+    const loadSavedImages = async () => {
       try {
-        const savedImagesData = localStorage.getItem('towelProducts');
-        if (savedImagesData) {
-          setSavedImages(JSON.parse(savedImagesData));
+        const response = await axios.get(`${API_URL}/api/patterns`);
+        if (response.data && Array.isArray(response.data)) {
+          setSavedImages(response.data);
+          console.log(`Loaded ${response.data.length} patterns from server`);
         }
       } catch (error) {
-        console.error('Error loading saved images:', error);
+        console.error('Error loading patterns from server:', error);
+        showNotification("Could not load patterns from server");
       }
     };
     
@@ -147,52 +156,31 @@ function ImageGenerator() {
     };
   }, []);
 
-  const generateImageWithParams = (currentPrompt, currentSeed) => {
-    if (!connection) return;
-    
-    if (timer.current) {
-      clearTimeout(timer.current);
+  const generateImageWithParams = (enhancedPrompt, currentSeed) => {
+    if (!connection) {
+      console.error('No connection available');
+      return;
     }
     
     setIsLoading(true);
-    
-    // Start the loading animation
     setLoadingProgress(0);
-    if (loadingInterval.current) clearInterval(loadingInterval.current);
+    
+    // Start the loading interval
+    if (loadingInterval.current) {
+      clearInterval(loadingInterval.current);
+    }
+    
     loadingInterval.current = setInterval(() => {
       setLoadingProgress(prev => {
-        const newProgress = prev + (Math.random() * 3);
-        return newProgress >= 90 ? 90 : newProgress;
+        const increment = Math.random() * 3;
+        return Math.min(prev + increment, 95); // Cap at 95% until complete
       });
     }, 200);
     
-    // Handle prompt based on mode
-    let enhancedPrompt = currentPrompt;
-    
+    // Process the prompt
     if (!advancedPromptMode) {
-      // Add seamless-specific enhancements only in structured mode
-      enhancedPrompt += ", perfect seamless tileable pattern, repeating infinitely in both horizontal and vertical directions";
-      
-      // Add specific seamless type instructions
-      const selectedSeamlessType = SEAMLESS_PATTERN_TYPES.find(t => t.id === seamlessType);
-      if (selectedSeamlessType) {
-        if (seamlessType === "continuous") {
-          enhancedPrompt += ", continuous flowing pattern with no visible edges or seams";
-        } else if (seamlessType === "mirrored") {
-          enhancedPrompt += ", mirrored symmetrical pattern at edges for perfect tiling";
-        } else if (seamlessType === "rotational") {
-          enhancedPrompt += ", rotational symmetry around central points";
-        } else if (seamlessType === "half-drop") {
-          enhancedPrompt += ", half-drop repeat pattern with vertical offset";
-        } else if (seamlessType === "brick") {
-          enhancedPrompt += ", brick repeat pattern with horizontal offset";
-        } else if (seamlessType === "diamond") {
-          enhancedPrompt += ", diamond grid arrangement for seamless tiling";
-        }
-      }
-      
-      // Add technical specifications for seamless patterns
-      enhancedPrompt += ", mathematically precise edges, no visible seams when tiled, perfect for textile printing";
+      // Build the enhanced prompt from all the selected options
+      // ... existing code ...
     } else {
       // In advanced mode, use the custom prompt directly
       // Only add minimal seamless pattern enforcement if not already present
@@ -206,6 +194,7 @@ function ImageGenerator() {
       prompt: enhancedPrompt,
       negative_prompt: "background, borders, edges, product shape, towel shape, 3D, folded, hanging, draped, background objects, human, hands, watermark, text, incomplete patterns, misaligned elements, visible seams, pattern breaks, asymmetry, edge artifacts, discontinuities",
       seed: currentSeed ? Number(currentSeed) : Number(randomSeed()),
+      request_id: uuidv4()
     };
     
     connection.send(input);
@@ -287,38 +276,33 @@ function ImageGenerator() {
       return;
     }
     
-    // Create a unique ID for the product
-    const productId = uuidv4();
+    // Create form data to send file
+    const formData = new FormData();
     
-    // Convert blob to base64 for storage
-    const reader = new FileReader();
-    reader.readAsDataURL(imageBlob);
-    reader.onloadend = () => {
-      const base64data = reader.result;
-      
-      // Create product object with metadata
-      const product = {
-        id: productId,
-        name: productName,
-        code: productCode,
-        type: towelType,
-        material: towelMaterial,
-        color: towelColor,
-        dimensions: dimensions,
-        price: price,
-        prompt: prompt,
-        seed: seed,
-        imageData: base64data,
-        createdAt: new Date().toISOString()
-      };
-      
-      // Add to saved products
-      const updatedProducts = [...savedImages, product];
-      setSavedImages(updatedProducts);
-      
-      // Save to localStorage
-      try {
-        localStorage.setItem('towelProducts', JSON.stringify(updatedProducts));
+    // Add product metadata
+    formData.append('id', uuidv4());
+    formData.append('name', productName);
+    formData.append('code', productCode);
+    formData.append('type', towelType);
+    formData.append('material', towelMaterial);
+    formData.append('color', towelColor);
+    formData.append('dimensions', dimensions);
+    formData.append('price', price);
+    formData.append('prompt', prompt);
+    formData.append('seed', seed);
+    
+    // Convert blob to file and append to form
+    const file = new File([imageBlob], `pattern-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    formData.append('image', file);
+    
+    // Save to server
+    axios.post(`${API_URL}/api/patterns`, formData)
+      .then(response => {
+        // Update local state with server response
+        const newProduct = response.data.product;
+        const updatedProducts = [...savedImages, newProduct];
+        setSavedImages(updatedProducts);
+        
         showNotification("Product saved successfully!");
         
         // Clear form fields after saving
@@ -326,17 +310,37 @@ function ImageGenerator() {
         setProductCode("");
         setDimensions("");
         setPrice("");
-      } catch (error) {
+      })
+      .catch(error => {
         console.error('Error saving product:', error);
-        showNotification("Error saving product. Please try again.");
-      }
-    };
+        showNotification(`Error saving product: ${error.response?.data?.error || 'Unknown error'}`);
+      });
   };
 
-  const deleteProduct = (productId) => {
-    const updatedProducts = savedImages.filter(product => product.id !== productId);
-    setSavedImages(updatedProducts);
-    localStorage.setItem('towelProducts', JSON.stringify(updatedProducts));
+  const deleteProduct = async (productId) => {
+    try {
+      await axios.delete(`${API_URL}/api/patterns/${productId}`);
+      
+      // Update local state
+      const updatedProducts = savedImages.filter(product => product.id !== productId);
+      setSavedImages(updatedProducts);
+      
+      showNotification("Product deleted successfully");
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      showNotification(`Error deleting product: ${error.response?.data?.error || 'Unknown error'}`);
+    }
+  };
+
+  // Render content based on saved images with URLs
+  const renderImage = (product) => {
+    // Check if product has imageUrl (server-based) or imageData (base64)
+    if (product.imageUrl) {
+      return `${API_URL}${product.imageUrl}`;
+    } else if (product.imageData) {
+      return product.imageData;
+    }
+    return '';
   };
 
   const openPreview = (imageUrl) => {
@@ -460,7 +464,8 @@ function ImageGenerator() {
   const galleryProps = {
     savedImages,
     deleteProduct,
-    openPreview
+    openPreview,
+    renderImage
   };
 
   return (

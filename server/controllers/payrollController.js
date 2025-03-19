@@ -141,6 +141,27 @@ export const previewPayroll = async (req, res) => {
   }
 };
 
+// Helper function to check for overlapping pay periods
+const checkOverlappingPayPeriods = async (employeeId, startDate, endDate, excludePayrollId = null) => {
+  const query = {
+    employeeId,
+    $or: [
+      {
+        payPeriodStart: { $lte: new Date(endDate) },
+        payPeriodEnd: { $gte: new Date(startDate) }
+      }
+    ]
+  };
+
+  // Exclude current payroll when updating
+  if (excludePayrollId) {
+    query._id = { $ne: excludePayrollId };
+  }
+
+  const overlappingPayroll = await Payroll.findOne(query);
+  return overlappingPayroll;
+};
+
 // Save calculated payroll to database
 export const savePayroll = async (req, res) => {
   try {
@@ -163,9 +184,17 @@ export const savePayroll = async (req, res) => {
       return res.status(404).json({ message: "Employee not found" });
     }
 
+    // Check for overlapping pay periods
+    const overlappingPayroll = await checkOverlappingPayPeriods(employeeId, payPeriodStart, payPeriodEnd);
+    if (overlappingPayroll) {
+      return res.status(400).json({
+        message: `An overlapping payroll record exists for ${employee.name} from ${new Date(overlappingPayroll.payPeriodStart).toLocaleDateString()} to ${new Date(overlappingPayroll.payPeriodEnd).toLocaleDateString()}`
+      });
+    }
+
     // Extract month and year from payPeriodEnd for indexing
     const endDate = new Date(payPeriodEnd);
-    const month = endDate.getMonth() + 1; // getMonth() is 0-indexed
+    const month = endDate.getMonth() + 1;
     const year = endDate.getFullYear();
 
     // Check if a payroll already exists for this employee in this month/year
@@ -224,9 +253,17 @@ export const calculatePayroll = async (req, res) => {
       return res.status(404).json({ message: "Employee not found" });
     }
 
+    // Check for overlapping pay periods
+    const overlappingPayroll = await checkOverlappingPayPeriods(employeeId, payPeriodStart, payPeriodEnd);
+    if (overlappingPayroll) {
+      return res.status(400).json({
+        message: `An overlapping payroll record exists for ${employee.name} from ${new Date(overlappingPayroll.payPeriodStart).toLocaleDateString()} to ${new Date(overlappingPayroll.payPeriodEnd).toLocaleDateString()}`
+      });
+    }
+
     // Extract month and year from payPeriodEnd for indexing
     const endDate = new Date(payPeriodEnd);
-    const month = endDate.getMonth() + 1; // getMonth() is 0-indexed
+    const month = endDate.getMonth() + 1;
     const year = endDate.getFullYear();
 
     // Check if a payroll already exists for this employee in this month/year
@@ -553,5 +590,66 @@ export const processPayment = async (req, res) => {
   } catch (error) {
     console.error("Payment processing error:", error);
     res.status(500).json({ message: error.message });
+  }
+};
+
+// Add endpoint to check for overlapping pay periods
+export const checkOverlappingPeriods = async (req, res) => {
+  try {
+    const { employeeId, payPeriodStart, payPeriodEnd } = req.body;
+
+    // Validate required fields
+    if (!employeeId || !payPeriodStart || !payPeriodEnd) {
+      return res.status(400).json({
+        message: 'Employee ID, start date, and end date are required'
+      });
+    }
+
+    // Validate employee exists
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+      return res.status(404).json({
+        message: 'Employee not found'
+      });
+    }
+
+    // Validate dates
+    const startDate = new Date(payPeriodStart);
+    const endDate = new Date(payPeriodEnd);
+
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return res.status(400).json({
+        message: 'Invalid date format'
+      });
+    }
+
+    if (endDate < startDate) {
+      return res.status(400).json({
+        message: 'End date cannot be before start date'
+      });
+    }
+
+    const overlappingPayroll = await checkOverlappingPayPeriods(employeeId, payPeriodStart, payPeriodEnd);
+    
+    if (overlappingPayroll) {
+      res.status(200).json({
+        overlapping: true,
+        overlappingPeriod: {
+          start: overlappingPayroll.payPeriodStart,
+          end: overlappingPayroll.payPeriodEnd
+        },
+        message: `An overlapping payroll record exists for ${employee.name} from ${new Date(overlappingPayroll.payPeriodStart).toLocaleDateString()} to ${new Date(overlappingPayroll.payPeriodEnd).toLocaleDateString()}`
+      });
+    } else {
+      res.status(200).json({
+        overlapping: false,
+        message: 'No overlapping pay periods found'
+      });
+    }
+  } catch (error) {
+    console.error("Error checking overlapping periods:", error);
+    res.status(500).json({ 
+      message: 'Internal server error while checking overlapping periods. Please try again.' 
+    });
   }
 }; 

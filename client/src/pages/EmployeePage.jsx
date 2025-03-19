@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 import { FiPlus, FiEdit, FiTrash2, FiSearch, FiFilter, FiRefreshCw, FiX, FiEye } from 'react-icons/fi';
 import EmployeeForm from '../components/employee/EmployeeForm';
 import { useNavigate } from 'react-router-dom';
+import apiClient from '../api/axiosConfig';
 
 const EmployeePage = () => {
   const navigate = useNavigate();
@@ -39,7 +39,7 @@ const EmployeePage = () => {
   const fetchEmployees = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('http://localhost:5000/api/employees');
+      const response = await apiClient.get('/employees');
       setEmployees(response.data);
       setError(null);
     } catch (err) {
@@ -58,7 +58,7 @@ const EmployeePage = () => {
   // Handle employee deletion
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`http://localhost:5000/api/employees/${id}`);
+      await apiClient.delete(`/employees/${id}`);
       fetchEmployees();
       setConfirmDelete(null);
     } catch (err) {
@@ -150,8 +150,8 @@ const EmployeePage = () => {
 
   // Get image URL
   const getImageUrl = (url) => {
-    if (!url) return '/default-profile.png';
-    return url.startsWith('http') ? url : `http://localhost:5000${url}`;
+    if (!url) return null;
+    return url.startsWith('http') ? url : `http://${window.location.hostname}:5000${url}`;
   };
 
   // Get sort indicator

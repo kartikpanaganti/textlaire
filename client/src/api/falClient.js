@@ -1,11 +1,13 @@
 import * as fal from '@fal-ai/serverless-client';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// Always connect directly to the backend server on port 5000
+// This bypasses the Vite proxy which can cause issues on network IPs
+const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5000`;
 const MODEL_ID = 'fal-ai/fast-lightning-sdxl';
 
 // Configure the fal client to use our proxy
 const configureClient = () => {
-  // console.log('Configuring fal client with proxy URL:', `${API_URL}/api/proxy`);
+  console.log('Configuring fal client with proxy URL:', `${API_URL}/api/proxy`);
   try {
     fal.config({
       proxyUrl: `${API_URL}/api/proxy`,
@@ -18,7 +20,7 @@ const configureClient = () => {
         },
       }),
     });
-    // console.log('Fal client configured successfully');
+    console.log('Fal client configured successfully');
   } catch (error) {
     console.error('Error configuring fal client:', error);
     throw error;
@@ -28,7 +30,7 @@ const configureClient = () => {
 // Get WebSocket connection details from our server
 const getWebSocketDetails = async () => {
   try {
-    // console.log('Fetching WebSocket details from:', `${API_URL}/api/ws-proxy`);
+    console.log('Fetching WebSocket details from:', `${API_URL}/api/ws-proxy`);
     const response = await fetch(`${API_URL}/api/ws-proxy`, {
       method: 'GET',
       headers: {
@@ -43,7 +45,7 @@ const getWebSocketDetails = async () => {
     }
     
     const data = await response.json();
-    // console.log('Received WebSocket details:', { wsUrl: data.wsUrl });
+    console.log('Received WebSocket details:', { wsUrl: data.wsUrl });
     return data;
   } catch (error) {
     console.error('Error fetching WebSocket details:', error);

@@ -10,7 +10,8 @@ import {
   getPayrollHistory,
   previewPayroll,
   savePayroll,
-  processPayment
+  processPayment,
+  checkOverlappingPeriods
 } from "../controllers/payrollController.js";
 
 const router = express.Router();
@@ -47,5 +48,8 @@ router.delete("/:id", deletePayroll);
 
 // Update payroll status
 router.patch("/:id/status", updatePayrollStatus);
+
+// Add new route for checking overlapping periods
+router.post("/check-overlap", checkOverlappingPeriods);
 
 export default router; 

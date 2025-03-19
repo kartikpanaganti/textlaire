@@ -68,6 +68,10 @@ const payrollSchema = new mongoose.Schema({
       type: Number,
       default: 0
     },
+    bonus: {
+      type: Number,
+      default: 0
+    },
     // Custom allowances array
     custom: [{
       name: String,
@@ -101,6 +105,24 @@ const payrollSchema = new mongoose.Schema({
     bankName: String,
     accountNumber: String,
     accountName: String
+  },
+  calculationOptions: {
+    includeOvertime: {
+      type: Boolean,
+      default: true
+    },
+    includeBonuses: {
+      type: Boolean,
+      default: true
+    },
+    includeLeaveDeductions: {
+      type: Boolean,
+      default: true
+    },
+    taxCalculation: {
+      type: Boolean,
+      default: true
+    }
   },
   notes: String,
   createdAt: {

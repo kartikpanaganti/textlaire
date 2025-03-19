@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../../api/axiosConfig';
 import {
   FiUser,
   FiMail,
@@ -31,7 +31,7 @@ const EmployeeDetails = () => {
 
   const fetchEmployeeDetails = async () => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/employees/${id}`);
+      const response = await apiClient.get(`/employees/${id}`);
       setEmployee(response.data);
       setError(null);
     } catch (err) {
@@ -153,7 +153,7 @@ const EmployeeDetails = () => {
         <div className="flex flex-col md:flex-row items-center gap-6">
           <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-gray-200 dark:border-gray-700">
             <img
-              src={employee.image ? `http://localhost:5000${employee.image}` : "/default-profile.png"}
+              src={employee.image ? `http://${window.location.hostname}:5000${employee.image}` : "/default-profile.png"}
               alt={employee.name}
               className="w-full h-full object-cover"
               onError={(e) => {
