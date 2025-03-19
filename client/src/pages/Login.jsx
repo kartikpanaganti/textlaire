@@ -1,10 +1,12 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { ThemeContext } from "../context/ThemeProvider";
+import { UserContext } from "../context/UserProvider";
 
 function Login() {
   const navigate = useNavigate();
   const { theme } = useContext(ThemeContext);
+  const { login } = useContext(UserContext);
   const [credentials, setCredentials] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
   const handleChange = (e) => {
@@ -14,7 +16,24 @@ function Login() {
   const handleLogin = (e) => {
     e.preventDefault();
     if (credentials.username === "admin" && credentials.password === "password") {
-      localStorage.setItem("isAuthenticated", "true");
+      // Create mock user data
+      const userData = {
+        id: "user123",
+        name: "Admin User",
+        email: "admin@example.com",
+        role: "Administrator",
+        avatar: null,
+        preferences: {
+          notifications: true,
+          emailAlerts: true,
+          fontSize: "medium",
+          language: "en",
+          twoFactorEnabled: false
+        }
+      };
+      
+      // Use the login function from UserContext
+      login(userData);
       navigate("/dashboard");
     } else {
       setError("Invalid credentials. Try again.");
@@ -74,6 +93,11 @@ function Login() {
               Login
             </button>
           </form>
+          
+          <div className="mt-6 text-center text-gray-400 text-sm">
+            <p>Demo credentials:</p>
+            <p>Username: admin | Password: password</p>
+          </div>
         </div>
       </div>
 

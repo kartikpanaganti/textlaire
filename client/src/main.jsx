@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ThemeProvider } from "./context/ThemeProvider"; // Import ThemeProvider
+import { UserProvider } from "./context/UserProvider"; // Import UserProvider
 
 import './index.css'
 import App from './App.jsx'
@@ -35,7 +36,9 @@ if (!crypto.randomUUID) {
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeProvider>
-      <App />
+      <UserProvider>
+        <App />
+      </UserProvider>
     </ThemeProvider>
   </StrictMode>,
 )

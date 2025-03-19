@@ -4,13 +4,17 @@ import Sidebar from "./components/layout/Sidebar";
 import Navbar from "./components/layout/Navbar";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
-import EmployeePage from "./pages/EmployeePage"; // Updated to use our new EmployeePage
+import EmployeePage from "./pages/EmployeePage";
 import EmployeeDetails from "./components/employee/EmployeeDetails";
 import { ThemeContext } from "./context/ThemeProvider"; // Theme Context
+import { UserContext } from "./context/UserProvider"; // User Context
 import AttendancePage from "./pages/AttendancePage";
 import ImageGeneration from "./pages/ImageGenerator";
 import RawMaterialsInventory from "./pages/RawMaterialsInventory";
 import PayrollPage from "./pages/PayrollPage";
+import ProfilePage from "./pages/ProfilePage";
+import SettingsPage from "./pages/SettingsPage";
+import NotificationsPage from "./pages/NotificationsPage";
 
 function App() {
   return (
@@ -24,15 +28,18 @@ function App() {
         <Route path="/attendance" element={<ProtectedRoute component={<AttendancePage />} />} />
         <Route path="/image-generation" element={<ProtectedRoute component={<ImageGeneration/>} noContainer={true} />} />
         <Route path="/payroll" element={<ProtectedRoute component={<PayrollPage />} />} />
+        <Route path="/profile" element={<ProtectedRoute component={<ProfilePage />} />} />
+        <Route path="/settings" element={<ProtectedRoute component={<SettingsPage />} />} />
+        <Route path="/notifications" element={<ProtectedRoute component={<NotificationsPage />} />} />
       </Routes>
     </Router>
   );
 }
 
-// �� Wrapper for Layout (Handles Sidebar & Navbar)
+// Wrapper for Layout (Handles Sidebar & Navbar)
 function LayoutWrapper({ children, noContainer = false }) {
   const { theme } = useContext(ThemeContext);
-  const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
+  const { isAuthenticated } = useContext(UserContext);
   
   // Check if the current component is ImageGeneration
   const isImageGenerator = children.type === ImageGeneration;
@@ -58,13 +65,25 @@ function LayoutWrapper({ children, noContainer = false }) {
 
 // 🔹 Wrapper to protect routes
 function ProtectedRoute({ component, noContainer = false }) {
-  const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
-  return isAuthenticated ? <LayoutWrapper noContainer={noContainer}>{component}</LayoutWrapper> : <Navigate to="/" />;
+  const { isAuthenticated, isLoading } = useContext(UserContext);
+  
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  }
+  
+  return isAuthenticated ? 
+    <LayoutWrapper noContainer={noContainer}>{component}</LayoutWrapper> : 
+    <Navigate to="/" />;
 }
 
 // 🔹 Separate Login Wrapper (No Sidebar/Navbar)
 function LoginWrapper() {
-  const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
+  const { isAuthenticated, isLoading } = useContext(UserContext);
+  
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  }
+  
   return isAuthenticated ? <Navigate to="/dashboard" /> : <Login />;
 }
 
