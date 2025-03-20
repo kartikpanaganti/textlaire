@@ -8,6 +8,7 @@ import EmployeePage from "./pages/EmployeePage";
 import { ThemeContext } from "./context/ThemeProvider"; // Theme Context
 import { UserContext } from "./context/UserProvider"; // User Context
 import AttendancePage from "./pages/AttendancePage";
+import PayrollPage from "./pages/PayrollPage";
 import ImageGeneration from "./pages/ImageGenerator";
 import RawMaterialsInventory from "./pages/RawMaterialsInventory";
 import ProfilePage from "./pages/ProfilePage";
@@ -25,7 +26,7 @@ function App() {
         <Route path="/raw-materials" element={<ProtectedRoute component={<RawMaterialsInventory />} />} />
         <Route path="/attendance" element={<ProtectedRoute component={<AttendancePage />} />} />
         <Route path="/image-generation" element={<ProtectedRoute component={<ImageGeneration/>} noContainer={true} />} />
-
+        <Route path="/payroll" element={<ProtectedRoute component={<PayrollPage />} />} />
 
         {/* profile and seting and notification pages */}
         <Route path="/profile" element={<ProtectedRoute component={<ProfilePage />} />} />

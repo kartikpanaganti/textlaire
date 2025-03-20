@@ -40,14 +40,6 @@ const PayrollSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  overtimeHours: {
-    type: Number,
-    default: 0
-  },
-  overtimeRate: {
-    type: Number,
-    default: 0
-  },
   bonusAmount: {
     type: Number,
     default: 0

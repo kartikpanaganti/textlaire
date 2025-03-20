@@ -30,45 +30,23 @@ const getAttendanceStats = async (employeeId, month, year) => {
   let absentDays = 0;
   let lateDays = 0;
   let leaveDays = 0;
-  let overtimeStats = {
-    regular: 0,
-    holiday: 0,
-    weekend: 0
-  };
   
   attendanceRecords.forEach(record => {
     switch(record.status) {
       case 'Present':
         presentDays++;
-        if (record.overtime) {
-          overtimeStats[record.overtimeType || 'regular'] += record.overtime;
-        }
         break;
       case 'Absent':
         absentDays++;
         break;
       case 'Late':
         lateDays++;
-        if (record.overtime) {
-          overtimeStats[record.overtimeType || 'regular'] += record.overtime;
-        }
         break;
       case 'On Leave':
         leaveDays++;
         break;
     }
   });
-  
-  // Calculate total overtime pay
-  const calculateOvertimePay = (baseRate) => {
-    const hourlyRate = baseRate / (workingDays * 8); // Assuming 8-hour workday
-    return {
-      regularOT: overtimeStats.regular * hourlyRate * 1.5,
-      holidayOT: overtimeStats.holiday * hourlyRate * 2,
-      weekendOT: overtimeStats.weekend * hourlyRate * 2,
-      totalOTHours: overtimeStats.regular + overtimeStats.holiday + overtimeStats.weekend
-    };
-  };
   
   // If an employee doesn't have an attendance record for a working day, 
   // we'll count it as absent unless it's already counted
@@ -82,24 +60,20 @@ const getAttendanceStats = async (employeeId, month, year) => {
     presentDays,
     absentDays,
     lateDays,
-    leaveDays,
-    overtimeStats
+    leaveDays
   };
 };
 
 // Calculate salary based on employee details and attendance
 const calculateSalary = (employee, attendanceStats, bonusAmount = 0, deductions = 0) => {
   const { salary } = employee;
-  const { workingDays, presentDays, lateDays, overtimeStats } = attendanceStats;
+  const { workingDays, presentDays, lateDays } = attendanceStats;
   
   // Calculate daily rate
   const dailyRate = salary / workingDays;
   
   // Calculate basic salary based on presence
   const basicSalary = dailyRate * presentDays;
-  
-  // Calculate overtime pay (1.5x regular hourly rate)
-  const overtimePay = calculateOvertimePay(dailyRate);
   
   // Calculate late deduction (half of daily rate per late day)
   const lateDeduction = (dailyRate * 0.5) * lateDays;
@@ -109,13 +83,11 @@ const calculateSalary = (employee, attendanceStats, bonusAmount = 0, deductions 
   const taxAmount = basicSalary * taxRate;
   
   // Calculate net salary
-  const netSalary = basicSalary + overtimePay.totalOTHours * dailyRate + bonusAmount - lateDeduction - deductions - taxAmount;
+  const netSalary = basicSalary + bonusAmount - lateDeduction - deductions - taxAmount;
   
   return {
     baseSalary: salary,
     basicSalary,
-    overtimeStats,
-    overtimePay,
     bonusAmount,
     lateDeduction,
     deductions,
@@ -162,8 +134,6 @@ export const generateEmployeePayroll = async (req, res) => {
       payroll.absentDays = attendanceStats.absentDays;
       payroll.lateDays = attendanceStats.lateDays;
       payroll.leaveDays = attendanceStats.leaveDays;
-      payroll.overtimeStats = attendanceStats.overtimeStats;
-      payroll.overtimePay = salaryDetails.overtimePay;
       payroll.bonusAmount = bonusAmount || 0;
       payroll.deductions = deductions || 0;
       payroll.deductionReasons = deductionReasons || '';
@@ -183,8 +153,6 @@ export const generateEmployeePayroll = async (req, res) => {
         absentDays: attendanceStats.absentDays,
         lateDays: attendanceStats.lateDays,
         leaveDays: attendanceStats.leaveDays,
-        overtimeStats: attendanceStats.overtimeStats,
-        overtimePay: salaryDetails.overtimePay,
         bonusAmount: bonusAmount || 0,
         deductions: deductions || 0,
         deductionReasons: deductionReasons || '',
@@ -248,8 +216,6 @@ export const generateAllPayrolls = async (req, res) => {
           payroll.absentDays = attendanceStats.absentDays;
           payroll.lateDays = attendanceStats.lateDays;
           payroll.leaveDays = attendanceStats.leaveDays;
-          payroll.overtimeStats = attendanceStats.overtimeStats;
-          payroll.overtimePay = salaryDetails.overtimePay;
           payroll.taxAmount = salaryDetails.taxAmount;
           payroll.netSalary = salaryDetails.netSalary;
           
@@ -266,8 +232,6 @@ export const generateAllPayrolls = async (req, res) => {
             absentDays: attendanceStats.absentDays,
             lateDays: attendanceStats.lateDays,
             leaveDays: attendanceStats.leaveDays,
-            overtimeStats: attendanceStats.overtimeStats,
-            overtimePay: salaryDetails.overtimePay,
             taxAmount: salaryDetails.taxAmount,
             netSalary: salaryDetails.netSalary
           });
