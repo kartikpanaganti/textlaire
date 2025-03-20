@@ -588,7 +588,6 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
                     <span className="tooltip">Work From Home</span>
                   </th>
                   <th className="px-2 py-3 text-left text-xs font-medium uppercase">Notes</th>
-                  <th className="px-2 py-3 text-left text-xs font-medium uppercase">Overtime</th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${isDarkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
@@ -798,17 +797,6 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
                             disabled={!selectedEmployees[record.employeeId]}
                             placeholder="Notes"
                           />
-                        </td>
-                        <td className="px-2 py-2">
-                          {record.overtime > 0 ? (
-                            <div className="space-y-1">
-                              <div className="inline-block px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                                {record.overtime} hrs ({record.overtimeRate}x)
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-gray-500 dark:text-gray-400">-</span>
-                          )}
                         </td>
                       </tr>
                     );

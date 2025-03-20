@@ -115,7 +115,6 @@ const AttendancePage = () => {
         date: formData.date,
         shift: formData.shift,
         breakTime: formData.breakTime,
-        overtime: formData.overtime,
         workFromHome: formData.workFromHome,
         notes: formData.notes,
         location: formData.location

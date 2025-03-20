@@ -21,7 +21,6 @@ const attendanceSchema = new mongoose.Schema({
   },
   shift: String,
   breakTime: String,
-  overtime: Number,
   workFromHome: Boolean,
   notes: String,
   location: {

@@ -17,52 +17,8 @@ const calculateHoursBetween = (startTime, endTime) => {
   return hours + (minutes / 60);
 };
 
-// Helper function to calculate overtime
-const calculateOvertime = async (employeeId, checkIn, checkOut, shift, date) => {
-  const employee = await Employee.findById(employeeId);
-  if (!employee) return 0;
-
-  const standardHours = employee.workingHours || 8;
-  const shiftTimings = employee.shiftConfig?.shiftTimings?.[shift] || {
-    Day: { start: "09:00", end: "17:00" },
-    Night: { start: "21:00", end: "05:00" },
-    Morning: { start: "06:00", end: "14:00" },
-    Evening: { start: "14:00", end: "22:00" }
-  }[shift];
-
-  if (!checkIn || !checkOut) return 0;
-
-  const actualHours = calculateHoursBetween(checkIn, checkOut);
-  const overtime = Math.max(0, actualHours - standardHours);
-
-  // Determine overtime type
-  let overtimeType = 'regular';
-  const dateObj = new Date(date);
-  const dayOfWeek = dateObj.getDay();
-  
-  // Check if it's a weekend
-  if (dayOfWeek === 0 || dayOfWeek === 6) {
-    overtimeType = 'weekend';
-  }
-  // You can add holiday check here if you have a holiday calendar
-  
-  return {
-    hours: parseFloat(overtime.toFixed(2)),
-    type: overtimeType
-  };
-};
-
 export const addAttendance = async (req, res) => {
   try {
-    const { employeeId, checkIn, checkOut, shift, date } = req.body;
-
-    // Calculate overtime if check-in and check-out times are provided
-    if (checkIn && checkOut) {
-      const overtimeDetails = await calculateOvertime(employeeId, checkIn, checkOut, shift, date);
-      req.body.overtime = overtimeDetails.hours;
-      req.body.overtimeType = overtimeDetails.type;
-    }
-
     const attendance = new Attendance(req.body);
     await attendance.save();
     
@@ -93,15 +49,6 @@ export const getAttendance = async (req, res) => {
 
 export const updateAttendance = async (req, res) => {
   try {
-    const { employeeId, checkIn, checkOut, shift, date } = req.body;
-
-    // Calculate overtime if check-in and check-out times are provided
-    if (checkIn && checkOut) {
-      const overtimeDetails = await calculateOvertime(employeeId, checkIn, checkOut, shift, date);
-      req.body.overtime = overtimeDetails.hours;
-      req.body.overtimeType = overtimeDetails.type;
-    }
-
     const attendance = await Attendance.findByIdAndUpdate(
       req.params.id,
       req.body,
