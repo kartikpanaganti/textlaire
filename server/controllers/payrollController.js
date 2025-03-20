@@ -365,3 +365,43 @@ export const deletePayroll = async (req, res) => {
     return res.status(500).json({ error: "Failed to delete payroll" });
   }
 };
+
+// Update payroll details
+export const updatePayroll = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      bonusAmount, 
+      deductions, 
+      deductionReasons, 
+      overtimeHours, 
+      overtimeRate, 
+      netSalary 
+    } = req.body;
+    
+    const payroll = await Payroll.findById(id);
+    
+    if (!payroll) {
+      return res.status(404).json({ error: "Payroll not found" });
+    }
+    
+    // Update payroll details
+    payroll.bonusAmount = bonusAmount || 0;
+    payroll.deductions = deductions || 0;
+    payroll.deductionReasons = deductionReasons || '';
+    payroll.overtimeHours = overtimeHours || 0;
+    payroll.overtimeRate = overtimeRate || 0;
+    payroll.netSalary = netSalary || payroll.netSalary;
+    
+    await payroll.save();
+    
+    return res.status(200).json({
+      message: "Payroll updated successfully",
+      payroll
+    });
+    
+  } catch (error) {
+    console.error('Error updating payroll:', error);
+    return res.status(500).json({ error: "Failed to update payroll" });
+  }
+};

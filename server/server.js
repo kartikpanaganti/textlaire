@@ -12,8 +12,6 @@ import rawMaterialRoutes from './routes/rawMaterialRoutes.js';
 import { config } from './config/index.js';
 import apiRoutes from './routes/api.js';
 import { errorHandler } from './middleware/errorHandler.js';
-import autoPayrollRoutes from './routes/autoPayrollRoutes.js';
-import autoPayrollService from './services/autoPayrollService.js';
 
 
 dotenv.config();
@@ -21,8 +19,8 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: '*', // Allow all origins
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  origin: ['http://localhost:5173', 'http://192.168.140.141:5173'], // Specific origins instead of wildcard
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // Added PATCH method
   allowedHeaders: ['Content-Type', 'Authorization', 'x-fal-target-url', 'Accept', 'Origin', 'x-requested-with'],
   credentials: true
 }));
@@ -37,12 +35,6 @@ app.use("/api/payroll", payrollRoutes); // Add Payroll Routes
 app.use('/api/raw-materials', rawMaterialRoutes);
 // Routes
 app.use('/api', apiRoutes);
-
-// Initialize auto payroll service
-autoPayrollService.init();
-
-// Add auto payroll routes
-app.use('/api/payroll/auto', autoPayrollRoutes);
 
 // Health check route
 app.get('/health', (req, res) => {

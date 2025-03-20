@@ -5,7 +5,8 @@ import {
   getEmployeePayroll,
   getAllPayrolls,
   updatePaymentStatus,
-  deletePayroll
+  deletePayroll,
+  updatePayroll
 } from '../controllers/payrollController.js';
 
 const router = express.Router();
@@ -24,6 +25,9 @@ router.get('/month/:month/:year', getAllPayrolls);
 
 // Update payment status
 router.patch('/:id/payment-status', updatePaymentStatus);
+
+// Update payroll details
+router.patch('/:id', updatePayroll);
 
 // Delete a payroll
 router.delete('/:id', deletePayroll);

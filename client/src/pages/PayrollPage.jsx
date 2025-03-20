@@ -38,9 +38,7 @@ import {
   InputAdornment,
   Collapse,
   Fade,
-  Zoom,
-  FormControlLabel,
-  Switch
+  Zoom
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -61,13 +59,9 @@ import {
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
   Clear as ClearIcon,
-  Visibility as VisibilityIcon,
-  Autorenew as AutorenewIcon
+  Visibility as VisibilityIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
-
-// Add axios base URL configuration
-axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const PayrollPage = () => {
   const theme = useTheme();
@@ -119,12 +113,6 @@ const PayrollPage = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [expandedRow, setExpandedRow] = useState(null);
 
-  // Add new state for auto generation status
-  const [autoGenerationStatus, setAutoGenerationStatus] = useState({
-    isEnabled: false,
-    lastGenerated: null
-  });
-
   // Fetch employees on component mount
   useEffect(() => {
     fetchEmployees();
@@ -150,20 +138,6 @@ const PayrollPage = () => {
       });
     }
   }, [payrolls]);
-
-  // Add useEffect to check auto generation status
-  useEffect(() => {
-    const fetchAutoGenerationStatus = async () => {
-      try {
-        const response = await axios.get('/api/payroll/auto/status');
-        setAutoGenerationStatus(response.data);
-      } catch (error) {
-        console.error('Error fetching auto generation status:', error);
-      }
-    };
-
-    fetchAutoGenerationStatus();
-  }, []);
 
   // Fetch all employees
   const fetchEmployees = async () => {
@@ -330,17 +304,26 @@ const PayrollPage = () => {
     setOpenDetailsDialog(false);
   };
 
-  // Add new function to handle payroll update
+  // Update the updatePayroll function
   const updatePayroll = async () => {
     if (!editingPayroll) return;
 
     try {
+      // Calculate new net salary
+      const overtimeAmount = (Number(editingPayroll.overtimeHours) || 0) * (Number(editingPayroll.overtimeRate) || 0);
+      const newNetSalary = (Number(editingPayroll.baseSalary) || 0) + 
+                          (Number(editingPayroll.bonusAmount) || 0) + 
+                          overtimeAmount - 
+                          (Number(editingPayroll.deductions) || 0) - 
+                          (Number(editingPayroll.taxAmount) || 0);
+
       const response = await axios.patch(`/api/payroll/${editingPayroll._id}`, {
-        bonusAmount: Number(editingPayroll.bonusAmount),
-        deductions: Number(editingPayroll.deductions),
+        bonusAmount: Number(editingPayroll.bonusAmount) || 0,
+        deductions: Number(editingPayroll.deductions) || 0,
         deductionReasons: editingPayroll.deductionReasons,
-        overtimeHours: Number(editingPayroll.overtimeHours),
-        overtimeRate: Number(editingPayroll.overtimeRate)
+        overtimeHours: Number(editingPayroll.overtimeHours) || 0,
+        overtimeRate: Number(editingPayroll.overtimeRate) || 0,
+        netSalary: newNetSalary
       });
 
       showSnackbar('Payroll updated successfully', 'success');
@@ -348,13 +331,32 @@ const PayrollPage = () => {
       handleCloseEditDialog();
     } catch (error) {
       console.error('Error updating payroll:', error);
-      showSnackbar('Failed to update payroll', 'error');
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        showSnackbar(error.response.data.message || 'Failed to update payroll', 'error');
+      } else if (error.request) {
+        // The request was made but no response was received
+        showSnackbar('No response from server. Please check your connection.', 'error');
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        showSnackbar('Error setting up the request', 'error');
+      }
     }
   };
 
   // Add handlers for edit dialog
   const handleOpenEditDialog = (payroll) => {
-    setEditingPayroll({ ...payroll });
+    setEditingPayroll({
+      ...payroll,
+      bonusAmount: payroll.bonusAmount || '',
+      deductions: payroll.deductions || '',
+      overtimeHours: payroll.overtimeHours || '',
+      overtimeRate: payroll.overtimeRate || '',
+      baseSalary: payroll.baseSalary || '',
+      taxAmount: payroll.taxAmount || '',
+      netSalary: payroll.netSalary || ''
+    });
     setOpenEditDialog(true);
   };
 
@@ -453,31 +455,6 @@ const PayrollPage = () => {
     });
   };
 
-  // Add handler for toggling auto generation
-  const handleToggleAutoGeneration = async () => {
-    try {
-      await axios.post('/api/payroll/auto/toggle', {
-        enabled: !autoGenerationStatus.isEnabled
-      });
-      setAutoGenerationStatus(prev => ({
-        ...prev,
-        isEnabled: !prev.isEnabled
-      }));
-      setSnackbar({
-        open: true,
-        message: `Auto generation ${!autoGenerationStatus.isEnabled ? 'enabled' : 'disabled'} successfully`,
-        severity: 'success'
-      });
-    } catch (error) {
-      console.error('Error toggling auto generation:', error);
-      setSnackbar({
-        open: true,
-        message: 'Error toggling auto generation',
-        severity: 'error'
-      });
-    }
-  };
-
   // Return JSX
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 8 }}>
@@ -500,14 +477,14 @@ const PayrollPage = () => {
                 <AttachMoneyIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
                 <Typography variant="h6" color="text.primary">
                   Total Payroll
-                </Typography>
+            </Typography>
               </Box>
               <Typography variant="h4" color="primary">
                 ₹{statistics.totalPayroll.toLocaleString()}
-              </Typography>
+            </Typography>
             </CardContent>
           </Card>
-        </Grid>
+          </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <Card 
             sx={{ 
@@ -597,8 +574,8 @@ const PayrollPage = () => {
           backdropFilter: 'blur(10px)'
         }}
       >
-        <Grid container spacing={3} alignItems="center" justifyContent="space-between">
-          <Grid item>
+        <Grid container spacing={3} alignItems="center">
+          <Grid item xs={12}>
             <Typography 
               variant="h4" 
               gutterBottom 
@@ -617,25 +594,6 @@ const PayrollPage = () => {
             <Typography variant="body1" color="text.secondary">
               Manage employee payrolls and payment records
             </Typography>
-          </Grid>
-          <Grid item>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={autoGenerationStatus.isEnabled}
-                    onChange={handleToggleAutoGeneration}
-                    color="primary"
-                  />
-                }
-                label="Auto Generation"
-              />
-              <Chip
-                label={`Last Generated: ${autoGenerationStatus.lastGenerated ? format(new Date(autoGenerationStatus.lastGenerated), 'MMM dd, yyyy HH:mm') : 'Never'}`}
-                color={autoGenerationStatus.isEnabled ? 'success' : 'default'}
-                variant="outlined"
-              />
-            </Box>
           </Grid>
         </Grid>
       </Paper>
@@ -858,9 +816,9 @@ const PayrollPage = () => {
           </Box>
         </Collapse>
 
-        <Table>
-          <TableHead>
-            <TableRow>
+          <Table>
+            <TableHead>
+              <TableRow>
               <TableCell padding="checkbox">
                 <IconButton size="small" onClick={() => setExpandedRow(null)}>
                   {expandedRow ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -938,10 +896,10 @@ const PayrollPage = () => {
                   Payment Status
                 </TableSortLabel>
               </TableCell>
-              <TableCell>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+                <TableCell>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
             {loading ? (
               <TableRow>
                 <TableCell colSpan={11} align="center">
@@ -970,38 +928,38 @@ const PayrollPage = () => {
                           {expandedRow === payroll._id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                         </IconButton>
                       </TableCell>
-                      <TableCell>{payroll.employeeId?.employeeID || 'N/A'}</TableCell>
-                      <TableCell>{payroll.employeeId?.name || 'N/A'}</TableCell>
-                      <TableCell>{payroll.employeeId?.department || 'N/A'}</TableCell>
+                    <TableCell>{payroll.employeeId?.employeeID || 'N/A'}</TableCell>
+                    <TableCell>{payroll.employeeId?.name || 'N/A'}</TableCell>
+                    <TableCell>{payroll.employeeId?.department || 'N/A'}</TableCell>
                       <TableCell align="right">₹{payroll.baseSalary.toFixed(2)}</TableCell>
                       <TableCell align="right">{payroll.workingDays}</TableCell>
                       <TableCell align="right">{payroll.presentDays}</TableCell>
                       <TableCell align="right">₹{payroll.netSalary.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={payroll.paymentStatus}
-                          color={
-                            payroll.paymentStatus === 'Paid'
-                              ? 'success'
-                              : payroll.paymentStatus === 'Pending'
-                              ? 'warning'
-                              : 'error'
-                          }
-                          size="small"
+                    <TableCell>
+                      <Chip
+                        label={payroll.paymentStatus}
+                        color={
+                          payroll.paymentStatus === 'Paid'
+                            ? 'success'
+                            : payroll.paymentStatus === 'Pending'
+                            ? 'warning'
+                            : 'error'
+                        }
+                        size="small"
                           sx={{
                             fontWeight: 'bold',
                             '& .MuiChip-label': {
                               px: 1
                             }
                           }}
-                        />
-                      </TableCell>
-                      <TableCell>
+                      />
+                    </TableCell>
+                    <TableCell>
                         <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Tooltip title="View Details">
-                            <IconButton
-                              size="small"
-                              color="primary"
+                      <Tooltip title="View Details">
+                        <IconButton
+                          size="small"
+                          color="primary"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleOpenDetailsDialog(payroll);
@@ -1028,15 +986,15 @@ const PayrollPage = () => {
                                   backgroundColor: alpha(theme.palette.info.main, 0.1)
                                 }
                               }}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          {payroll.paymentStatus === 'Pending' && (
-                            <Tooltip title="Mark as Paid">
-                              <IconButton
-                                size="small"
-                                color="success"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      {payroll.paymentStatus === 'Pending' && (
+                        <Tooltip title="Mark as Paid">
+                          <IconButton
+                            size="small"
+                            color="success"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleOpenPaymentDialog(payroll);
@@ -1046,15 +1004,15 @@ const PayrollPage = () => {
                                     backgroundColor: alpha(theme.palette.success.main, 0.1)
                                   }
                                 }}
-                              >
-                                <MonetizationOnIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          <Tooltip title="Delete">
-                            <IconButton
-                              size="small"
-                              color="error"
+                          >
+                            <MonetizationOnIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      <Tooltip title="Delete">
+                        <IconButton
+                          size="small"
+                          color="error"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 deletePayroll(payroll._id);
@@ -1064,14 +1022,14 @@ const PayrollPage = () => {
                                   backgroundColor: alpha(theme.palette.error.main, 0.1)
                                 }
                               }}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                         </Box>
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
+                    </TableCell>
+                  </TableRow>
+                <TableRow>
                       <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={11}>
                         <Collapse in={expandedRow === payroll._id} timeout="auto" unmountOnExit>
                           <Box sx={{ margin: 1 }}>
@@ -1090,8 +1048,8 @@ const PayrollPage = () => {
                                       <TableCell>Overtime Amount</TableCell>
                                       <TableCell align="right">
                                         ₹{(payroll.overtimeHours * payroll.overtimeRate).toFixed(2)}
-                                      </TableCell>
-                                    </TableRow>
+                  </TableCell>
+                </TableRow>
                                     <TableRow>
                                       <TableCell>Bonus Amount</TableCell>
                                       <TableCell align="right">₹{payroll.bonusAmount.toFixed(2)}</TableCell>
@@ -1161,9 +1119,9 @@ const PayrollPage = () => {
                     </TableRow>
                   </React.Fragment>
                 ))
-            )}
-          </TableBody>
-        </Table>
+              )}
+            </TableBody>
+          </Table>
         <TablePagination
           rowsPerPageOptions={[5, 10, 25, 50]}
           component="div"
@@ -1178,7 +1136,7 @@ const PayrollPage = () => {
             }
           }}
         />
-      </TableContainer>
+        </TableContainer>
 
       {/* Generate Payroll Dialog */}
       <Dialog 
@@ -1819,7 +1777,7 @@ const PayrollPage = () => {
                   {editingPayroll.employeeId?.name || 'N/A'}
                 </Typography>
                 <Typography variant="body1">
-                  <strong>Base Salary:</strong> ₹{editingPayroll.baseSalary.toFixed(2)}
+                  <strong>Base Salary:</strong> ₹{Number(editingPayroll.baseSalary || 0).toFixed(2)}
                 </Typography>
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -1840,6 +1798,9 @@ const PayrollPage = () => {
                       },
                       '&:hover .MuiOutlinedInput-notchedOutline': {
                         borderColor: theme.palette.primary.main
+                      },
+                      '& input::-webkit-inner-spin-button, & input::-webkit-outer-spin-button': {
+                        display: 'none'
                       }
                     }
                   }}
@@ -1863,6 +1824,9 @@ const PayrollPage = () => {
                       },
                       '&:hover .MuiOutlinedInput-notchedOutline': {
                         borderColor: theme.palette.primary.main
+                      },
+                      '& input::-webkit-inner-spin-button, & input::-webkit-outer-spin-button': {
+                        display: 'none'
                       }
                     }
                   }}
@@ -1874,7 +1838,7 @@ const PayrollPage = () => {
                   label="Deduction Reasons"
                   multiline
                   rows={2}
-                  value={editingPayroll.deductionReasons}
+                  value={editingPayroll.deductionReasons || ''}
                   onChange={(e) => setEditingPayroll({
                     ...editingPayroll,
                     deductionReasons: e.target.value
@@ -1906,6 +1870,9 @@ const PayrollPage = () => {
                       },
                       '&:hover .MuiOutlinedInput-notchedOutline': {
                         borderColor: theme.palette.primary.main
+                      },
+                      '& input::-webkit-inner-spin-button, & input::-webkit-outer-spin-button': {
+                        display: 'none'
                       }
                     }
                   }}
@@ -1929,6 +1896,9 @@ const PayrollPage = () => {
                       },
                       '&:hover .MuiOutlinedInput-notchedOutline': {
                         borderColor: theme.palette.primary.main
+                      },
+                      '& input::-webkit-inner-spin-button, & input::-webkit-outer-spin-button': {
+                        display: 'none'
                       }
                     }
                   }}
@@ -1952,30 +1922,30 @@ const PayrollPage = () => {
                     <TableBody>
                       <TableRow>
                         <TableCell>Base Salary</TableCell>
-                        <TableCell align="right">₹{editingPayroll.baseSalary.toFixed(2)}</TableCell>
+                        <TableCell align="right">₹{Number(editingPayroll.baseSalary || 0).toFixed(2)}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell>Overtime Amount</TableCell>
                         <TableCell align="right">
-                          ₹{(editingPayroll.overtimeHours * editingPayroll.overtimeRate).toFixed(2)}
+                          ₹{(Number(editingPayroll.overtimeHours || 0) * Number(editingPayroll.overtimeRate || 0)).toFixed(2)}
                         </TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell>Bonus Amount</TableCell>
-                        <TableCell align="right">₹{editingPayroll.bonusAmount.toFixed(2)}</TableCell>
+                        <TableCell align="right">₹{Number(editingPayroll.bonusAmount || 0).toFixed(2)}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell>Deductions</TableCell>
-                        <TableCell align="right">₹{editingPayroll.deductions.toFixed(2)}</TableCell>
+                        <TableCell align="right">₹{Number(editingPayroll.deductions || 0).toFixed(2)}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell>Tax Amount</TableCell>
-                        <TableCell align="right">₹{editingPayroll.taxAmount.toFixed(2)}</TableCell>
+                        <TableCell align="right">₹{Number(editingPayroll.taxAmount || 0).toFixed(2)}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell sx={{ fontWeight: 'bold' }}>Net Salary</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                          ₹{editingPayroll.netSalary.toFixed(2)}
+                          ₹{Number(editingPayroll.netSalary || 0).toFixed(2)}
                         </TableCell>
                       </TableRow>
                     </TableBody>
@@ -2023,28 +1993,6 @@ const PayrollPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Snackbar for notifications */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={handleSnackbarClose}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert 
-          onClose={handleSnackbarClose} 
-          severity={snackbar.severity} 
-          sx={{ 
-            width: '100%',
-            background: theme.palette.mode === 'dark'
-              ? `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.9)})`
-              : `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.9)}, ${alpha(theme.palette.background.paper, 1)})`,
-            backdropFilter: 'blur(10px)'
-          }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
     </Container>
   );
 };
