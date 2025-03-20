@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { FiPlus, FiEdit, FiTrash2, FiSearch, FiFilter, FiRefreshCw, FiX, FiEye } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiSearch, FiFilter, FiRefreshCw, FiX, FiGrid, FiList } from 'react-icons/fi';
 import EmployeeForm from '../components/employee/EmployeeForm';
-import { useNavigate } from 'react-router-dom';
+import EmployeeDetailsModal from '../components/employee/EmployeeDetailsModal';
+import EmployeeCard from '../components/employee/EmployeeCard';
 import apiClient from '../lib/api';
 
 const EmployeePage = () => {
-  const navigate = useNavigate();
   // State management
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,19 +17,18 @@ const EmployeePage = () => {
   const [filterStatus, setFilterStatus] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'ascending' });
+  const [viewMode, setViewMode] = useState('grid'); // Changed default to 'grid'
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
 
   // Department options for filtering
   const departments = [
-    "Weaving",
-    "Dyeing",
-    "Printing",
+    "Production",
     "Quality Control",
-    "Packaging",
-    "Maintenance",
-    "Administration",
-    "Human Resources",
-    "Finance",
-    "IT"
+    "Inventory & Raw Materials",
+    "Workforce & HR",
+    "Sales & Marketing",
+    "Finance & Accounts",
+    "Maintenance"
   ];
 
   // Status options for filtering
@@ -39,7 +38,7 @@ const EmployeePage = () => {
   const fetchEmployees = async () => {
     setLoading(true);
     try {
-      const response = await apiClient.get('/employees');
+      const response = await apiClient.get('/api/employees');
       setEmployees(response.data);
       setError(null);
     } catch (err) {
@@ -58,7 +57,7 @@ const EmployeePage = () => {
   // Handle employee deletion
   const handleDelete = async (id) => {
     try {
-      await apiClient.delete(`/employees/${id}`);
+      await apiClient.delete(`/api/employees/${id}`);
       fetchEmployees();
       setConfirmDelete(null);
     } catch (err) {
@@ -161,21 +160,29 @@ const EmployeePage = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 max-w-[1400px]">
       {/* Page Header */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-4 md:mb-0">
           Employee Management
         </h1>
-        <button
-          onClick={() => {
-            setEditingEmployee(null);
-            setShowForm(true);
-          }}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors duration-200"
-        >
-          <FiPlus /> Add New Employee
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setViewMode(viewMode === 'table' ? 'grid' : 'table')}
+            className="flex items-center gap-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+          >
+            {viewMode === 'table' ? 'Grid View' : 'Table View'}
+          </button>
+          <button
+            onClick={() => {
+              setEditingEmployee(null);
+              setShowForm(true);
+            }}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors duration-200"
+          >
+            <FiPlus /> Add New Employee
+          </button>
+        </div>
       </div>
 
       {/* Error Message */}
@@ -188,39 +195,9 @@ const EmployeePage = () => {
         </div>
       )}
 
-      {/* Employee Form */}
-      {showForm && (
-        <div className="mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
-                {editingEmployee ? 'Edit Employee' : 'Add New Employee'}
-              </h2>
-              <button
-                onClick={() => {
-                  setShowForm(false);
-                  setEditingEmployee(null);
-                }}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              >
-                <FiX className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-4">
-              <EmployeeForm
-                fetchEmployees={fetchEmployees}
-                editingEmployee={editingEmployee}
-                setEditingEmployee={setEditingEmployee}
-                onClose={() => setShowForm(false)}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Filters and Search */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Search */}
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -285,73 +262,77 @@ const EmployeePage = () => {
         </div>
       </div>
 
-      {/* Employee Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+      {/* Employee List */}
+      <div className="overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center">
+          <div className="p-8 text-center bg-white dark:bg-gray-800 rounded-lg shadow-lg">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
             <p className="text-gray-600 dark:text-gray-400">Loading employees...</p>
           </div>
         ) : getSortedAndFilteredEmployees().length === 0 ? (
-          <div className="p-8 text-center">
+          <div className="p-8 text-center bg-white dark:bg-gray-800 rounded-lg shadow-lg">
             <p className="text-gray-600 dark:text-gray-400">No employees found.</p>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
+        ) : viewMode === 'table' ? (
+          <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-900">
                 <tr>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
                     onClick={() => requestSort('employeeID')}
                   >
                     ID {getSortIndicator('employeeID')}
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Photo
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
                     onClick={() => requestSort('name')}
                   >
                     Name {getSortIndicator('name')}
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
                     onClick={() => requestSort('department')}
                   >
                     Department {getSortIndicator('department')}
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
                     onClick={() => requestSort('position')}
                   >
                     Position {getSortIndicator('position')}
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
                     onClick={() => requestSort('status')}
                   >
                     Status {getSortIndicator('status')}
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
                     onClick={() => requestSort('joiningDate')}
                   >
                     Joined {getSortIndicator('joiningDate')}
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {getSortedAndFilteredEmployees().map((employee) => (
-                  <tr key={employee._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                  <tr 
+                    key={employee._id} 
+                    className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                    onClick={() => setSelectedEmployee(employee)}
+                  >
+                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                       {employee.employeeID}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-4 whitespace-nowrap">
                       <div className="h-10 w-10 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-700">
                         <img
                           src={getImageUrl(employee.image)}
@@ -364,16 +345,16 @@ const EmployeePage = () => {
                         />
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                       {employee.name}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {employee.department}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {employee.position}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-4 whitespace-nowrap">
                       <span
                         className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                           employee.status === 'Active'
@@ -388,20 +369,14 @@ const EmployeePage = () => {
                         {employee.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {formatDate(employee.joiningDate)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end space-x-2">
                         <button
-                          onClick={() => navigate(`/employees/${employee._id}`)}
-                          className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                          title="View Details"
-                        >
-                          <FiEye className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setEditingEmployee(employee);
                             setShowForm(true);
                           }}
@@ -411,7 +386,10 @@ const EmployeePage = () => {
                           <FiEdit className="w-5 h-5" />
                         </button>
                         <button
-                          onClick={() => setConfirmDelete(employee._id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmDelete(employee._id);
+                          }}
                           className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                           title="Delete"
                         >
@@ -424,8 +402,64 @@ const EmployeePage = () => {
               </tbody>
             </table>
           </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+            {getSortedAndFilteredEmployees().map((employee) => (
+              <EmployeeCard
+                key={employee._id}
+                employee={employee}
+                onEdit={(e) => {
+                  e.stopPropagation();
+                  setEditingEmployee(employee);
+                  setShowForm(true);
+                }}
+                onDelete={(e) => {
+                  e.stopPropagation();
+                  setConfirmDelete(employee._id);
+                }}
+              />
+            ))}
+          </div>
         )}
       </div>
+
+      {/* Employee Details Modal */}
+      {selectedEmployee && (
+        <EmployeeDetailsModal
+          employee={selectedEmployee}
+          onClose={() => setSelectedEmployee(null)}
+        />
+      )}
+
+      {/* Employee Form Modal */}
+      {showForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900 z-10">
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
+                {editingEmployee ? 'Edit Employee' : 'Add New Employee'}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowForm(false);
+                  setEditingEmployee(null);
+                }}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <FiX className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4">
+              <EmployeeForm
+                fetchEmployees={fetchEmployees}
+                editingEmployee={editingEmployee}
+                setEditingEmployee={setEditingEmployee}
+                onClose={() => setShowForm(false)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {confirmDelete && (

@@ -18,6 +18,7 @@ import { useNavigate } from "react-router-dom";
 
 import Select from 'react-select';
 import apiClient from '../lib/api';
+import AttendanceTable from '../components/attendance/AttendanceTable';
 
 const AttendancePage = () => {
   const navigate = useNavigate();
@@ -62,6 +63,9 @@ const AttendancePage = () => {
     info: isDarkMode 
       ? "bg-purple-600 hover:bg-purple-700 text-white" 
       : "bg-purple-500 hover:bg-purple-600 text-white",
+    warning: isDarkMode 
+      ? "bg-yellow-600 hover:bg-yellow-700 text-white" 
+      : "bg-yellow-500 hover:bg-yellow-600 text-white",
   };
 
   const handleSort = (field) => {
@@ -80,9 +84,10 @@ const AttendancePage = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
+      // Fetch attendance and employees
       const [attendanceRes, employeesRes] = await Promise.all([
-        apiClient.get('/attendance'),
-        apiClient.get('/employees')
+        apiClient.get('/api/attendance'),
+        apiClient.get('/api/employees')
       ]);
 
       const filteredAttendance = attendanceRes.data.filter(record =>
@@ -92,6 +97,7 @@ const AttendancePage = () => {
       setAttendance(filteredAttendance);
       setEmployees(employeesRes.data);
     } catch (error) {
+      console.error('Error fetching data:', error);
       toast.error("Failed to fetch data");
     }
     setLoading(false);
@@ -117,10 +123,10 @@ const AttendancePage = () => {
 
       let response;
       if (editRecord) {
-        response = await apiClient.put(`/attendance/${editRecord._id}`, attendanceData);
+        response = await apiClient.put(`/api/attendance/${editRecord._id}`, attendanceData);
         toast.success("Attendance updated successfully");
       } else {
-        response = await apiClient.post("/attendance", attendanceData);
+        response = await apiClient.post("/api/attendance", attendanceData);
         toast.success("Attendance added successfully");
       }
 
@@ -144,7 +150,7 @@ const AttendancePage = () => {
   const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this record?")) {
       try {
-        await apiClient.delete(`/attendance/${id}`);
+        await apiClient.delete(`/api/attendance/${id}`);
         toast.success("Record deleted successfully");
         fetchData();
       } catch (error) {
@@ -214,7 +220,7 @@ const AttendancePage = () => {
   const fetchAttendanceByDateRange = async (startDate, endDate) => {
     setLoading(true);
     try {
-      const response = await apiClient.get('/attendance');
+      const response = await apiClient.get('/api/attendance');
       const filteredData = response.data.filter(record => {
         const recordDate = record.date.substring(0, 10);
         return recordDate >= startDate && recordDate <= endDate;
@@ -230,7 +236,7 @@ const AttendancePage = () => {
   const fetchAttendanceByDate = async (date) => {
     setLoading(true);
     try {
-      const response = await apiClient.get('/attendance');
+      const response = await apiClient.get('/api/attendance');
       const filteredData = response.data.filter(record => 
         record.date.substring(0, 10) === date
       );
@@ -390,99 +396,23 @@ const AttendancePage = () => {
           <AttendanceFilters onFilterChange={handleFilterChange} />
         </div>
 
-        {/* Attendance Table */}
-        {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <FaSpinner className="animate-spin text-4xl text-blue-500" />
-          </div>
-        ) : filteredAttendance.length > 0 ? (
-          <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-            <table className="min-w-full divide-y attendance-table">
-              <thead>
-                <tr className="bg-gray-100 dark:bg-gray-800">
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase">Employee</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase">Shift</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase">Check In</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase">Check Out</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase">WFH</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
-                {filteredAttendance.map(record => {
-                  // Determine status class
-                  let statusClass = '';
-                  switch(record.status) {
-                    case 'Present':
-                      statusClass = 'attendance-status-present';
-                      break;
-                    case 'Absent':
-                      statusClass = 'attendance-status-absent';
-                      break;
-                    case 'Late':
-                      statusClass = 'attendance-status-late';
-                      break;
-                    case 'On Leave':
-                      statusClass = 'attendance-status-leave';
-                      break;
-                    case 'Half Day':
-                      statusClass = 'attendance-status-half-day';
-                      break;
-                    default:
-                      statusClass = '';
-                  }
-                  
-                  return (
-                    <tr key={record._id} className="hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors duration-150">
-                      <td className="px-6 py-4 font-medium">{record.employeeId?.name}</td>
-                      <td className={`px-6 py-4 ${statusClass}`}>{record.status}</td>
-                      <td className="px-6 py-4">{record.shift}</td>
-                      <td className="px-6 py-4">{record.checkIn}</td>
-                      <td className="px-6 py-4">{record.checkOut}</td>
-                      <td className="px-6 py-4">
-                        {record.workFromHome ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                            WFH
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">
-                            Office
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              setEditRecord(record);
-                              setShowModal(true);
-                            }}
-                            className="p-1 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                            title="Edit"
-                          >
-                            <FaEdit />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(record._id)}
-                            className="p-1 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                            title="Delete"
-                          >
-                            <FaTrash />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200 p-4 rounded-lg text-center">
-            No attendance records found for the selected date.
-          </div>
-        )}
+        {/* Replace the existing table with the new AttendanceTable component */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mt-6">
+          {loading ? (
+            <div className="flex justify-center items-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            </div>
+          ) : (
+            <AttendanceTable
+              attendance={filteredAttendance}
+              onEdit={(record) => {
+                setEditRecord(record);
+                setShowModal(true);
+              }}
+              onDelete={handleDelete}
+            />
+          )}
+        </div>
 
         {/* Export Buttons */}
         <div className="mt-6 flex justify-end gap-3">

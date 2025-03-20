@@ -123,6 +123,22 @@ textarea:-webkit-autofill {
   transition: opacity 300ms, transform 300ms;
 }
 
+/* Add animation for fade-in modals */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
 /* Add animation for slide-in alerts */
 @keyframes slide-in {
   0% {

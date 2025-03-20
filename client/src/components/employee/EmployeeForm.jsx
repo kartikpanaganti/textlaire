@@ -1,10 +1,11 @@
 import { useState, useEffect, useContext } from "react";
 import apiClient from '../../lib/api';
 import { 
-  FiUser, FiMail, FiPhone, FiBriefcase, FiDollarSign, 
+  FiUser, FiMail, FiPhone, FiBriefcase, 
   FiCalendar, FiMapPin, FiAlertTriangle, FiClock, 
   FiFileText, FiX, FiUpload, FiTool, FiAward, FiShield
 } from "react-icons/fi";
+import { FaRupeeSign } from "react-icons/fa";
 import { ThemeContext } from "../../context/ThemeProvider";
 
 const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee, onClose }) => {
@@ -12,30 +13,55 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee, onC
   
   // Define form options
   const departments = [
-    "Weaving",
-    "Dyeing",
-    "Printing",
+    "Production",
     "Quality Control",
-    "Packaging",
-    "Maintenance",
-    "Administration",
-    "Human Resources",
-    "Finance",
-    "IT"
+    "Inventory & Raw Materials",
+    "Workforce & HR",
+    "Sales & Marketing",
+    "Finance & Accounts",
+    "Maintenance"
   ];
 
-  const positions = [
-    "Manager",
-    "Supervisor",
-    "Operator",
-    "Technician",
-    "Quality Inspector",
-    "Team Lead",
-    "Assistant",
-    "Specialist",
-    "Coordinator",
-    "Analyst"
-  ];
+  // Department-specific positions
+  const departmentPositions = {
+    "Production": [
+      "Machine Operator",
+      "Textile Worker",
+      "Weaver/Knitter",
+      "Dyeing & Printing Operator"
+    ],
+    "Quality Control": [
+      "Quality Inspector",
+      "Fabric Checker",
+      "Testing Technician"
+    ],
+    "Inventory & Raw Materials": [
+      "Store Keeper",
+      "Inventory Assistant"
+    ],
+    "Workforce & HR": [
+      "HR Executive",
+      "Payroll Assistant"
+    ],
+    "Sales & Marketing": [
+      "Sales Executive",
+      "Customer Support Representative"
+    ],
+    "Finance & Accounts": [
+      "Accountant",
+      "Billing Assistant"
+    ],
+    "Maintenance": [
+      "Maintenance Technician",
+      "Electrical Engineer"
+    ]
+  };
+
+  // Get available positions based on selected department
+  const getAvailablePositions = (department) => {
+    if (!department) return [];
+    return departmentPositions[department] || [];
+  };
 
   const workTypes = [
     "Full-time",
@@ -57,17 +83,19 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee, onC
     salary: "",
     shiftTiming: "",
     joiningDate: "",
-    experienceLevel: "",
     workType: "",
     status: "Active",
-    supervisor: "",
     address: "",
     emergencyContact: "",
-    previousExperience: "",
-    skills: "",
-    workingHours: "",
-    attendanceRecord: "",
-    safetyCertification: "",
+    // Bank Details
+    bankName: "",
+    accountNumber: "",
+    accountHolderName: "",
+    ifscCode: "",
+    // Home Details
+    homeAddress: "",
+    homePhone: "",
+    homeEmail: "",
     imageUrl: ""
   };
 
@@ -103,7 +131,13 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee, onC
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => {
+      // If changing department, reset position
+      if (name === "department") {
+        return { ...prev, [name]: value, position: "" };
+      }
+      return { ...prev, [name]: value };
+    });
   };
 
   const formatImageFileName = (file, employeeName, employeeID) => {
@@ -180,7 +214,7 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee, onC
       }
 
       const response = await apiClient[editingEmployee ? "put" : "post"](
-        editingEmployee ? `/employees/${editingEmployee._id}` : '/employees', 
+        editingEmployee ? `/api/employees/${editingEmployee._id}` : '/api/employees', 
         formPayload, 
         {
           headers: { "Content-Type": "multipart/form-data" }
@@ -248,42 +282,31 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee, onC
   };
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-900 p-4 md:p-6 relative transition-colors duration-200 rounded-lg">
+    <div className="transition-colors duration-200">
       {/* Alert Message */}
       {showAlert && (
-        <div className="fixed top-4 right-4 z-50 animate-slide-in">
-          <div className={`${
-            alertType === "error" 
-              ? "bg-red-100 dark:bg-red-900 border-red-400 dark:border-red-700 text-red-700 dark:text-red-100" 
-              : "bg-green-100 dark:bg-green-900 border-green-400 dark:border-green-700 text-green-700 dark:text-green-100"
-            } border px-4 py-3 rounded-lg shadow-lg flex items-center transition-colors duration-200`}
+        <div className={`mb-6 ${
+          alertType === "error" 
+            ? "bg-red-100 dark:bg-red-900 border-red-400 dark:border-red-700 text-red-700 dark:text-red-100" 
+            : "bg-green-100 dark:bg-green-900 border-green-400 dark:border-green-700 text-green-700 dark:text-green-100"
+          } border px-4 py-3 rounded-lg shadow-lg flex items-center transition-colors duration-200`}
+        >
+          <span className="mr-2">{alertType === "error" ? "❗" : "✅"}</span>
+          <span>{alertMessage}</span>
+          <button
+            onClick={() => setShowAlert(false)}
+            className={`ml-4 ${
+              alertType === "error"
+                ? "text-red-500 dark:text-red-300 hover:text-red-700 dark:hover:text-red-100" 
+                : "text-green-500 dark:text-green-300 hover:text-green-700 dark:hover:text-green-100"
+              } transition-colors duration-200`}
           >
-            <span className="mr-2">{alertType === "error" ? "❗" : "✅"}</span>
-            <span>{alertMessage}</span>
-            <button
-              onClick={() => setShowAlert(false)}
-              className={`ml-4 ${
-                alertType === "error"
-                  ? "text-red-500 dark:text-red-300 hover:text-red-700 dark:hover:text-red-100" 
-                  : "text-green-500 dark:text-green-300 hover:text-green-700 dark:hover:text-green-100"
-                } transition-colors duration-200`}
-            >
-              <FiX className="w-5 h-5" />
-            </button>
-          </div>
+            <FiX className="w-5 h-5" />
+          </button>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="max-w-2xl mx-auto space-y-6">
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold text-gray-800 dark:text-white transition-colors duration-200">
-            {editingEmployee ? "Update Profile" : "New Employee"}
-          </h1>
-          <p className="text-gray-600 dark:text-gray-300 text-sm transition-colors duration-200">
-            {editingEmployee ? "Edit employee details" : "Add new team member"}
-          </p>
-        </div>
-
+      <form onSubmit={handleSubmit} className="space-y-6">
         {/* Image Upload Section */}
         <div className="flex flex-col items-center gap-4 mb-8">
           <div className="relative group w-32 h-32 rounded-full border-4 border-dashed border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 transition-all duration-200">
@@ -352,9 +375,11 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee, onC
                 { name: "emergencyContact", icon: <FiAlertTriangle />, placeholder: "Emergency Contact" },
               ].map((field) => (
                 <div key={field.name} className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 transition-colors duration-200">
-                    {field.icon}
-                  </div>
+                  {field.icon && (
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500">
+                      {field.icon}
+                    </div>
+                  )}
                   <input
                     type={field.type || "text"}
                     name={field.name}
@@ -394,19 +419,28 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee, onC
                   icon: <FiUser />, 
                   type: "select", 
                   placeholder: "Position",
-                  options: positions,
-                  required: true
+                  options: getAvailablePositions(formData.department),
+                  required: true,
+                  disabled: !formData.department
                 },
-                { name: "salary", icon: <FiDollarSign />, type: "number", placeholder: "Salary", required: true },
+                { 
+                  name: "salary", 
+                  icon: <FaRupeeSign />, 
+                  type: "number", 
+                  placeholder: "Salary (₹)", 
+                  required: true 
+                },
                 { 
                   name: "workType", 
+                  icon: <FiClock />,
                   type: "select", 
                   placeholder: "Employment Type",
                   options: workTypes,
-                  required: true
+                  required: false
                 },
                 { 
                   name: "status", 
+                  icon: <FiShield />,
                   type: "select", 
                   placeholder: "Status",
                   options: statusOptions
@@ -424,12 +458,21 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee, onC
                       name={field.name}
                       value={formData[field.name] || ""}
                       onChange={handleChange}
-                      className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none text-gray-900 dark:text-white"
+                      className={`w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none ${
+                        !formData[field.name] 
+                          ? "text-gray-400 dark:text-gray-500" 
+                          : "text-gray-900 dark:text-white"
+                      }`}
                       required={field.required}
+                      disabled={field.disabled}
                     >
-                      <option value="">{field.placeholder}</option>
+                      <option value="" disabled>
+                        {field.name === "position" && !formData.department 
+                          ? "Please select a department first" 
+                          : field.placeholder}
+                      </option>
                       {field.options.map(option => (
-                        <option key={option} value={option}>{option}</option>
+                        <option key={option} value={option} className="text-gray-900 dark:text-white">{option}</option>
                       ))}
                     </select>
                   ) : (
@@ -459,17 +502,15 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee, onC
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
-                { name: "address", icon: <FiMapPin />, placeholder: "Address" },
-                { name: "supervisor", icon: <FiUser />, placeholder: "Supervisor" },
-                { name: "experienceLevel", icon: <FiAward />, placeholder: "Experience Level" },
-                { name: "workingHours", icon: <FiClock />, type: "number", placeholder: "Working Hours" },
-                { name: "skills", icon: <FiTool />, placeholder: "Skills" },
-                { name: "previousExperience", icon: <FiFileText />, placeholder: "Previous Experience" },
+                { name: "address", icon: <FiMapPin />, placeholder: "Office Address" },
+                { name: "emergencyContact", icon: <FiAlertTriangle />, placeholder: "Emergency Contact" },
               ].map((field) => (
                 <div key={field.name} className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500">
-                    {field.icon}
-                  </div>
+                  {field.icon && (
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500">
+                      {field.icon}
+                    </div>
+                  )}
                   <input
                     type={field.type || "text"}
                     name={field.name}
@@ -478,6 +519,77 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee, onC
                     onChange={handleChange}
                     className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
                   />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Bank Details */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+              <span className="w-2 h-6 bg-yellow-500 rounded-full"></span>
+              Bank Details (Optional)
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { name: "bankName", icon: <FiBriefcase />, placeholder: "Bank Name", required: false },
+                { name: "accountNumber", icon: <FiFileText />, placeholder: "Account Number", required: false },
+                { name: "accountHolderName", icon: <FiUser />, placeholder: "Account Holder Name", required: false },
+                { name: "ifscCode", icon: <FiFileText />, placeholder: "IFSC Code", required: false },
+              ].map((field) => (
+                <div key={field.name} className="relative">
+                  {field.icon && (
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500">
+                      {field.icon}
+                    </div>
+                  )}
+                  <input
+                    type={field.type || "text"}
+                    name={field.name}
+                    placeholder={field.placeholder}
+                    value={formData[field.name] || ""}
+                    onChange={handleChange}
+                    className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
+                    required={field.required}
+                  />
+                  {field.required && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-500">*</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Home Details */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+              <span className="w-2 h-6 bg-red-500 rounded-full"></span>
+              Home Details (Optional)
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { name: "homeAddress", icon: <FiMapPin />, placeholder: "Home Address", required: false },
+                { name: "homePhone", icon: <FiPhone />, placeholder: "Home Phone", required: false },
+                { name: "homeEmail", icon: <FiMail />, type: "email", placeholder: "Home Email", required: false },
+              ].map((field) => (
+                <div key={field.name} className="relative">
+                  {field.icon && (
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500">
+                      {field.icon}
+                    </div>
+                  )}
+                  <input
+                    type={field.type || "text"}
+                    name={field.name}
+                    placeholder={field.placeholder}
+                    value={formData[field.name] || ""}
+                    onChange={handleChange}
+                    className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
+                    required={field.required}
+                  />
+                  {field.required && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-red-500">*</span>
+                  )}
                 </div>
               ))}
             </div>

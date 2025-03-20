@@ -16,32 +16,43 @@ const EmployeeSchema = new mongoose.Schema({
   department: {
     type: String,
     enum: [
-      "Weaving",
-      "Dyeing",
-      "Printing",
+      "Production",
       "Quality Control",
-      "Packaging",
-      "Maintenance",
-      "Administration",
-      "Human Resources",
-      "Finance",
-      "IT"
+      "Inventory & Raw Materials",
+      "Workforce & HR",
+      "Sales & Marketing",
+      "Finance & Accounts",
+      "Maintenance"
     ],
     required: [true, "Department is required"]
   },
   position: {
     type: String,
     enum: [
-      "Manager",
-      "Supervisor",
-      "Operator",
-      "Technician",
+      // Production positions
+      "Machine Operator",
+      "Textile Worker",
+      "Weaver/Knitter",
+      "Dyeing & Printing Operator",
+      // Quality Control positions
       "Quality Inspector",
-      "Team Lead",
-      "Assistant",
-      "Specialist",
-      "Coordinator",
-      "Analyst"
+      "Fabric Checker",
+      "Testing Technician",
+      // Inventory positions
+      "Store Keeper",
+      "Inventory Assistant",
+      // HR positions
+      "HR Executive",
+      "Payroll Assistant",
+      // Sales positions
+      "Sales Executive",
+      "Customer Support Representative",
+      // Finance positions
+      "Accountant",
+      "Billing Assistant",
+      // Maintenance positions
+      "Maintenance Technician",
+      "Electrical Engineer"
     ],
     required: [true, "Position is required"]
   },
@@ -68,20 +79,68 @@ const EmployeeSchema = new mongoose.Schema({
   workType: {
     type: String,
     enum: ["Full-time", "Part-time", "Contract", "Temporary", "Intern"],
-    required: [true, "Work type is required"]
+    required: false
   },
   supervisor: String,
   address: String,
   emergencyContact: String,
   previousExperience: String,
   skills: String,
-  workingHours: Number,
+  workingHours: {
+    type: Number,
+    default: 8
+  },
+  shiftConfig: {
+    type: {
+      defaultShift: {
+        type: String,
+        enum: ["Day", "Night", "Morning", "Evening", "Flexible"],
+        default: "Day"
+      },
+      shiftTimings: {
+        Day: {
+          start: { type: String, default: "09:00" },
+          end: { type: String, default: "17:00" }
+        },
+        Night: {
+          start: { type: String, default: "21:00" },
+          end: { type: String, default: "05:00" }
+        },
+        Morning: {
+          start: { type: String, default: "06:00" },
+          end: { type: String, default: "14:00" }
+        },
+        Evening: {
+          start: { type: String, default: "14:00" },
+          end: { type: String, default: "22:00" }
+        }
+      }
+    },
+    default: {
+      defaultShift: "Day",
+      shiftTimings: {
+        Day: { start: "09:00", end: "17:00" },
+        Night: { start: "21:00", end: "05:00" },
+        Morning: { start: "06:00", end: "14:00" },
+        Evening: { start: "14:00", end: "22:00" }
+      }
+    }
+  },
   image: String,
   status: {
     type: String,
     enum: ["Active", "Inactive", "On Leave", "Terminated"],
     default: "Active"
   },
+  // Bank Details
+  bankName: String,
+  accountNumber: String,
+  accountHolderName: String,
+  ifscCode: String,
+  // Home Details
+  homeAddress: String,
+  homePhone: String,
+  homeEmail: String,
   createdAt: {
     type: Date,
     default: Date.now

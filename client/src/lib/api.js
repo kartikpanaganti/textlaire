@@ -14,15 +14,6 @@ const apiClient = axios.create({
   },
 });
 
-// Add request interceptor to handle /api prefix
-apiClient.interceptors.request.use((config) => {
-  // If URL already starts with /api, don't modify it
-  if (!config.url.startsWith('/api')) {
-    config.url = `/api${config.url}`;
-  }
-  return config;
-});
-
 /**
  * Configure the fal.ai client
  * @returns {Promise<Object>} - Configuration result
@@ -61,10 +52,10 @@ export const getWebSocketDetails = async () => {
  */
 export const submitBulkAttendance = async (attendanceData) => {
   try {
-    const response = await apiClient.post('/attendance/bulk', attendanceData);
+    const response = await apiClient.post('/api/attendance/bulk', attendanceData);
     return response.data;
   } catch (error) {
-    console.error('Error submitting attendance:', error);
+    console.error('Error submitting bulk attendance:', error);
     throw error;
   }
 };
@@ -75,7 +66,7 @@ export const submitBulkAttendance = async (attendanceData) => {
  */
 export const getAllPatterns = async () => {
   try {
-    const response = await apiClient.get('/patterns');
+    const response = await apiClient.get('/api/patterns');
     return response.data;
   } catch (error) {
     console.error('Error fetching patterns:', error);
@@ -90,7 +81,7 @@ export const getAllPatterns = async () => {
  */
 export const getPatternById = async (id) => {
   try {
-    const response = await apiClient.get(`/patterns/${id}`);
+    const response = await apiClient.get(`/api/patterns/${id}`);
     return response.data;
   } catch (error) {
     console.error(`Error fetching pattern with ID ${id}:`, error);
@@ -126,7 +117,7 @@ export const savePattern = async (data, imageFile) => {
       formData.append('image', file);
     }
     
-    const response = await apiClient.post('/patterns', formData, {
+    const response = await apiClient.post('/api/patterns', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -146,7 +137,7 @@ export const savePattern = async (data, imageFile) => {
  */
 export const deletePattern = async (id) => {
   try {
-    const response = await apiClient.delete(`/patterns/${id}`);
+    const response = await apiClient.delete(`/api/patterns/${id}`);
     return response.data;
   } catch (error) {
     console.error(`Error deleting pattern with ID ${id}:`, error);

@@ -33,6 +33,27 @@ router.post('/bulk', async (req, res) => {
     const attendanceRecords = req.body;
     const savedRecords = await Promise.all(
       attendanceRecords.map(async (record) => {
+        // Calculate overtime if check-in and check-out times are provided
+        let overtime = 0;
+        let overtimeRate = 1.5;
+        
+        if (record.checkIn && record.checkOut) {
+          const [startHour, startMinute] = record.checkIn.split(':').map(Number);
+          const [endHour, endMinute] = record.checkOut.split(':').map(Number);
+          
+          let hours = endHour - startHour;
+          let minutes = endMinute - startMinute;
+          
+          // Handle overnight shifts
+          if (hours < 0) {
+            hours += 24;
+          }
+          
+          const totalHours = hours + (minutes / 60);
+          const standardHours = 8; // Default working hours
+          overtime = Math.max(0, totalHours - standardHours);
+        }
+
         const attendance = new Attendance({
           employeeId: record.employeeId,
           status: record.status,
@@ -40,7 +61,9 @@ router.post('/bulk', async (req, res) => {
           checkOut: record.checkOut,
           date: record.date,
           shift: record.shift,
-          workFromHome: record.workFromHome
+          workFromHome: record.workFromHome,
+          overtime,
+          overtimeRate
         });
         return await attendance.save();
       })
@@ -70,7 +93,7 @@ router.post('/bulk', async (req, res) => {
 // Create attendance record
 router.post("/", async (req, res) => {
   try {
-    const { employeeId, status, checkIn, checkOut, date, shift, breakTime, overtime, workFromHome, notes, location } = req.body;
+    const { employeeId, status, checkIn, checkOut, date, shift, breakTime, overtime, overtimeRate, workFromHome, notes, location } = req.body;
     const newAttendance = new Attendance({
       employeeId,
       status,
@@ -80,6 +103,7 @@ router.post("/", async (req, res) => {
       shift,
       breakTime,
       overtime,
+      overtimeRate,
       workFromHome,
       notes,
       location

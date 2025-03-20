@@ -8,29 +8,40 @@ const router = express.Router();
 
 // Constants for validation
 const departments = [
-  "Weaving",
-  "Dyeing",
-  "Printing",
+  "Production",
   "Quality Control",
-  "Packaging",
-  "Maintenance",
-  "Administration",
-  "Human Resources",
-  "Finance",
-  "IT"
+  "Inventory & Raw Materials",
+  "Workforce & HR",
+  "Sales & Marketing",
+  "Finance & Accounts",
+  "Maintenance"
 ];
 
 const positions = [
-  "Manager",
-  "Supervisor",
-  "Operator",
-  "Technician",
+  // Production positions
+  "Machine Operator",
+  "Textile Worker",
+  "Weaver/Knitter",
+  "Dyeing & Printing Operator",
+  // Quality Control positions
   "Quality Inspector",
-  "Team Lead",
-  "Assistant",
-  "Specialist",
-  "Coordinator",
-  "Analyst"
+  "Fabric Checker",
+  "Testing Technician",
+  // Inventory positions
+  "Store Keeper",
+  "Inventory Assistant",
+  // HR positions
+  "HR Executive",
+  "Payroll Assistant",
+  // Sales positions
+  "Sales Executive",
+  "Customer Support Representative",
+  // Finance positions
+  "Accountant",
+  "Billing Assistant",
+  // Maintenance positions
+  "Maintenance Technician",
+  "Electrical Engineer"
 ];
 
 const workTypes = [
@@ -117,18 +128,22 @@ const validateEmployee = (req, res, next) => {
   
   const errors = [];
   
+  // Only validate departments if it's being updated
   if (department && !departments.includes(department)) {
     errors.push("Invalid department");
   }
   
+  // Only validate position if it's being updated
   if (position && !positions.includes(position)) {
     errors.push("Invalid position");
   }
   
+  // Only validate workType if it's being updated
   if (workType && !workTypes.includes(workType)) {
     errors.push("Invalid work type");
   }
   
+  // Only validate status if it's being updated
   if (status && !statuses.includes(status)) {
     errors.push("Invalid status");
   }
@@ -283,8 +298,8 @@ router.put("/:id", upload.single("image"), validateEmployee, async (req, res) =>
       }
     });
 
-    // Save updated employee
-    const updatedEmployee = await employee.save();
+    // Save updated employee with validation bypass for backward compatibility
+    const updatedEmployee = await employee.save({ validateBeforeSave: false });
     res.json(updatedEmployee);
   } catch (err) {
     console.error("Error updating employee:", err);
