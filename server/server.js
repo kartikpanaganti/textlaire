@@ -12,6 +12,8 @@ import rawMaterialRoutes from './routes/rawMaterialRoutes.js';
 import { config } from './config/index.js';
 import apiRoutes from './routes/api.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import autoPayrollRoutes from './routes/autoPayrollRoutes.js';
+import autoPayrollService from './services/autoPayrollService.js';
 
 
 dotenv.config();
@@ -35,6 +37,12 @@ app.use("/api/payroll", payrollRoutes); // Add Payroll Routes
 app.use('/api/raw-materials', rawMaterialRoutes);
 // Routes
 app.use('/api', apiRoutes);
+
+// Initialize auto payroll service
+autoPayrollService.init();
+
+// Add auto payroll routes
+app.use('/api/payroll/auto', autoPayrollRoutes);
 
 // Health check route
 app.get('/health', (req, res) => {
