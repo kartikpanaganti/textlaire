@@ -9,24 +9,53 @@ const attendanceSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: ["Present", "Absent", "Late", "On Leave"],
-    default: "Present"
+    required: true
   },
-  checkIn: String,
-  checkOut: String,
+  checkIn: {
+    type: String
+  },
+  checkOut: {
+    type: String
+  },
   date: {
     type: String,
+    required: true,
     set: function(date) {
       return new Date(date).toISOString().split('T')[0];
     }
   },
-  shift: String,
+  shift: {
+    type: String,
+    enum: ["Day", "Night", "Morning", "Evening", "Flexible"]
+  },
   breakTime: String,
-  workFromHome: Boolean,
-  notes: String,
+  workFromHome: {
+    type: Boolean,
+    default: false
+  },
+  notes: {
+    type: String
+  },
   location: {
     lat: Number,
     lng: Number
+  },
+  overtime: {
+    hours: {
+      type: Number,
+      default: 0
+    },
+    rate: {
+      type: Number,
+      default: 1.5
+    },
+    totalHours: {
+      type: Number,
+      default: 0
+    }
   }
+}, {
+  timestamps: true
 });
 
 // Add compound unique index for employeeId and date

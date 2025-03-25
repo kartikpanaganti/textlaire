@@ -13,6 +13,12 @@ const getAttendanceStats = async (employeeId, month, year) => {
   const startDateStr = format(startDate, 'yyyy-MM-dd');
   const endDateStr = format(endDate, 'yyyy-MM-dd');
   
+  // Get employee data first
+  const employee = await Employee.findById(employeeId);
+  if (!employee) {
+    throw new Error('Employee not found');
+  }
+  
   const attendanceRecords = await Attendance.find({
     employeeId,
     date: { 
@@ -31,6 +37,10 @@ const getAttendanceStats = async (employeeId, month, year) => {
   let lateDays = 0;
   let leaveDays = 0;
   
+  // Calculate overtime hours and rates
+  let totalOvertimeHours = 0;
+  let totalOvertimeAmount = 0;
+  
   attendanceRecords.forEach(record => {
     switch(record.status) {
       case 'Present':
@@ -46,6 +56,16 @@ const getAttendanceStats = async (employeeId, month, year) => {
         leaveDays++;
         break;
     }
+
+    // Add overtime hours if present
+    if (record.overtime && record.overtime.hours > 0) {
+      totalOvertimeHours += record.overtime.hours;
+      // Calculate overtime amount based on rate
+      const overtimeRate = record.overtime.rate;
+      const dailyRate = employee.salary / workingDays;
+      const hourlyRate = dailyRate / 8; // Assuming 8 hours per day
+      totalOvertimeAmount += (hourlyRate * record.overtime.hours * overtimeRate);
+    }
   });
   
   // If an employee doesn't have an attendance record for a working day, 
@@ -60,14 +80,16 @@ const getAttendanceStats = async (employeeId, month, year) => {
     presentDays,
     absentDays,
     lateDays,
-    leaveDays
+    leaveDays,
+    totalOvertimeHours,
+    totalOvertimeAmount
   };
 };
 
 // Calculate salary based on employee details and attendance
 const calculateSalary = (employee, attendanceStats, bonusAmount = 0, deductions = 0) => {
   const { salary } = employee;
-  const { workingDays, presentDays, lateDays } = attendanceStats;
+  const { workingDays, presentDays, lateDays, totalOvertimeAmount } = attendanceStats;
   
   // Calculate daily rate
   const dailyRate = salary / workingDays;
@@ -82,13 +104,14 @@ const calculateSalary = (employee, attendanceStats, bonusAmount = 0, deductions 
   const taxRate = 0.1;
   const taxAmount = basicSalary * taxRate;
   
-  // Calculate net salary
-  const netSalary = basicSalary + bonusAmount - lateDeduction - deductions - taxAmount;
+  // Calculate net salary including overtime
+  const netSalary = basicSalary + bonusAmount + totalOvertimeAmount - lateDeduction - deductions - taxAmount;
   
   return {
     baseSalary: salary,
     basicSalary,
     bonusAmount,
+    overtimeAmount: totalOvertimeAmount,
     lateDeduction,
     deductions,
     taxAmount,
@@ -134,6 +157,8 @@ export const generateEmployeePayroll = async (req, res) => {
       payroll.absentDays = attendanceStats.absentDays;
       payroll.lateDays = attendanceStats.lateDays;
       payroll.leaveDays = attendanceStats.leaveDays;
+      payroll.overtimeHours = attendanceStats.totalOvertimeHours;
+      payroll.overtimeAmount = salaryDetails.overtimeAmount;
       payroll.bonusAmount = bonusAmount || 0;
       payroll.deductions = deductions || 0;
       payroll.deductionReasons = deductionReasons || '';
@@ -153,6 +178,8 @@ export const generateEmployeePayroll = async (req, res) => {
         absentDays: attendanceStats.absentDays,
         lateDays: attendanceStats.lateDays,
         leaveDays: attendanceStats.leaveDays,
+        overtimeHours: attendanceStats.totalOvertimeHours,
+        overtimeAmount: salaryDetails.overtimeAmount,
         bonusAmount: bonusAmount || 0,
         deductions: deductions || 0,
         deductionReasons: deductionReasons || '',
@@ -163,16 +190,23 @@ export const generateEmployeePayroll = async (req, res) => {
       await payroll.save();
     }
     
+    // Populate employee details in the response
+    const populatedPayroll = await Payroll.findById(payroll._id)
+      .populate('employeeId', 'name employeeId department');
+    
     return res.status(200).json({ 
       message: "Payroll generated successfully", 
-      payroll,
+      payroll: populatedPayroll,
       salaryDetails,
       attendanceStats
     });
     
   } catch (error) {
     console.error('Error generating payroll:', error);
-    return res.status(500).json({ error: "Failed to generate payroll" });
+    return res.status(500).json({ 
+      error: "Failed to generate payroll",
+      details: error.message 
+    });
   }
 };
 
@@ -216,6 +250,8 @@ export const generateAllPayrolls = async (req, res) => {
           payroll.absentDays = attendanceStats.absentDays;
           payroll.lateDays = attendanceStats.lateDays;
           payroll.leaveDays = attendanceStats.leaveDays;
+          payroll.overtimeHours = attendanceStats.totalOvertimeHours;
+          payroll.overtimeAmount = salaryDetails.overtimeAmount;
           payroll.taxAmount = salaryDetails.taxAmount;
           payroll.netSalary = salaryDetails.netSalary;
           
@@ -232,6 +268,8 @@ export const generateAllPayrolls = async (req, res) => {
             absentDays: attendanceStats.absentDays,
             lateDays: attendanceStats.lateDays,
             leaveDays: attendanceStats.leaveDays,
+            overtimeHours: attendanceStats.totalOvertimeHours,
+            overtimeAmount: salaryDetails.overtimeAmount,
             taxAmount: salaryDetails.taxAmount,
             netSalary: salaryDetails.netSalary
           });

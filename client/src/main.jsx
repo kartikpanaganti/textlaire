@@ -2,10 +2,17 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ThemeProvider } from "./context/ThemeProvider"; // Import ThemeProvider
 import { UserProvider } from "./context/UserProvider"; // Import UserProvider
+import axios from 'axios'; // Import axios for configuration
 
 import './index.css'
 import App from './App.jsx'
 import './lib/api'; // Updated import path
+
+// Configure axios defaults for all API requests
+axios.defaults.baseURL = import.meta.env.VITE_API_URL || 
+  (window.location.hostname === 'localhost' ? 
+    'http://localhost:5000' : 
+    `//${window.location.host}`);
 
 // Polyfill for crypto and its methods if not available
 if (typeof crypto === 'undefined') {

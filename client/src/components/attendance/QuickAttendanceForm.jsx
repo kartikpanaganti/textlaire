@@ -1,7 +1,8 @@
 import { useState, useEffect, useContext } from 'react';
-import { format } from 'date-fns';
+import { format, differenceInHours, differenceInMinutes } from 'date-fns';
 import { FaSearch, FaFilter, FaCalendarAlt, FaUserCheck, FaUserTimes, FaSave, FaList, FaMoon, FaSun, FaTimes } from 'react-icons/fa';
 import { ThemeContext } from '../../context/ThemeProvider';
+import { toast } from 'react-toastify';
 
 const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
     const [attendanceData, setAttendanceData] = useState([]);
@@ -21,6 +22,15 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
     const [templates, setTemplates] = useState([]);
     const [showTemplateList, setShowTemplateList] = useState(false);
     const [applyDefaultShifts, setApplyDefaultShifts] = useState(true);
+    const [overtimeSettings, setOvertimeSettings] = useState({
+      standardHours: 8,
+      regularRate: 1.5,
+      doubleTimeRate: 2.0,
+      requireApproval: false
+    });
+    const [overtimeHistory, setOvertimeHistory] = useState([]);
+    const [showOvertimeSettings, setShowOvertimeSettings] = useState(false);
+    const [showOvertimeHistory, setShowOvertimeHistory] = useState(false);
 
     // Use global theme context instead of local state
     const { theme } = useContext(ThemeContext);
@@ -72,6 +82,78 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
         setSelectedEmployees(initialSelected);
       }
     }, [employees, selectedDate, applyDefaultShifts]);
+
+    // Add loadTemplate function
+    const loadTemplate = (template) => {
+      try {
+        const templateData = JSON.parse(template.data);
+        setAttendanceData(prev => 
+          prev.map(record => {
+            if (selectedEmployees[record.employeeId]) {
+              return {
+                ...record,
+                ...templateData
+              };
+            }
+            return record;
+          })
+        );
+        setShowTemplateList(false);
+        toast.success('Template loaded successfully');
+      } catch (error) {
+        console.error('Error loading template:', error);
+        toast.error('Failed to load template');
+      }
+    };
+
+    // Add deleteTemplate function
+    const deleteTemplate = (templateId) => {
+      if (window.confirm('Are you sure you want to delete this template?')) {
+        try {
+          const updatedTemplates = templates.filter(t => t.id !== templateId);
+          setTemplates(updatedTemplates);
+          localStorage.setItem('attendanceTemplates', JSON.stringify(updatedTemplates));
+          toast.success('Template deleted successfully');
+        } catch (error) {
+          console.error('Error deleting template:', error);
+          toast.error('Failed to delete template');
+        }
+      }
+    };
+
+    // Add saveTemplate function
+    const saveTemplate = () => {
+      if (!templateName.trim()) {
+        toast.error('Please enter a template name');
+        return;
+      }
+
+      try {
+        const newTemplate = {
+          id: Date.now().toString(),
+          name: templateName,
+          date: new Date().toISOString(),
+          data: JSON.stringify({
+            status: 'Present',
+            shift: 'Day',
+            checkIn: '09:00',
+            checkOut: '17:00',
+            workFromHome: false,
+            notes: ''
+          })
+        };
+
+        const updatedTemplates = [...templates, newTemplate];
+        setTemplates(updatedTemplates);
+        localStorage.setItem('attendanceTemplates', JSON.stringify(updatedTemplates));
+        setTemplateName('');
+        setShowTemplateModal(false);
+        toast.success('Template saved successfully');
+      } catch (error) {
+        console.error('Error saving template:', error);
+        toast.error('Failed to save template');
+      }
+    };
 
     const handleSubmit = async (e) => {
       e.preventDefault();
@@ -152,60 +234,79 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
       return 'Flexible';
     };
 
-    // Function to calculate overtime - simplified
-    const calculateOvertime = (checkIn, checkOut) => {
-      if (!checkIn || !checkOut) return { hours: 0, rate: 1.5 };
+    // Enhanced overtime calculation function
+    const calculateOvertime = (checkIn, checkOut, shift) => {
+      if (!checkIn || !checkOut) return { hours: 0, rate: 1.5, totalHours: 0 };
 
+      // Convert times to Date objects for the current day
+      const today = new Date();
       const [startHour, startMinute] = checkIn.split(':').map(Number);
       const [endHour, endMinute] = checkOut.split(':').map(Number);
       
-      let hours = endHour - startHour;
-      let minutes = endMinute - startMinute;
-      
+      const startTime = new Date(today.setHours(startHour, startMinute, 0));
+      const endTime = new Date(today.setHours(endHour, endMinute, 0));
+
       // Handle overnight shifts
-      if (hours < 0) {
-        hours += 24;
+      if (endTime < startTime) {
+        endTime.setDate(endTime.getDate() + 1);
       }
-      
-      const totalHours = hours + (minutes / 60);
-      const standardHours = 8; // Default working hours
-      const overtime = Math.max(0, totalHours - standardHours);
+
+      // Calculate total hours worked
+      const totalMinutes = differenceInMinutes(endTime, startTime);
+      const totalHours = totalMinutes / 60;
+
+      // Calculate overtime based on shift type
+      let overtime = 0;
+      let rate = 1.5; // Default overtime rate
+
+      // Standard working hours
+      const standardHours = 8;
+
+      if (shift === 'Night') {
+        // Night shift overtime rules
+        if (totalHours > standardHours) {
+          overtime = totalHours - standardHours;
+          if (totalHours > 12) {
+            rate = 2.0; // Double time
+          }
+        }
+      } else {
+        // Regular shift overtime rules
+        if (totalHours > standardHours) {
+          overtime = totalHours - standardHours;
+          if (totalHours > 12) {
+            rate = 2.0; // Double time
+          }
+        }
+      }
 
       return {
         hours: parseFloat(overtime.toFixed(2)),
-        rate: 1.5
+        rate: rate,
+        totalHours: parseFloat(totalHours.toFixed(2))
       };
     };
 
-    // Modified handleIndividualChange to update overtime with new calculation
-    const handleIndividualChange = (index, field, value) => {
-      setAttendanceData(prev => {
-        const newData = [...prev];
-        newData[index] = {
-          ...newData[index],
-          [field]: value
-        };
-        
-        // If check-in or check-out time changes, update overtime
-        if ((field === 'checkIn' || field === 'checkOut') && 
-            newData[index].checkIn && 
-            newData[index].checkOut) {
-          const overtimeDetails = calculateOvertime(
-            newData[index].checkIn,
-            newData[index].checkOut
-          );
-          newData[index].overtime = overtimeDetails.hours;
-          newData[index].overtimeRate = overtimeDetails.rate;
+    // Modify handleIndividualChange to include overtime calculation
+    const handleIndividualChange = (employeeId, field, value) => {
+      setAttendanceData(prev => prev.map(record => {
+        if (record.employeeId === employeeId) {
+          const updatedRecord = { ...record, [field]: value };
+          
+          // Calculate overtime if check-in and check-out times are present
+          if (field === 'checkIn' || field === 'checkOut') {
+            const overtime = calculateOvertime(
+              field === 'checkIn' ? value : record.checkIn,
+              field === 'checkOut' ? value : record.checkOut,
+              record.shift
+            );
+            updatedRecord.overtime = overtime;
+          }
+          
+          return updatedRecord;
         }
-        
-        // If check-in time is changed, update the shift accordingly
-        if (field === 'checkIn' && value) {
-          const detectedShift = determineShiftFromTime(value);
-          newData[index].shift = detectedShift;
-        }
-        
-        return newData;
-      });
+        return record;
+      }));
     };
 
     // Add new state for quick time buttons with overtime consideration
@@ -214,6 +315,46 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
       afternoon: { in: '13:00', out: '21:00', shift: 'Evening' },
       night: { in: '21:00', out: '05:00', shift: 'Night' }
     });
+
+    // Add applyPresetTimes function
+    const applyPresetTimes = () => {
+      if (!presetTimes.checkIn || !presetTimes.checkOut) {
+        alert('Please set both check-in and check-out times');
+        return;
+      }
+
+      setAttendanceData(prev => 
+        prev.map(record => {
+          if (selectedEmployees[record.employeeId] && record.status !== 'Absent' && record.status !== 'On Leave') {
+            return {
+              ...record,
+              checkIn: presetTimes.checkIn,
+              checkOut: presetTimes.checkOut,
+              shift: determineShiftFromTime(presetTimes.checkIn)
+            };
+          }
+          return record;
+        })
+      );
+    };
+
+    // Add applyShiftPatterns function
+    const applyShiftPatterns = () => {
+      setAttendanceData(prev => 
+        prev.map(record => {
+          if (selectedEmployees[record.employeeId] && record.status !== 'Absent' && record.status !== 'On Leave') {
+            // Get the appropriate shift pattern based on current shift
+            const shiftPattern = quickTimes[record.shift.toLowerCase()] || quickTimes.morning;
+            return {
+              ...record,
+              checkIn: shiftPattern.in,
+              checkOut: shiftPattern.out
+            };
+          }
+          return record;
+        })
+      );
+    };
 
     // Modified handleQuickTime to include overtime calculation
     const handleQuickTime = (index, timeType) => {
@@ -224,9 +365,9 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
       const checkOutTime = quickTimes[timeType].out;
       const shift = quickTimes[timeType].shift;
       
-      handleIndividualChange(index, 'checkIn', checkInTime);
-      handleIndividualChange(index, 'checkOut', checkOutTime);
-      handleIndividualChange(index, 'shift', shift);
+      handleIndividualChange(record.employeeId, 'checkIn', checkInTime);
+      handleIndividualChange(record.employeeId, 'checkOut', checkOutTime);
+      handleIndividualChange(record.employeeId, 'shift', shift);
     };
 
     // Filter attendance data based on search, department and shift filter
@@ -303,6 +444,53 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
         newData[index] = {
           ...newData[index],
           shift: 'Flexible'
+        };
+        return newData;
+      });
+    };
+
+    // Add markAllPresent function
+    const markAllPresent = () => {
+      setAttendanceData(prev => 
+        prev.map(record => {
+          if (selectedEmployees[record.employeeId]) {
+            return {
+              ...record,
+              status: 'Present'
+            };
+          }
+          return record;
+        })
+      );
+    };
+
+    // Add markAllAbsent function
+    const markAllAbsent = () => {
+      setAttendanceData(prev => 
+        prev.map(record => {
+          if (selectedEmployees[record.employeeId]) {
+            return {
+              ...record,
+              status: 'Absent',
+              checkIn: '',
+              checkOut: ''
+            };
+          }
+          return record;
+        })
+      );
+    };
+
+    // Add handleQuickStatusChange function
+    const handleQuickStatusChange = (index, status) => {
+      setAttendanceData(prev => {
+        const newData = [...prev];
+        newData[index] = {
+          ...newData[index],
+          status,
+          // Clear check-in/out times if status is Absent or On Leave
+          checkIn: status === 'Absent' || status === 'On Leave' ? '' : newData[index].checkIn,
+          checkOut: status === 'Absent' || status === 'On Leave' ? '' : newData[index].checkOut
         };
         return newData;
       });
@@ -588,6 +776,7 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
                     <span className="tooltip">Work From Home</span>
                   </th>
                   <th className="px-2 py-3 text-left text-xs font-medium uppercase">Notes</th>
+                  <th className="px-2 py-3 text-left text-xs font-medium uppercase">Overtime</th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${isDarkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
@@ -670,7 +859,7 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
                         <td className="px-2 py-2">
                           <select
                             value={record.shift}
-                            onChange={(e) => handleIndividualChange(originalIndex, 'shift', e.target.value)}
+                            onChange={(e) => handleIndividualChange(record.employeeId, 'shift', e.target.value)}
                             className={`rounded-md text-sm ${themeClasses.input} border focus:border-blue-500 w-full ${
                               record.shift === 'Flexible' ? 'bg-purple-100 dark:bg-purple-900' : ''
                             }`}
@@ -698,7 +887,7 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
                             <input
                               type="time"
                               value={record.checkIn}
-                              onChange={(e) => handleIndividualChange(originalIndex, 'checkIn', e.target.value)}
+                              onChange={(e) => handleIndividualChange(record.employeeId, 'checkIn', e.target.value)}
                               className={`rounded-md w-full text-sm ${themeClasses.input} border focus:border-blue-500 ${
                                 !Object.values(quickTimes).some(times => times.in === record.checkIn) && record.checkIn 
                                   ? 'bg-purple-100 dark:bg-purple-900' : ''
@@ -741,7 +930,7 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
                             <input
                               type="time"
                               value={record.checkOut}
-                              onChange={(e) => handleIndividualChange(originalIndex, 'checkOut', e.target.value)}
+                              onChange={(e) => handleIndividualChange(record.employeeId, 'checkOut', e.target.value)}
                               className={`rounded-md w-full text-sm ${themeClasses.input} border focus:border-blue-500 ${
                                 !Object.values(quickTimes).some(times => times.out === record.checkOut) && record.checkOut 
                                   ? 'bg-purple-100 dark:bg-purple-900' : ''
@@ -783,7 +972,7 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
                           <input
                             type="checkbox"
                             checked={record.workFromHome}
-                            onChange={(e) => handleIndividualChange(originalIndex, 'workFromHome', e.target.checked)}
+                            onChange={(e) => handleIndividualChange(record.employeeId, 'workFromHome', e.target.checked)}
                             className={`rounded h-5 w-5 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'border-gray-300'}`}
                             disabled={!selectedEmployees[record.employeeId]}
                           />
@@ -792,11 +981,25 @@ const QuickAttendanceForm = ({ employees, onSubmit, onClose }) => {
                           <input
                             type="text"
                             value={record.notes}
-                            onChange={(e) => handleIndividualChange(originalIndex, 'notes', e.target.value)}
+                            onChange={(e) => handleIndividualChange(record.employeeId, 'notes', e.target.value)}
                             className={`rounded-md w-full text-sm ${themeClasses.input} border focus:border-blue-500`}
                             disabled={!selectedEmployees[record.employeeId]}
                             placeholder="Notes"
                           />
+                        </td>
+                        <td className="px-2 py-2">
+                          <div className="flex flex-col gap-1">
+                            <div className={`text-sm ${themeClasses.table.cell}`}>
+                              {record.overtime?.hours > 0 ? (
+                                <div className="flex items-center gap-2">
+                                  <span>{record.overtime.hours} hours</span>
+                                  <span className="text-xs">({record.overtime.rate}x)</span>
+                                </div>
+                              ) : (
+                                <span className="text-gray-500">No overtime</span>
+                              )}
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     );

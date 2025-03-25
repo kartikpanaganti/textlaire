@@ -477,14 +477,14 @@ const PayrollPage = () => {
                 <AttachMoneyIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
                 <Typography variant="h6" color="text.primary">
                   Total Payroll
-            </Typography>
+                </Typography>
               </Box>
               <Typography variant="h4" color="primary">
                 ₹{statistics.totalPayroll.toLocaleString()}
-            </Typography>
+              </Typography>
             </CardContent>
           </Card>
-          </Grid>
+        </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <Card 
             sx={{ 
@@ -594,6 +594,60 @@ const PayrollPage = () => {
             <Typography variant="body1" color="text.secondary">
               Manage employee payrolls and payment records
             </Typography>
+          </Grid>
+          <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={handleOpenGenerateDialog}
+              sx={{
+                background: theme.palette.mode === 'dark'
+                  ? `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`
+                  : `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+                '&:hover': {
+                  background: theme.palette.mode === 'dark'
+                    ? `linear-gradient(45deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`
+                    : `linear-gradient(45deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`
+                }
+              }}
+            >
+              Generate Payroll
+            </Button>
+            <Button
+              variant="contained"
+              color="secondary"
+              startIcon={<AddIcon />}
+              onClick={generateAllPayrolls}
+              sx={{
+                background: theme.palette.mode === 'dark'
+                  ? `linear-gradient(45deg, ${theme.palette.secondary.main}, ${theme.palette.secondary.dark})`
+                  : `linear-gradient(45deg, ${theme.palette.secondary.main}, ${theme.palette.secondary.dark})`,
+                '&:hover': {
+                  background: theme.palette.mode === 'dark'
+                    ? `linear-gradient(45deg, ${theme.palette.secondary.dark}, ${theme.palette.secondary.main})`
+                    : `linear-gradient(45deg, ${theme.palette.secondary.dark}, ${theme.palette.secondary.main})`
+                }
+              }}
+            >
+              Generate All
+            </Button>
+            <Button
+              variant="outlined"
+              color="primary"
+              startIcon={<RefreshIcon />}
+              onClick={fetchPayrolls}
+              sx={{
+                borderColor: theme.palette.primary.main,
+                color: theme.palette.primary.main,
+                '&:hover': {
+                  borderColor: theme.palette.primary.dark,
+                  backgroundColor: alpha(theme.palette.primary.main, 0.1)
+                }
+              }}
+            >
+              Refresh
+            </Button>
           </Grid>
         </Grid>
       </Paper>
@@ -816,9 +870,9 @@ const PayrollPage = () => {
           </Box>
         </Collapse>
 
-          <Table>
-            <TableHead>
-              <TableRow>
+        <Table>
+          <TableHead>
+            <TableRow>
               <TableCell padding="checkbox">
                 <IconButton size="small" onClick={() => setExpandedRow(null)}>
                   {expandedRow ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -880,6 +934,24 @@ const PayrollPage = () => {
               </TableCell>
               <TableCell align="right">
                 <TableSortLabel
+                  active={orderBy === 'overtimeHours'}
+                  direction={orderBy === 'overtimeHours' ? order : 'asc'}
+                  onClick={() => handleRequestSort('overtimeHours')}
+                >
+                  Overtime Hours
+                </TableSortLabel>
+              </TableCell>
+              <TableCell align="right">
+                <TableSortLabel
+                  active={orderBy === 'overtimeAmount'}
+                  direction={orderBy === 'overtimeAmount' ? order : 'asc'}
+                  onClick={() => handleRequestSort('overtimeAmount')}
+                >
+                  Overtime Amount
+                </TableSortLabel>
+              </TableCell>
+              <TableCell align="right">
+                <TableSortLabel
                   active={orderBy === 'netSalary'}
                   direction={orderBy === 'netSalary' ? order : 'asc'}
                   onClick={() => handleRequestSort('netSalary')}
@@ -896,13 +968,13 @@ const PayrollPage = () => {
                   Payment Status
                 </TableSortLabel>
               </TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
+              <TableCell>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={11} align="center">
+                <TableCell colSpan={12} align="center">
                   <CircularProgress />
                 </TableCell>
               </TableRow>
@@ -928,38 +1000,37 @@ const PayrollPage = () => {
                           {expandedRow === payroll._id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                         </IconButton>
                       </TableCell>
-                    <TableCell>{payroll.employeeId?.employeeID || 'N/A'}</TableCell>
-                    <TableCell>{payroll.employeeId?.name || 'N/A'}</TableCell>
-                    <TableCell>{payroll.employeeId?.department || 'N/A'}</TableCell>
+                      <TableCell>{payroll.employeeId?.employeeID || 'N/A'}</TableCell>
+                      <TableCell>{payroll.employeeId?.name || 'N/A'}</TableCell>
+                      <TableCell>{payroll.employeeId?.department || 'N/A'}</TableCell>
                       <TableCell align="right">₹{payroll.baseSalary.toFixed(2)}</TableCell>
                       <TableCell align="right">{payroll.workingDays}</TableCell>
                       <TableCell align="right">{payroll.presentDays}</TableCell>
+                      <TableCell align="right">
+                        {payroll.overtimeHours.toFixed(1)} hours
+                        {payroll.overtimeRate > 1 && ` (${payroll.overtimeRate}x)`}
+                      </TableCell>
+                      <TableCell align="right">₹{payroll.overtimeAmount.toFixed(2)}</TableCell>
                       <TableCell align="right">₹{payroll.netSalary.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={payroll.paymentStatus}
-                        color={
-                          payroll.paymentStatus === 'Paid'
-                            ? 'success'
-                            : payroll.paymentStatus === 'Pending'
-                            ? 'warning'
-                            : 'error'
-                        }
-                        size="small"
-                          sx={{
-                            fontWeight: 'bold',
-                            '& .MuiChip-label': {
-                              px: 1
-                            }
-                          }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Tooltip title="View Details">
-                        <IconButton
+                      <TableCell>
+                        <Chip
+                          label={payroll.paymentStatus}
+                          color={
+                            payroll.paymentStatus === 'Paid'
+                              ? 'success'
+                              : payroll.paymentStatus === 'Pending'
+                              ? 'warning'
+                              : 'error'
+                          }
                           size="small"
-                          color="primary"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <Tooltip title="View Details">
+                            <IconButton
+                              size="small"
+                              color="primary"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleOpenDetailsDialog(payroll);
@@ -986,15 +1057,15 @@ const PayrollPage = () => {
                                   backgroundColor: alpha(theme.palette.info.main, 0.1)
                                 }
                               }}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      {payroll.paymentStatus === 'Pending' && (
-                        <Tooltip title="Mark as Paid">
-                          <IconButton
-                            size="small"
-                            color="success"
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          {payroll.paymentStatus === 'Pending' && (
+                            <Tooltip title="Mark as Paid">
+                              <IconButton
+                                size="small"
+                                color="success"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleOpenPaymentDialog(payroll);
@@ -1004,15 +1075,15 @@ const PayrollPage = () => {
                                     backgroundColor: alpha(theme.palette.success.main, 0.1)
                                   }
                                 }}
-                          >
-                            <MonetizationOnIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                      <Tooltip title="Delete">
-                        <IconButton
-                          size="small"
-                          color="error"
+                              >
+                                <MonetizationOnIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          <Tooltip title="Delete">
+                            <IconButton
+                              size="small"
+                              color="error"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 deletePayroll(payroll._id);
@@ -1022,15 +1093,15 @@ const PayrollPage = () => {
                                   backgroundColor: alpha(theme.palette.error.main, 0.1)
                                 }
                               }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                         </Box>
-                    </TableCell>
-                  </TableRow>
-                <TableRow>
-                      <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={11}>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={12}>
                         <Collapse in={expandedRow === payroll._id} timeout="auto" unmountOnExit>
                           <Box sx={{ margin: 1 }}>
                             <Grid container spacing={2}>
@@ -1047,9 +1118,18 @@ const PayrollPage = () => {
                                     <TableRow>
                                       <TableCell>Overtime Amount</TableCell>
                                       <TableCell align="right">
-                                        ₹{(payroll.overtimeHours * payroll.overtimeRate).toFixed(2)}
-                  </TableCell>
-                </TableRow>
+                                        {payroll.overtimeHours > 0 ? (
+                                          <div>
+                                            <div>₹{payroll.overtimeAmount.toFixed(2)}</div>
+                                            <div className="text-xs text-gray-500">
+                                              {payroll.overtimeHours.toFixed(1)} hours × {payroll.overtimeRate}x rate
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          '₹0.00'
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
                                     <TableRow>
                                       <TableCell>Bonus Amount</TableCell>
                                       <TableCell align="right">₹{payroll.bonusAmount.toFixed(2)}</TableCell>
@@ -1119,9 +1199,9 @@ const PayrollPage = () => {
                     </TableRow>
                   </React.Fragment>
                 ))
-              )}
-            </TableBody>
-          </Table>
+            )}
+          </TableBody>
+        </Table>
         <TablePagination
           rowsPerPageOptions={[5, 10, 25, 50]}
           component="div"
@@ -1136,7 +1216,7 @@ const PayrollPage = () => {
             }
           }}
         />
-        </TableContainer>
+      </TableContainer>
 
       {/* Generate Payroll Dialog */}
       <Dialog 
@@ -1608,7 +1688,16 @@ const PayrollPage = () => {
                       <TableRow>
                         <TableCell>Overtime Amount</TableCell>
                         <TableCell align="right">
-                          ₹{(selectedPayroll.overtimeHours * selectedPayroll.overtimeRate).toFixed(2)}
+                          {selectedPayroll.overtimeHours > 0 ? (
+                            <div>
+                              <div>₹{selectedPayroll.overtimeAmount.toFixed(2)}</div>
+                              <div className="text-xs text-gray-500">
+                                {selectedPayroll.overtimeHours.toFixed(1)} hours × {selectedPayroll.overtimeRate}x rate
+                              </div>
+                            </div>
+                          ) : (
+                            '₹0.00'
+                          )}
                         </TableCell>
                       </TableRow>
                       <TableRow>
@@ -1927,7 +2016,16 @@ const PayrollPage = () => {
                       <TableRow>
                         <TableCell>Overtime Amount</TableCell>
                         <TableCell align="right">
-                          ₹{(Number(editingPayroll.overtimeHours || 0) * Number(editingPayroll.overtimeRate || 0)).toFixed(2)}
+                          {editingPayroll.overtimeHours > 0 ? (
+                            <div>
+                              <div>₹{editingPayroll.overtimeAmount.toFixed(2)}</div>
+                              <div className="text-xs text-gray-500">
+                                {editingPayroll.overtimeHours.toFixed(1)} hours × {editingPayroll.overtimeRate}x rate
+                              </div>
+                            </div>
+                          ) : (
+                            '₹0.00'
+                          )}
                         </TableCell>
                       </TableRow>
                       <TableRow>

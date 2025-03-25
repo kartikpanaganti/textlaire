@@ -135,7 +135,7 @@ function ImageGenerator() {
   const API_URL = import.meta.env.VITE_API_URL || 
     (window.location.hostname === 'localhost' ? 
       'http://localhost:5000' : 
-      `http://${window.location.hostname}:5000`);
+      `//${window.location.host}`);
 
   // Add viewport size hook
   const viewport = useViewportSize();
