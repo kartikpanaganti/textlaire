@@ -24,8 +24,6 @@ function Login() {
         role: "Administrator",
         avatar: null,
         preferences: {
-          notifications: true,
-          emailAlerts: true,
           fontSize: "medium",
           language: "en",
           twoFactorEnabled: false

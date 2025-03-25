@@ -66,8 +66,6 @@ export const UserProvider = ({ children }) => {
     const userWithDefaults = {
       ...userData,
       preferences: userData.preferences || {
-        notifications: true,
-        emailAlerts: true,
         fontSize: "medium",
         language: "en",
         twoFactorEnabled: false

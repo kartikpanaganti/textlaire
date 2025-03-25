@@ -13,7 +13,6 @@ import ImageGeneration from "./pages/ImageGenerator";
 import RawMaterialsInventory from "./pages/RawMaterialsInventory";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
-import NotificationsPage from "./pages/NotificationsPage";
 
 function App() {
   return (
@@ -28,11 +27,9 @@ function App() {
         <Route path="/image-generation" element={<ProtectedRoute component={<ImageGeneration/>} noContainer={true} />} />
         <Route path="/payroll" element={<ProtectedRoute component={<PayrollPage />} />} />
 
-        {/* profile and seting and notification pages */}
+        {/* profile and settings pages */}
         <Route path="/profile" element={<ProtectedRoute component={<ProfilePage />} />} />
         <Route path="/settings" element={<ProtectedRoute component={<SettingsPage />} />} />
-        <Route path="/notifications" element={<ProtectedRoute component={<NotificationsPage />} />} />
-      
       
       </Routes>
     </Router>

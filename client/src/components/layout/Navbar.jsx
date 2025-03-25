@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaBell, FaUserCircle, FaSun, FaMoon, FaSignOutAlt, FaCog, FaUser, FaEnvelope, FaCheck } from "react-icons/fa";
+import { FaUserCircle, FaSun, FaMoon, FaSignOutAlt, FaCog, FaUser } from "react-icons/fa";
 import { ThemeContext } from "../../context/ThemeProvider";
 import { UserContext } from "../../context/UserProvider";
 
@@ -9,12 +9,6 @@ function Navbar() {
   const { theme, toggleTheme } = useContext(ThemeContext);
   const { user, logout } = useContext(UserContext);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState([
-    { id: 1, text: "New message received", time: "2 min ago", read: false },
-    { id: 2, text: "Your document was shared", time: "1 hour ago", read: false },
-    { id: 3, text: "Meeting reminder: Team standup", time: "3 hours ago", read: false }
-  ]);
 
   // Logout Function
   const handleLogout = () => {
@@ -34,29 +28,11 @@ function Navbar() {
     setIsDropdownOpen(false);
   };
 
-  // Mark notification as read
-  const markAsRead = (id) => {
-    setNotifications(notifications.map(notification => 
-      notification.id === id ? { ...notification, read: true } : notification
-    ));
-  };
-
-  // Mark all notifications as read
-  const markAllAsRead = () => {
-    setNotifications(notifications.map(notification => ({ ...notification, read: true })));
-  };
-
-  // Get unread notification count
-  const unreadCount = notifications.filter(notification => !notification.read).length;
-
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (!event.target.closest(".dropdown-menu")) {
         setIsDropdownOpen(false);
-      }
-      if (!event.target.closest(".notifications-menu")) {
-        setIsNotificationsOpen(false);
       }
     };
     document.addEventListener("click", handleClickOutside);
@@ -82,81 +58,6 @@ function Navbar() {
             <FaMoon className="text-gray-700 dark:text-gray-300" />
           }
         </button>
-
-        {/* Notifications Icon with Badge */}
-        <div className="relative notifications-menu">
-          <button 
-            onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
-            aria-label="Notifications"
-          >
-            <FaBell className="text-gray-700 dark:text-gray-300" />
-          </button>
-          {unreadCount > 0 && (
-            <span className="absolute top-0 right-0 bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
-              {unreadCount}
-            </span>
-          )}
-          
-          {/* Notifications Dropdown */}
-          {isNotificationsOpen && (
-            <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-dark-surface shadow-lg rounded-md overflow-hidden z-50 border border-gray-200 dark:border-gray-700">
-              <div className="flex justify-between items-center p-3 border-b border-gray-200 dark:border-gray-700">
-                <h3 className="font-medium text-light-text-primary dark:text-dark-text-primary">Notifications</h3>
-                {unreadCount > 0 && (
-                  <button 
-                    onClick={markAllAsRead}
-                    className="text-sm text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                  >
-                    Mark all as read
-                  </button>
-                )}
-              </div>
-              <div className="max-h-96 overflow-y-auto">
-                {notifications.length === 0 ? (
-                  <div className="p-4 text-center text-gray-500 dark:text-gray-400">
-                    No notifications
-                  </div>
-                ) : (
-                  notifications.map((notification) => (
-                    <div 
-                      key={notification.id}
-                      className={`p-3 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all ${!notification.read ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                            {notification.text}
-                          </p>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
-                            {notification.time}
-                          </span>
-                        </div>
-                        {!notification.read && (
-                          <button 
-                            onClick={() => markAsRead(notification.id)}
-                            className="text-blue-500 hover:text-blue-700 dark:text-blue-400 p-1"
-                            aria-label="Mark as read"
-                          >
-                            <FaCheck className="text-xs" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-              <div className="p-2 border-t border-gray-200 dark:border-gray-700 text-center">
-                <button 
-                  className="text-sm text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                  onClick={() => navigate('/notifications')}
-                >
-                  View all notifications
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
 
         {/* User Dropdown */}
         <div className="relative dropdown-menu">

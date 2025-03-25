@@ -54,7 +54,7 @@ function Dashboard() {
     
     setLoading(true);
     try {
-      const response = await apiClient.get('/attendance');
+      const response = await apiClient.get('/api/attendance');
       
       // Filter attendance data based on selected filters
       let filteredAttendance = [...response.data];
@@ -383,16 +383,19 @@ function Dashboard() {
               <FaTachometerAlt className="mr-1 text-blue-500" size={12} /> System Status
             </h2>
             <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="text-xs text-gray-700 dark:text-gray-300">System Status</span>
+                </div>
+                <span className="text-xs text-green-500">Operational</span>
+              </div>
               <div className="flex justify-between items-center">
                 <span className="text-xs text-gray-700 dark:text-gray-300">Database</span>
                 <span className="px-1.5 py-0.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full text-xs">Online</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-xs text-gray-700 dark:text-gray-300">API Services</span>
-                <span className="px-1.5 py-0.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full text-xs">Online</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-700 dark:text-gray-300">Notification System</span>
                 <span className="px-1.5 py-0.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full text-xs">Online</span>
               </div>
               <div className="flex justify-between items-center">
