@@ -205,7 +205,7 @@ function ImageGenerator() {
       try {
         const products = await getAllPatterns();
         setSavedImages(products);
-        console.log(`Loaded ${products.length} patterns from server`);
+        // console.log(`Loaded ${products.length} patterns from server`);
       } catch (error) {
         console.error('Error loading patterns from server:', error);
         showNotification("Could not load patterns from server");

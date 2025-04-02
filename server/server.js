@@ -7,6 +7,8 @@ import employeesRoutes from "./routes/employees.js";
 import authRoutes from "./routes/auth.js";
 import AttendanceRoutes from "./routes/attendanceRoutes.js"; // Import Attendance Routes
 import payrollRoutes from "./routes/payrollRoutes.js"; // Import Payroll Routes
+import productRoutes from "./routes/productRoutes.js"; // Import Product Routes
+import uploadRoutes from "./routes/uploadRoutes.js"; // Import Upload Routes
 import path from "path";
 import rawMaterialRoutes from './routes/rawMaterialRoutes.js';
 import { config } from './config/index.js';
@@ -33,6 +35,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/attendance", AttendanceRoutes); // Add Attendance Routes
 app.use("/api/payroll", payrollRoutes); // Add Payroll Routes
 app.use('/api/raw-materials', rawMaterialRoutes);
+app.use('/api/products', productRoutes); // Add Product Routes
+app.use('/api/uploads', uploadRoutes); // Add Upload Routes
 // Routes
 app.use('/api', apiRoutes);
 

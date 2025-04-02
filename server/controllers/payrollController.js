@@ -18,6 +18,22 @@ const getAttendanceStats = async (employeeId, month, year) => {
   if (!employee) {
     throw new Error('Employee not found');
   }
+
+  // Convert joining date to Date object
+  const joiningDate = new Date(employee.joiningDate);
+  
+  // If joining date is after the end of the month, return zero stats
+  if (joiningDate > endDate) {
+    return {
+      workingDays: 0,
+      presentDays: 0,
+      absentDays: 0,
+      lateDays: 0,
+      leaveDays: 0,
+      totalOvertimeHours: 0,
+      totalOvertimeAmount: 0
+    };
+  }
   
   const attendanceRecords = await Attendance.find({
     employeeId,
@@ -27,9 +43,20 @@ const getAttendanceStats = async (employeeId, month, year) => {
     }
   });
   
-  // Count working days (excluding weekends)
+  // Get all days in the month
   const daysInMonth = eachDayOfInterval({ start: startDate, end: endDate });
-  const workingDays = daysInMonth.filter(day => !isWeekend(day)).length;
+  
+  // Adjust working days calculation based on joining date
+  const workingDays = daysInMonth
+    .filter(day => {
+      // Only count days after or equal to joining date
+      if (day < joiningDate) {
+        return false;
+      }
+      // Don't count weekends
+      return !isWeekend(day);
+    })
+    .length;
   
   // Count different attendance statuses
   let presentDays = 0;
@@ -42,6 +69,12 @@ const getAttendanceStats = async (employeeId, month, year) => {
   let totalOvertimeAmount = 0;
   
   attendanceRecords.forEach(record => {
+    // Skip records before joining date
+    const recordDate = new Date(record.date);
+    if (recordDate < joiningDate) {
+      return;
+    }
+
     switch(record.status) {
       case 'Present':
         presentDays++;
@@ -68,7 +101,7 @@ const getAttendanceStats = async (employeeId, month, year) => {
     }
   });
   
-  // If an employee doesn't have an attendance record for a working day, 
+  // If an employee doesn't have an attendance record for a working day after their joining date, 
   // we'll count it as absent unless it's already counted
   const recordedDays = presentDays + absentDays + lateDays + leaveDays;
   if (recordedDays < workingDays) {

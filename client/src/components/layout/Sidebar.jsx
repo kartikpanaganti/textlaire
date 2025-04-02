@@ -3,7 +3,8 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { 
   FaUserCog, FaBox, FaChartPie, FaSignOutAlt, 
   FaBars, FaTachometerAlt, FaIndustry, FaClipboardList, 
-  FaTruck, FaCogs, FaBoxOpen, FaMoneyBillWave 
+  FaTruck, FaCogs, FaBoxOpen, FaMoneyBillWave,
+  FaShoppingCart
 } from "react-icons/fa";
 import { IoPersonCircleOutline } from "react-icons/io5";
 import { IoImagesOutline} from "react-icons/io5";
@@ -160,6 +161,17 @@ function Sidebar() {
               isActive={location.pathname === "/image-generation"}
               onClick={() => {
                 navigate("/image-generation");
+                if (isMobileView) toggleMobileMenu();
+              }}
+              colors={colors}
+            />
+            <SidebarItem 
+              icon={<FaShoppingCart className={colors.icon} />} 
+              label="Products" 
+              isCollapsed={isCollapsed && !isMobileMenuOpen} 
+              isActive={location.pathname === "/products"}
+              onClick={() => {
+                navigate("/products");
                 if (isMobileView) toggleMobileMenu();
               }}
               colors={colors}

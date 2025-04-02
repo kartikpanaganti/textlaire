@@ -59,7 +59,9 @@ import {
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
   Clear as ClearIcon,
-  Visibility as VisibilityIcon
+  Visibility as VisibilityIcon,
+  Info as InfoIcon,
+  Save as SaveIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 
@@ -70,6 +72,7 @@ const PayrollPage = () => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [autoGenerating, setAutoGenerating] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1); // Current month
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear()); // Current year
   const [openGenerateDialog, setOpenGenerateDialog] = useState(false);
@@ -92,7 +95,9 @@ const PayrollPage = () => {
     totalPayroll: 0,
     averageSalary: 0,
     pendingPayments: 0,
-    paidPayments: 0
+    paidPayments: 0,
+    highestPaid: { name: '', amount: 0 },
+    lowestPaid: { name: '', amount: Number.MAX_VALUE }
   });
 
   // Add new state for edit dialog
@@ -130,14 +135,62 @@ const PayrollPage = () => {
       const pending = payrolls.filter(p => p.paymentStatus === 'Pending').length;
       const paid = payrolls.filter(p => p.paymentStatus === 'Paid').length;
       
+      // Find highest and lowest paid employees
+      let highest = { name: '', amount: 0 };
+      let lowest = { name: '', amount: Number.MAX_VALUE };
+      
+      payrolls.forEach(p => {
+        if (p.netSalary > highest.amount) {
+          highest = { 
+            name: p.employeeId.name, 
+            amount: p.netSalary 
+          };
+        }
+        if (p.netSalary < lowest.amount) {
+          lowest = { 
+            name: p.employeeId.name, 
+            amount: p.netSalary 
+          };
+        }
+      });
+      
       setStatistics({
         totalPayroll: total,
         averageSalary: total / payrolls.length,
         pendingPayments: pending,
-        paidPayments: paid
+        paidPayments: paid,
+        highestPaid: highest,
+        lowestPaid: lowest
       });
     }
   }, [payrolls]);
+
+  // New function to fetch attendance data with retry capability
+  const fetchAttendanceDataWithRetry = async (retryCount = 0, maxRetries = 2) => {
+    try {
+      await fetchAttendanceData();
+    } catch (error) {
+      if (retryCount < maxRetries) {
+        console.log(`Retrying attendance data fetch (${retryCount + 1}/${maxRetries})...`);
+        // Exponential backoff: wait longer between each retry
+        const delay = Math.pow(2, retryCount) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        await fetchAttendanceDataWithRetry(retryCount + 1, maxRetries);
+      } else {
+        console.error('Maximum retry attempts reached for attendance data fetch');
+      }
+    }
+  };
+
+  // Update useEffect to use the retry function
+  useEffect(() => {
+    fetchAttendanceDataWithRetry();
+    // Set up an interval to refresh attendance data every 30 minutes (1800000 ms)
+    const intervalId = setInterval(fetchAttendanceDataWithRetry, 1800000);
+    
+    // Clear interval on component unmount
+    return () => clearInterval(intervalId);
+  }, [selectedMonth, selectedYear]);
 
   // Fetch all employees
   const fetchEmployees = async () => {
@@ -147,6 +200,235 @@ const PayrollPage = () => {
     } catch (error) {
       console.error('Error fetching employees:', error);
       showSnackbar('Failed to fetch employees', 'error');
+    }
+  };
+
+  // New function to fetch attendance data and calculate payrolls automatically
+  const fetchAttendanceData = async () => {
+    try {
+      setAutoGenerating(true);
+      // Fetch all attendance data and filter by month/year on client side
+      // since there's no specific endpoint for attendance by month/year
+      console.log(`Fetching attendance data for ${selectedMonth}/${selectedYear}...`);
+      const response = await axios.get('/api/attendance');
+      const allAttendanceData = response.data;
+      console.log(`Received ${allAttendanceData.length} attendance records from API`);
+      
+      // Filter the attendance data for the selected month and year
+      const filteredAttendanceData = allAttendanceData.filter(record => {
+        try {
+          // Check if date exists and is in a valid format
+          if (!record.date) return false;
+          
+          const recordDate = new Date(record.date);
+          // Check if the date is valid
+          if (isNaN(recordDate.getTime())) return false;
+          
+          return recordDate.getMonth() + 1 === selectedMonth && 
+                 recordDate.getFullYear() === selectedYear;
+        } catch (err) {
+          console.warn('Invalid date format in attendance record:', record);
+          return false;
+        }
+      });
+      
+      console.log(`Found ${filteredAttendanceData.length} attendance records for ${selectedMonth}/${selectedYear}`);
+      
+      // Check if attendance data exists
+      if (!filteredAttendanceData || filteredAttendanceData.length === 0) {
+        console.log('No attendance data available for the selected period');
+        showSnackbar(`No attendance data found for ${format(new Date(selectedYear, selectedMonth - 1), 'MMMM yyyy')}. Please add attendance records first.`, 'warning');
+        setAutoGenerating(false);
+        return;
+      }
+      
+      // Get existing payrolls to avoid duplicates
+      const existingPayrolls = await axios.get(`/api/payroll/month/${selectedMonth}/${selectedYear}`);
+      console.log(`Found ${existingPayrolls.data.length} existing payrolls for ${selectedMonth}/${selectedYear}`);
+      
+      // Find employees that don't have a payroll generated yet
+      const employeesWithPayroll = new Set(existingPayrolls.data.map(p => 
+        p.employeeId._id || (typeof p.employeeId === 'string' ? p.employeeId : null)
+      ).filter(id => id !== null));
+      
+      console.log(`${employeesWithPayroll.size} employees already have payrolls`);
+      
+      // Group attendance by employee
+      const attendanceByEmployee = {};
+      
+      filteredAttendanceData.forEach(record => {
+        // Skip records without valid employee ID
+        if (!record.employeeId || (!record.employeeId._id && typeof record.employeeId !== 'string')) {
+          console.warn('Attendance record missing employeeId:', record);
+          return;
+        }
+        
+        // Get employee ID - handle both object and string formats
+        const employeeId = record.employeeId._id || record.employeeId;
+        
+        if (!attendanceByEmployee[employeeId]) {
+          attendanceByEmployee[employeeId] = {
+            employeeId: record.employeeId,
+            presentDays: 0,
+            absentDays: 0,
+            lateDays: 0,
+            leaveDays: 0,
+            overtimeHours: 0
+          };
+        }
+        
+        // Make status case-insensitive for more robustness
+        const status = record.status ? record.status.toLowerCase() : '';
+        
+        // Update attendance counts based on status
+        if (status.includes('present')) {
+          attendanceByEmployee[employeeId].presentDays++;
+          // Add overtime hours if available
+          const overtimeHours = record.overtimeHours || record.overtime || 0;
+          if (overtimeHours) {
+            attendanceByEmployee[employeeId].overtimeHours += Number(overtimeHours);
+          }
+        } else if (status.includes('absent')) {
+          attendanceByEmployee[employeeId].absentDays++;
+        } else if (status.includes('late')) {
+          attendanceByEmployee[employeeId].lateDays++;
+          attendanceByEmployee[employeeId].presentDays++; // Late is still present
+        } else if (status.includes('leave')) {
+          attendanceByEmployee[employeeId].leaveDays++;
+        }
+      });
+      
+      console.log(`Processed attendance for ${Object.keys(attendanceByEmployee).length} employees`);
+      
+      // Generate payrolls for employees who don't have one yet
+      const payrollsToGenerate = [];
+      
+      for (const employeeId in attendanceByEmployee) {
+        if (!employeesWithPayroll.has(employeeId)) {
+          const attendance = attendanceByEmployee[employeeId];
+          const employee = attendance.employeeId;
+          
+          // Skip if employee data is missing
+          if (!employee) {
+            console.warn('Missing employee data for ID:', employeeId);
+            continue;
+          }
+          
+          // Calculate working days in the month
+          const year = selectedYear;
+          const month = selectedMonth - 1; // JavaScript months are 0-indexed
+          const daysInMonth = new Date(year, month + 1, 0).getDate();
+          const workingDays = daysInMonth; // Simplified - can be adjusted for weekends/holidays
+          
+          // Ensure valid data for salary calculations
+          let baseSalary = 0;
+          
+          // Try to get employee salary from different possible object structures
+          if (typeof employee === 'object') {
+            baseSalary = employee.salary || employee.baseSalary || 0;
+          }
+          
+          // Get overtime rate from employee data or use default
+          const overtimeRate = (employee.overtimeRate || employee.hourlyRate || 250); 
+          
+          // Calculate overtime amount
+          const overtimeAmount = attendance.overtimeHours * overtimeRate;
+          
+          // Calculate tax amount (simplified)
+          const taxAmount = baseSalary * 0.1; // Assuming 10% tax
+          
+          // Calculate net salary
+          const netSalary = baseSalary + overtimeAmount - taxAmount;
+          
+          // Create a payroll object
+          const payroll = {
+            employeeId: employeeId,
+            month: selectedMonth,
+            year: selectedYear,
+            workingDays: workingDays,
+            presentDays: attendance.presentDays,
+            absentDays: attendance.absentDays,
+            lateDays: attendance.lateDays,
+            leaveDays: attendance.leaveDays,
+            overtimeHours: attendance.overtimeHours,
+            overtimeRate: overtimeRate,
+            overtimeAmount: overtimeAmount,
+            baseSalary: baseSalary,
+            bonusAmount: 0, // Default, can be updated later
+            deductions: 0, // Default, can be updated later
+            taxAmount: taxAmount,
+            netSalary: netSalary,
+            paymentStatus: 'Pending'
+          };
+          
+          payrollsToGenerate.push(payroll);
+        }
+      }
+      
+      console.log(`Found ${payrollsToGenerate.length} employees needing payroll generation`);
+      
+      // If there are payrolls to generate, send them to the server
+      if (payrollsToGenerate.length > 0) {
+        try {
+          // Try to batch generate all payrolls
+          console.log('Attempting to batch generate payrolls...');
+          await axios.post('/api/payroll/batch-generate', { payrolls: payrollsToGenerate });
+          console.log('Batch payroll generation successful');
+          showSnackbar(`Automatically generated ${payrollsToGenerate.length} payrolls from attendance data`, 'success');
+          // Refresh the payroll list after generating new ones
+          fetchPayrolls();
+        } catch (batchError) {
+          console.error('Error in batch generate payrolls:', batchError);
+          
+          // If batch generate fails, try generating one by one as fallback
+          console.log('Attempting to generate payrolls individually as fallback');
+          showSnackbar('Batch generation failed. Trying to generate payrolls individually...', 'warning');
+          
+          const successfulPayrolls = [];
+          const failedPayrolls = [];
+          
+          // Process each payroll individually
+          for (const payroll of payrollsToGenerate) {
+            try {
+              // Generate single payroll
+              console.log(`Generating payroll for employee ${payroll.employeeId}...`);
+              await axios.post('/api/payroll/generate', {
+                employeeId: payroll.employeeId,
+                month: payroll.month,
+                year: payroll.year,
+                bonusAmount: payroll.bonusAmount,
+                deductions: payroll.deductions,
+                deductionReasons: ''
+              });
+              successfulPayrolls.push(payroll);
+            } catch (singleError) {
+              console.error(`Failed to generate payroll for employee ${payroll.employeeId}:`, singleError);
+              failedPayrolls.push({
+                employeeId: payroll.employeeId,
+                error: singleError.message || 'Unknown error'
+              });
+            }
+          }
+          
+          // Show results of individual generation
+          if (successfulPayrolls.length > 0) {
+            console.log(`Successfully generated ${successfulPayrolls.length} payrolls individually`);
+            showSnackbar(`Successfully generated ${successfulPayrolls.length} payrolls individually. ${failedPayrolls.length} failed.`, 'success');
+            fetchPayrolls();
+          } else {
+            console.error('All individual payroll generation attempts failed');
+            showSnackbar(`Failed to generate any payrolls automatically. Please try manually.`, 'error');
+          }
+        }
+      } else {
+        console.log('No new payrolls to generate');
+        showSnackbar('All employees already have payrolls for this period', 'info');
+      }
+    } catch (error) {
+      console.error('Error fetching attendance data or generating payrolls:', error);
+      showSnackbar(`Failed to auto-generate payrolls: ${error.message || 'Unknown error'}`, 'error');
+    } finally {
+      setAutoGenerating(false);
     }
   };
 
@@ -323,6 +605,11 @@ const PayrollPage = () => {
         deductionReasons: editingPayroll.deductionReasons,
         overtimeHours: Number(editingPayroll.overtimeHours) || 0,
         overtimeRate: Number(editingPayroll.overtimeRate) || 0,
+        presentDays: Number(editingPayroll.presentDays) || 0,
+        absentDays: Number(editingPayroll.absentDays) || 0,
+        lateDays: Number(editingPayroll.lateDays) || 0,
+        leaveDays: Number(editingPayroll.leaveDays) || 0,
+        overtimeAmount: overtimeAmount,
         netSalary: newNetSalary
       });
 
@@ -355,7 +642,8 @@ const PayrollPage = () => {
       overtimeRate: payroll.overtimeRate || '',
       baseSalary: payroll.baseSalary || '',
       taxAmount: payroll.taxAmount || '',
-      netSalary: payroll.netSalary || ''
+      netSalary: payroll.netSalary || '',
+      leaveDays: payroll.leaveDays || 0
     });
     setOpenEditDialog(true);
   };
@@ -562,213 +850,50 @@ const PayrollPage = () => {
         </Grid>
       </Grid>
 
-      {/* Header Section */}
-      <Paper 
-        elevation={3} 
-        sx={{ 
-          p: 3, 
-          mb: 4,
-          background: theme.palette.mode === 'dark'
-            ? `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.9)})`
-            : `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.9)}, ${alpha(theme.palette.background.paper, 1)})`,
-          backdropFilter: 'blur(10px)'
-        }}
-      >
-        <Grid container spacing={3} alignItems="center">
-          <Grid item xs={12}>
-            <Typography 
-              variant="h4" 
-              gutterBottom 
-              component="div"
-              sx={{
-                background: theme.palette.mode === 'dark'
-                  ? `linear-gradient(45deg, ${theme.palette.primary.light}, ${theme.palette.primary.main})`
-                  : `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-                backgroundClip: 'text',
-                textFillColor: 'transparent',
-                fontWeight: 'bold'
-              }}
-            >
-              Payroll Management
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Manage employee payrolls and payment records
-            </Typography>
-          </Grid>
-          <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<AddIcon />}
-              onClick={handleOpenGenerateDialog}
-              sx={{
-                background: theme.palette.mode === 'dark'
-                  ? `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`
-                  : `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-                '&:hover': {
-                  background: theme.palette.mode === 'dark'
-                    ? `linear-gradient(45deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`
-                    : `linear-gradient(45deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`
-                }
-              }}
-            >
-              Generate Payroll
-            </Button>
-            <Button
-              variant="contained"
-              color="secondary"
-              startIcon={<AddIcon />}
-              onClick={generateAllPayrolls}
-              sx={{
-                background: theme.palette.mode === 'dark'
-                  ? `linear-gradient(45deg, ${theme.palette.secondary.main}, ${theme.palette.secondary.dark})`
-                  : `linear-gradient(45deg, ${theme.palette.secondary.main}, ${theme.palette.secondary.dark})`,
-                '&:hover': {
-                  background: theme.palette.mode === 'dark'
-                    ? `linear-gradient(45deg, ${theme.palette.secondary.dark}, ${theme.palette.secondary.main})`
-                    : `linear-gradient(45deg, ${theme.palette.secondary.dark}, ${theme.palette.secondary.main})`
-                }
-              }}
-            >
-              Generate All
-            </Button>
-            <Button
-              variant="outlined"
-              color="primary"
-              startIcon={<RefreshIcon />}
-              onClick={fetchPayrolls}
-              sx={{
-                borderColor: theme.palette.primary.main,
-                color: theme.palette.primary.main,
-                '&:hover': {
-                  borderColor: theme.palette.primary.dark,
-                  backgroundColor: alpha(theme.palette.primary.main, 0.1)
-                }
-              }}
-            >
-              Refresh
-            </Button>
-          </Grid>
-        </Grid>
-      </Paper>
-
-      {/* Filter Section */}
-      <Paper 
-        elevation={3} 
-        sx={{ 
-          p: 3, 
-          mb: 4,
-          background: theme.palette.mode === 'dark'
-            ? `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.9)})`
-            : `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.9)}, ${alpha(theme.palette.background.paper, 1)})`,
-          backdropFilter: 'blur(10px)'
-        }}
-      >
-        <Grid container spacing={3} alignItems="center">
-          <Grid item xs={12} sm={4} md={3}>
-            <FormControl fullWidth>
+      {/* Controls for month, year and actions should come next */}
+      <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={7}>
+            <Grid container spacing={2}>
+              <Grid item xs={6} md={3}>
+                <FormControl fullWidth variant="outlined" size="small">
               <InputLabel>Month</InputLabel>
               <Select
                 value={selectedMonth}
-                label="Month"
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                sx={{
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.23) : undefined
-                  },
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: theme.palette.primary.main
-                  }
-                }}
-              >
-                <MenuItem value={1}>January</MenuItem>
-                <MenuItem value={2}>February</MenuItem>
-                <MenuItem value={3}>March</MenuItem>
-                <MenuItem value={4}>April</MenuItem>
-                <MenuItem value={5}>May</MenuItem>
-                <MenuItem value={6}>June</MenuItem>
-                <MenuItem value={7}>July</MenuItem>
-                <MenuItem value={8}>August</MenuItem>
-                <MenuItem value={9}>September</MenuItem>
-                <MenuItem value={10}>October</MenuItem>
-                <MenuItem value={11}>November</MenuItem>
-                <MenuItem value={12}>December</MenuItem>
+                    label="Month"
+                    sx={{ backgroundColor: alpha(theme.palette.background.paper, 0.8) }}
+                  >
+                    {Array.from({ length: 12 }, (_, i) => (
+                      <MenuItem key={i + 1} value={i + 1}>
+                        {format(new Date(0, i), 'MMMM')}
+                      </MenuItem>
+                    ))}
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={4} md={3}>
-            <FormControl fullWidth>
+              <Grid item xs={6} md={3}>
+                <FormControl fullWidth variant="outlined" size="small">
               <InputLabel>Year</InputLabel>
               <Select
                 value={selectedYear}
-                label="Year"
                 onChange={(e) => setSelectedYear(e.target.value)}
-                sx={{
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.23) : undefined
-                  },
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: theme.palette.primary.main
-                  }
-                }}
-              >
-                {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((year) => (
-                  <MenuItem key={year} value={year}>
-                    {year}
+                    label="Year"
+                    sx={{ backgroundColor: alpha(theme.palette.background.paper, 0.8) }}
+                  >
+                    {Array.from({ length: 5 }, (_, i) => (
+                      <MenuItem key={i} value={new Date().getFullYear() - i}>
+                        {new Date().getFullYear() - i}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={4} md={3}>
-            <Button
-              fullWidth
-              variant="outlined"
-              color="primary"
-              startIcon={<FilterListIcon />}
-              onClick={fetchPayrolls}
-              sx={{
-                borderColor: theme.palette.primary.main,
-                color: theme.palette.primary.main,
-                '&:hover': {
-                  borderColor: theme.palette.primary.dark,
-                  backgroundColor: alpha(theme.palette.primary.main, 0.1)
-                }
-              }}
-            >
-              Filter
-            </Button>
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <Typography 
-              variant="h6" 
-              align="right"
-              sx={{
-                color: theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.primary.main
-              }}
-            >
-              Total Records: {payrolls.length}
-            </Typography>
-          </Grid>
-        </Grid>
-      </Paper>
-
-      {/* Payroll Table */}
-      <TableContainer 
-        component={Paper} 
-        elevation={3}
-        sx={{
-          background: theme.palette.mode === 'dark'
-            ? `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.9)})`
-            : `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.9)}, ${alpha(theme.palette.background.paper, 1)})`,
-          backdropFilter: 'blur(10px)'
-        }}
-      >
-        {/* Search and Filter Bar */}
-        <Box sx={{ p: 2, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Grid item xs={12} md={6}>
           <TextField
+                  fullWidth
             size="small"
-            placeholder="Search..."
+                  placeholder="Search employees..."
             value={searchTerm}
             onChange={handleSearchChange}
             InputProps={{
@@ -777,269 +902,483 @@ const PayrollPage = () => {
                   <SearchIcon />
                 </InputAdornment>
               ),
-              endAdornment: searchTerm && (
+                    endAdornment: searchTerm ? (
                 <InputAdornment position="end">
                   <IconButton size="small" onClick={() => setSearchTerm('')}>
-                    <ClearIcon />
+                          <ClearIcon fontSize="small" />
                   </IconButton>
                 </InputAdornment>
-              )
+                    ) : null
             }}
-            sx={{ minWidth: 200 }}
+                  sx={{ backgroundColor: alpha(theme.palette.background.paper, 0.8) }}
           />
+              </Grid>
+            </Grid>
+          </Grid>
+          <Grid item xs={12} md={5}>
+            <Box sx={{ display: 'flex', gap: 1, justifyContent: { xs: 'center', md: 'flex-end' } }}>
           <Button
-            startIcon={<FilterListIcon />}
-            onClick={() => setShowFilters(!showFilters)}
-            variant={showFilters ? "contained" : "outlined"}
+                variant="contained"
             color="primary"
-          >
-            Filters
+                startIcon={<AddIcon />}
+                onClick={handleOpenGenerateDialog}
+                sx={{ 
+                  boxShadow: 2,
+                  '&:hover': { boxShadow: 4 }
+                }}
+              >
+                Generate Payroll
           </Button>
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<RefreshIcon />}
+                onClick={generateAllPayrolls}
+                disabled={generating || autoGenerating}
+                sx={{ 
+                  boxShadow: 2,
+                  '&:hover': { boxShadow: 4 }
+                }}
+              >
+                {generating ? 'Generating...' : 'Generate All'}
+              </Button>
+              {autoGenerating && (
+                <Chip
+                  icon={<RefreshIcon className="rotating-icon" />}
+                  label="Auto-Generating"
+                  color="info"
+                  size="small"
+                  sx={{ 
+                    animation: 'pulse 1.5s infinite',
+                    '@keyframes pulse': {
+                      '0%': { opacity: 0.7 },
+                      '50%': { opacity: 1 },
+                      '100%': { opacity: 0.7 }
+                    },
+                    '.rotating-icon': {
+                      animation: 'rotate 2s linear infinite',
+                      '@keyframes rotate': {
+                        '0%': { transform: 'rotate(0deg)' },
+                        '100%': { transform: 'rotate(360deg)' }
+                      }
+                    }
+                  }}
+                />
+              )}
+              <Tooltip title="Toggle Filters">
+                <IconButton 
+                  color={showFilters ? "primary" : "default"} 
+                  onClick={() => setShowFilters(!showFilters)}
+                  sx={{ 
+                    border: 1, 
+                    borderColor: showFilters ? 'primary.main' : 'divider',
+                    '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1) }
+                  }}
+                >
+                  <FilterListIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Refresh Data">
+                <IconButton 
+                  onClick={fetchPayrolls}
+                  sx={{ 
+                    border: 1, 
+                    borderColor: 'divider',
+                    '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1) }
+                  }}
+                >
+                  <RefreshIcon />
+                </IconButton>
+              </Tooltip>
         </Box>
+          </Grid>
+        </Grid>
 
-        {/* Filter Panel */}
+        {/* Advanced Filters Section */}
         <Collapse in={showFilters}>
-          <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} sm={4}>
+          <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+            <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+              <FilterListIcon fontSize="small" sx={{ mr: 1 }} />
+              Advanced Filters
+              <Button 
+                size="small" 
+                onClick={handleClearFilters} 
+                startIcon={<ClearIcon />}
+                sx={{ ml: 2 }}
+              >
+                Clear
+              </Button>
+            </Typography>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12} md={3}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Department</InputLabel>
                   <Select
                     value={filters.department}
-                    label="Department"
                     onChange={(e) => handleFilterChange('department', e.target.value)}
+                    label="Department"
                   >
-                    <MenuItem value="">All</MenuItem>
-                    {[...new Set(payrolls.map(p => p.employeeId?.department))].map(dept => (
-                      <MenuItem key={dept} value={dept}>{dept}</MenuItem>
-                    ))}
+                    <MenuItem value="">All Departments</MenuItem>
+                    <MenuItem value="Engineering">Engineering</MenuItem>
+                    <MenuItem value="Sales">Sales</MenuItem>
+                    <MenuItem value="Marketing">Marketing</MenuItem>
+                    <MenuItem value="Finance">Finance</MenuItem>
+                    <MenuItem value="HR">HR</MenuItem>
+                    <MenuItem value="Operations">Operations</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} md={3}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Payment Status</InputLabel>
                   <Select
                     value={filters.paymentStatus}
-                    label="Payment Status"
                     onChange={(e) => handleFilterChange('paymentStatus', e.target.value)}
+                    label="Payment Status"
                   >
-                    <MenuItem value="">All</MenuItem>
+                    <MenuItem value="">All Statuses</MenuItem>
                     <MenuItem value="Pending">Pending</MenuItem>
                     <MenuItem value="Paid">Paid</MenuItem>
-                    <MenuItem value="Failed">Failed</MenuItem>
+                    <MenuItem value="Cancelled">Cancelled</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={4}>
-                <Box sx={{ display: 'flex', gap: 1 }}>
+              <Grid item xs={6} md={3}>
                   <TextField
+                  fullWidth
                     size="small"
                     label="Min Salary"
                     type="number"
                     value={filters.salaryRange.min}
                     onChange={(e) => handleFilterChange('salaryRange', { ...filters.salaryRange, min: e.target.value })}
                     InputProps={{
-                      startAdornment: <InputAdornment position="start">₹</InputAdornment>
+                    startAdornment: <InputAdornment position="start">₹</InputAdornment>,
                     }}
                   />
+              </Grid>
+              <Grid item xs={6} md={3}>
                   <TextField
+                  fullWidth
                     size="small"
                     label="Max Salary"
                     type="number"
                     value={filters.salaryRange.max}
                     onChange={(e) => handleFilterChange('salaryRange', { ...filters.salaryRange, max: e.target.value })}
                     InputProps={{
-                      startAdornment: <InputAdornment position="start">₹</InputAdornment>
-                    }}
-                  />
-                </Box>
-              </Grid>
-              <Grid item xs={12}>
-                <Button
-                  startIcon={<ClearIcon />}
-                  onClick={handleClearFilters}
-                  variant="outlined"
-                  color="error"
-                  size="small"
-                >
-                  Clear Filters
-                </Button>
+                    startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+                  }}
+                />
               </Grid>
             </Grid>
           </Box>
         </Collapse>
+      </Paper>
 
-        <Table>
+      {/* Payroll Table */}
+      <Paper elevation={3} sx={{ width: '100%', overflow: 'hidden' }}>
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
+            <CircularProgress />
+            <Typography variant="h6" sx={{ ml: 2 }}>Loading payroll data...</Typography>
+          </Box>
+        ) : payrolls.length === 0 ? (
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            height: 300,
+            backgroundColor: alpha(theme.palette.background.paper, 0.5),
+            p: 3,
+            borderRadius: 2
+          }}>
+            <MonetizationOnIcon sx={{ fontSize: 60, color: alpha(theme.palette.text.secondary, 0.3), mb: 2 }} />
+            <Typography variant="h6" color="textSecondary" gutterBottom>No Payroll Data Found</Typography>
+            <Typography variant="body2" color="textSecondary" align="center" sx={{ maxWidth: 500, mb: 3 }}>
+              There are no payroll records for {format(new Date(selectedYear, selectedMonth - 1), 'MMMM yyyy')}.
+              Generate payroll for this month by clicking the "Generate Payroll" button.
+            </Typography>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={handleOpenGenerateDialog}
+            >
+              Generate Payroll
+            </Button>
+          </Box>
+        ) : (
+          <>
+            <TableContainer sx={{ maxHeight: 'calc(100vh - 340px)' }}>
+              <Table stickyHeader>
           <TableHead>
             <TableRow>
-              <TableCell padding="checkbox">
-                <IconButton size="small" onClick={() => setExpandedRow(null)}>
-                  {expandedRow ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                </IconButton>
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={orderBy === 'employeeId.employeeID'}
-                  direction={orderBy === 'employeeId.employeeID' ? order : 'asc'}
-                  onClick={() => handleRequestSort('employeeId.employeeID')}
-                >
-                  Employee ID
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>
+                    <TableCell sx={{ backgroundColor: theme.palette.primary.main, color: 'white' }}></TableCell>
+                    <TableCell 
+                      sx={{ backgroundColor: theme.palette.primary.main, color: 'white', fontWeight: 'bold' }}
+                      onClick={() => handleRequestSort('employeeId.name')}
+                    >
                 <TableSortLabel
                   active={orderBy === 'employeeId.name'}
                   direction={orderBy === 'employeeId.name' ? order : 'asc'}
-                  onClick={() => handleRequestSort('employeeId.name')}
-                >
-                  Name
+                        sx={{
+                          '& .MuiTableSortLabel-icon': {
+                            color: 'white !important',
+                          },
+                          '&.Mui-active': {
+                            color: 'white',
+                          },
+                        }}
+                      >
+                        Employee
                 </TableSortLabel>
               </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={orderBy === 'employeeId.department'}
-                  direction={orderBy === 'employeeId.department' ? order : 'asc'}
-                  onClick={() => handleRequestSort('employeeId.department')}
-                >
-                  Department
-                </TableSortLabel>
-              </TableCell>
-              <TableCell align="right">
+                    <TableCell 
+                      sx={{ backgroundColor: theme.palette.primary.main, color: 'white', fontWeight: 'bold' }}
+                      onClick={() => handleRequestSort('baseSalary')}
+                    >
                 <TableSortLabel
                   active={orderBy === 'baseSalary'}
                   direction={orderBy === 'baseSalary' ? order : 'asc'}
-                  onClick={() => handleRequestSort('baseSalary')}
+                        sx={{
+                          '& .MuiTableSortLabel-icon': {
+                            color: 'white !important',
+                          },
+                          '&.Mui-active': {
+                            color: 'white',
+                          },
+                        }}
                 >
                   Base Salary
                 </TableSortLabel>
               </TableCell>
-              <TableCell align="right">
-                <TableSortLabel
-                  active={orderBy === 'workingDays'}
-                  direction={orderBy === 'workingDays' ? order : 'asc'}
-                  onClick={() => handleRequestSort('workingDays')}
-                >
-                  Working Days
-                </TableSortLabel>
-              </TableCell>
-              <TableCell align="right">
+                    <TableCell 
+                      sx={{ backgroundColor: theme.palette.primary.main, color: 'white', fontWeight: 'bold' }}
+                      onClick={() => handleRequestSort('presentDays')}
+                    >
                 <TableSortLabel
                   active={orderBy === 'presentDays'}
                   direction={orderBy === 'presentDays' ? order : 'asc'}
-                  onClick={() => handleRequestSort('presentDays')}
-                >
-                  Present Days
+                        sx={{
+                          '& .MuiTableSortLabel-icon': {
+                            color: 'white !important',
+                          },
+                          '&.Mui-active': {
+                            color: 'white',
+                          },
+                        }}
+                      >
+                        Attendance
                 </TableSortLabel>
               </TableCell>
-              <TableCell align="right">
+                    <TableCell 
+                      sx={{ backgroundColor: theme.palette.primary.main, color: 'white', fontWeight: 'bold' }}
+                      onClick={() => handleRequestSort('bonusAmount')}
+                    >
                 <TableSortLabel
-                  active={orderBy === 'overtimeHours'}
-                  direction={orderBy === 'overtimeHours' ? order : 'asc'}
-                  onClick={() => handleRequestSort('overtimeHours')}
-                >
-                  Overtime Hours
+                        active={orderBy === 'bonusAmount'}
+                        direction={orderBy === 'bonusAmount' ? order : 'asc'}
+                        sx={{
+                          '& .MuiTableSortLabel-icon': {
+                            color: 'white !important',
+                          },
+                          '&.Mui-active': {
+                            color: 'white',
+                          },
+                        }}
+                      >
+                        Bonus
                 </TableSortLabel>
               </TableCell>
-              <TableCell align="right">
+                    <TableCell 
+                      sx={{ backgroundColor: theme.palette.primary.main, color: 'white', fontWeight: 'bold' }}
+                      onClick={() => handleRequestSort('deductions')}
+                    >
                 <TableSortLabel
-                  active={orderBy === 'overtimeAmount'}
-                  direction={orderBy === 'overtimeAmount' ? order : 'asc'}
-                  onClick={() => handleRequestSort('overtimeAmount')}
-                >
-                  Overtime Amount
+                        active={orderBy === 'deductions'}
+                        direction={orderBy === 'deductions' ? order : 'asc'}
+                        sx={{
+                          '& .MuiTableSortLabel-icon': {
+                            color: 'white !important',
+                          },
+                          '&.Mui-active': {
+                            color: 'white',
+                          },
+                        }}
+                      >
+                        Deductions
                 </TableSortLabel>
               </TableCell>
-              <TableCell align="right">
+                    <TableCell 
+                      sx={{ backgroundColor: theme.palette.primary.main, color: 'white', fontWeight: 'bold' }}
+                      onClick={() => handleRequestSort('netSalary')}
+                    >
                 <TableSortLabel
                   active={orderBy === 'netSalary'}
                   direction={orderBy === 'netSalary' ? order : 'asc'}
-                  onClick={() => handleRequestSort('netSalary')}
+                        sx={{
+                          '& .MuiTableSortLabel-icon': {
+                            color: 'white !important',
+                          },
+                          '&.Mui-active': {
+                            color: 'white',
+                          },
+                        }}
                 >
                   Net Salary
                 </TableSortLabel>
               </TableCell>
-              <TableCell>
+                    <TableCell 
+                      sx={{ backgroundColor: theme.palette.primary.main, color: 'white', fontWeight: 'bold' }}
+                      onClick={() => handleRequestSort('paymentStatus')}
+                    >
                 <TableSortLabel
                   active={orderBy === 'paymentStatus'}
                   direction={orderBy === 'paymentStatus' ? order : 'asc'}
-                  onClick={() => handleRequestSort('paymentStatus')}
-                >
-                  Payment Status
+                        sx={{
+                          '& .MuiTableSortLabel-icon': {
+                            color: 'white !important',
+                          },
+                          '&.Mui-active': {
+                            color: 'white',
+                          },
+                        }}
+                      >
+                        Status
                 </TableSortLabel>
               </TableCell>
-              <TableCell>Actions</TableCell>
+                    <TableCell sx={{ backgroundColor: theme.palette.primary.main, color: 'white', fontWeight: 'bold' }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={12} align="center">
-                  <CircularProgress />
-                </TableCell>
-              </TableRow>
-            ) : (
-              sortPayrolls(filterPayrolls(payrolls))
+                  {sortPayrolls(filterPayrolls(payrolls))
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((payroll) => (
+                    .map((payroll) => {
+                      const isExpanded = expandedRow === payroll._id;
+                      return (
                   <React.Fragment key={payroll._id}>
                     <TableRow 
                       hover
                       onClick={() => handleRowClick(payroll._id)}
                       sx={{
                         cursor: 'pointer',
+                              bgcolor: isExpanded ? alpha(theme.palette.primary.light, 0.1) : 'inherit',
                         '&:hover': {
-                          backgroundColor: theme.palette.mode === 'dark'
-                            ? alpha(theme.palette.primary.main, 0.1)
-                            : alpha(theme.palette.primary.light, 0.1)
+                                bgcolor: alpha(theme.palette.primary.light, 0.15),
                         }
                       }}
                     >
                       <TableCell padding="checkbox">
                         <IconButton size="small">
-                          {expandedRow === payroll._id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                         </IconButton>
                       </TableCell>
-                      <TableCell>{payroll.employeeId?.employeeID || 'N/A'}</TableCell>
-                      <TableCell>{payroll.employeeId?.name || 'N/A'}</TableCell>
-                      <TableCell>{payroll.employeeId?.department || 'N/A'}</TableCell>
-                      <TableCell align="right">₹{payroll.baseSalary.toFixed(2)}</TableCell>
-                      <TableCell align="right">{payroll.workingDays}</TableCell>
-                      <TableCell align="right">{payroll.presentDays}</TableCell>
-                      <TableCell align="right">
-                        {payroll.overtimeHours.toFixed(1)} hours
-                        {payroll.overtimeRate > 1 && ` (${payroll.overtimeRate}x)`}
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Box 
+                                  sx={{ 
+                                    width: 40, 
+                                    height: 40, 
+                                    bgcolor: payroll.employeeId.name ? 
+                                      `hsl(${payroll.employeeId.name.charCodeAt(0) * 10 % 360}, 70%, 50%)` : 
+                                      'grey.500',
+                                    color: 'white',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontWeight: 'bold',
+                                    mr: 2
+                                  }}
+                                >
+                                  {payroll.employeeId.name ? payroll.employeeId.name.charAt(0).toUpperCase() : '?'}
+                                </Box>
+                                <Box>
+                                  <Typography variant="body1" fontWeight="medium">
+                                    {payroll.employeeId.name}
+                                  </Typography>
+                                  <Typography variant="body2" color="textSecondary">
+                                    {payroll.employeeId.jobTitle} • {payroll.employeeId.department}
+                                  </Typography>
+                                </Box>
+                              </Box>
                       </TableCell>
-                      <TableCell align="right">₹{payroll.overtimeAmount.toFixed(2)}</TableCell>
-                      <TableCell align="right">₹{payroll.netSalary.toFixed(2)}</TableCell>
+                            <TableCell>₹{payroll.baseSalary.toLocaleString('en-IN')}</TableCell>
+                            <TableCell>
+                              <Tooltip title={`Present: ${payroll.presentDays} | Absent: ${payroll.absentDays} | Late: ${payroll.lateDays} | Leave: ${payroll.leaveDays || 0} | Overtime: ${payroll.overtimeHours}h`}>
+                                <Box>
+                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <Typography variant="body2">
+                                      {payroll.presentDays}/{payroll.workingDays} days
+                                    </Typography>
+                                  </Box>
+                                  <Box sx={{ width: '100%', mt: 1 }}>
+                                    <Box 
+                                      sx={{ 
+                                        height: 6, 
+                                        borderRadius: 3, 
+                                        width: '100%', 
+                                        bgcolor: alpha(theme.palette.grey[500], 0.2)
+                                      }}
+                                    >
+                                      <Box 
+                                        sx={{ 
+                                          height: '100%', 
+                                          borderRadius: 3, 
+                                          width: `${(payroll.presentDays / payroll.workingDays) * 100}%`,
+                                          bgcolor: payroll.presentDays / payroll.workingDays > 0.8 
+                                            ? theme.palette.success.main 
+                                            : payroll.presentDays / payroll.workingDays > 0.6 
+                                              ? theme.palette.warning.main 
+                                              : theme.palette.error.main,
+                                        }}
+                                      />
+                                    </Box>
+                                  </Box>
+                                </Box>
+                              </Tooltip>
+                            </TableCell>
+                            <TableCell>
+                              {payroll.bonusAmount > 0 ? (
+                                <Typography color="success.main" fontWeight="medium">
+                                  +₹{payroll.bonusAmount.toLocaleString('en-IN')}
+                                </Typography>
+                              ) : '—'}
+                            </TableCell>
+                            <TableCell>
+                              {payroll.deductions > 0 ? (
+                                <Typography color="error.main" fontWeight="medium">
+                                  -₹{payroll.deductions.toLocaleString('en-IN')}
+                                </Typography>
+                              ) : '—'}
+                            </TableCell>
+                            <TableCell>
+                              <Typography fontWeight="bold">
+                                ₹{payroll.netSalary.toLocaleString('en-IN')}
+                              </Typography>
+                            </TableCell>
                       <TableCell>
                         <Chip
                           label={payroll.paymentStatus}
+                                size="small"
                           color={
-                            payroll.paymentStatus === 'Paid'
-                              ? 'success'
-                              : payroll.paymentStatus === 'Pending'
-                              ? 'warning'
-                              : 'error'
-                          }
-                          size="small"
+                                  payroll.paymentStatus === 'Paid' ? 'success' : 
+                                  payroll.paymentStatus === 'Pending' ? 'warning' : 'error'
+                                }
+                                variant={payroll.paymentStatus === 'Paid' ? 'filled' : 'outlined'}
+                                sx={{ fontWeight: 'medium' }}
                         />
                       </TableCell>
                       <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
+                              <Box sx={{ display: 'flex' }}>
                           <Tooltip title="View Details">
                             <IconButton
                               size="small"
-                              color="primary"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleOpenDetailsDialog(payroll);
                               }}
-                              sx={{
-                                '&:hover': {
-                                  backgroundColor: alpha(theme.palette.primary.main, 0.1)
-                                }
-                              }}
+                                    sx={{ color: theme.palette.info.main }}
                             >
                               <VisibilityIcon fontSize="small" />
                             </IconButton>
@@ -1047,52 +1386,37 @@ const PayrollPage = () => {
                           <Tooltip title="Edit Payroll">
                             <IconButton
                               size="small"
-                              color="info"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleOpenEditDialog(payroll);
                               }}
-                              sx={{
-                                '&:hover': {
-                                  backgroundColor: alpha(theme.palette.info.main, 0.1)
-                                }
-                              }}
+                                    sx={{ color: theme.palette.primary.main }}
                             >
                               <EditIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                           {payroll.paymentStatus === 'Pending' && (
-                            <Tooltip title="Mark as Paid">
+                                  <Tooltip title="Process Payment">
                               <IconButton
                                 size="small"
-                                color="success"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleOpenPaymentDialog(payroll);
                                 }}
-                                sx={{
-                                  '&:hover': {
-                                    backgroundColor: alpha(theme.palette.success.main, 0.1)
-                                  }
-                                }}
-                              >
-                                <MonetizationOnIcon fontSize="small" />
+                                      sx={{ color: theme.palette.success.main }}
+                                    >
+                                      <AttachMoneyIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
                           )}
                           <Tooltip title="Delete">
                             <IconButton
                               size="small"
-                              color="error"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 deletePayroll(payroll._id);
                               }}
-                              sx={{
-                                '&:hover': {
-                                  backgroundColor: alpha(theme.palette.error.main, 0.1)
-                                }
-                              }}
+                                    sx={{ color: theme.palette.error.main }}
                             >
                               <DeleteIcon fontSize="small" />
                             </IconButton>
@@ -1100,108 +1424,165 @@ const PayrollPage = () => {
                         </Box>
                       </TableCell>
                     </TableRow>
+                          
+                          {/* Expandable Detail Row */}
                     <TableRow>
-                      <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={12}>
-                        <Collapse in={expandedRow === payroll._id} timeout="auto" unmountOnExit>
-                          <Box sx={{ margin: 1 }}>
-                            <Grid container spacing={2}>
-                              <Grid item xs={12} sm={6}>
-                                <Typography variant="subtitle2" gutterBottom>
+                            <TableCell colSpan={9} sx={{ p: 0, borderBottom: isExpanded ? 1 : 'none' }}>
+                              <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                                <Box sx={{ py: 3, px: 4, backgroundColor: alpha(theme.palette.background.paper, 0.5) }}>
+                                  <Grid container spacing={3}>
+                                    <Grid item xs={12} md={6}>
+                                      <Typography variant="subtitle2" gutterBottom color="textSecondary">
                                   Salary Breakdown
                                 </Typography>
-                                <Table size="small">
-                                  <TableBody>
-                                    <TableRow>
-                                      <TableCell>Base Salary</TableCell>
-                                      <TableCell align="right">₹{payroll.baseSalary.toFixed(2)}</TableCell>
-                                    </TableRow>
-                                    <TableRow>
-                                      <TableCell>Overtime Amount</TableCell>
-                                      <TableCell align="right">
-                                        {payroll.overtimeHours > 0 ? (
-                                          <div>
-                                            <div>₹{payroll.overtimeAmount.toFixed(2)}</div>
-                                            <div className="text-xs text-gray-500">
-                                              {payroll.overtimeHours.toFixed(1)} hours × {payroll.overtimeRate}x rate
-                                            </div>
-                                          </div>
-                                        ) : (
-                                          '₹0.00'
-                                        )}
-                                      </TableCell>
-                                    </TableRow>
-                                    <TableRow>
-                                      <TableCell>Bonus Amount</TableCell>
-                                      <TableCell align="right">₹{payroll.bonusAmount.toFixed(2)}</TableCell>
-                                    </TableRow>
-                                    <TableRow>
-                                      <TableCell>Deductions</TableCell>
-                                      <TableCell align="right">₹{payroll.deductions.toFixed(2)}</TableCell>
-                                    </TableRow>
-                                    <TableRow>
-                                      <TableCell>Tax Amount</TableCell>
-                                      <TableCell align="right">₹{payroll.taxAmount.toFixed(2)}</TableCell>
-                                    </TableRow>
-                                    <TableRow>
-                                      <TableCell sx={{ fontWeight: 'bold' }}>Net Salary</TableCell>
-                                      <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                                        ₹{payroll.netSalary.toFixed(2)}
-                                      </TableCell>
-                                    </TableRow>
-                                  </TableBody>
-                                </Table>
+                                      <Paper variant="outlined" sx={{ p: 2 }}>
+                                        <Grid container spacing={2}>
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2" color="textSecondary">Base Salary:</Typography>
+                                          </Grid>
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2">₹{payroll.baseSalary.toLocaleString('en-IN')}</Typography>
+                                          </Grid>
+                                          
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2" color="textSecondary">Overtime Amount:</Typography>
+                                          </Grid>
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2">₹{payroll.overtimeAmount.toLocaleString('en-IN')}</Typography>
+                                          </Grid>
+                                          
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2" color="textSecondary">Bonus Amount:</Typography>
+                                          </Grid>
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2" color="success.main">+₹{payroll.bonusAmount.toLocaleString('en-IN')}</Typography>
+                                          </Grid>
+                                          
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2" color="textSecondary">Deductions:</Typography>
+                                          </Grid>
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2" color="error.main">-₹{payroll.deductions.toLocaleString('en-IN')}</Typography>
+                                          </Grid>
+                                          
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2" color="textSecondary">Tax Amount:</Typography>
+                                          </Grid>
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2" color="error.main">-₹{payroll.taxAmount.toLocaleString('en-IN')}</Typography>
+                                          </Grid>
+                                          
+                                          <Grid item xs={12}><Divider /></Grid>
+                                          
+                                          <Grid item xs={6}>
+                                            <Typography variant="subtitle2">Net Salary:</Typography>
+                                          </Grid>
+                                          <Grid item xs={6}>
+                                            <Typography variant="subtitle2" fontWeight="bold">₹{payroll.netSalary.toLocaleString('en-IN')}</Typography>
+                                          </Grid>
+                                        </Grid>
+                                      </Paper>
+                                    </Grid>
+                                    
+                                    <Grid item xs={12} md={6}>
+                                      <Typography variant="subtitle2" gutterBottom color="textSecondary">
+                                        Additional Information
+                                      </Typography>
+                                      <Paper variant="outlined" sx={{ p: 2 }}>
+                                        <Grid container spacing={2}>
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2" color="textSecondary">Working Days:</Typography>
+                                          </Grid>
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2">{payroll.workingDays} days</Typography>
+                                          </Grid>
+                                          
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2" color="textSecondary">Present Days:</Typography>
+                                          </Grid>
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2">{payroll.presentDays} days</Typography>
+                                          </Grid>
+                                          
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2" color="textSecondary">Absent Days:</Typography>
+                                          </Grid>
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2">{payroll.absentDays} days</Typography>
+                                          </Grid>
+                                          
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2" color="textSecondary">Late Days:</Typography>
+                                          </Grid>
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2">{payroll.lateDays} days</Typography>
+                                          </Grid>
+                                          
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2" color="textSecondary">Leave Days:</Typography>
+                                          </Grid>
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2">{payroll.leaveDays || 0} days</Typography>
+                                          </Grid>
+                                          
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2" color="textSecondary">Overtime Hours:</Typography>
+                                          </Grid>
+                                          <Grid item xs={6}>
+                                            <Typography variant="body2">{payroll.overtimeHours} hours</Typography>
+                                          </Grid>
+                                          
+                                          {payroll.deductionReasons && (
+                                            <>
+                                              <Grid item xs={12}>
+                                                <Typography variant="body2" color="textSecondary">Deduction Reasons:</Typography>
+                                              </Grid>
+                                              <Grid item xs={12}>
+                                                <Typography variant="body2">{payroll.deductionReasons}</Typography>
+                                              </Grid>
+                                            </>
+                                          )}
                               </Grid>
-                              <Grid item xs={12} sm={6}>
-                                <Typography variant="subtitle2" gutterBottom>
-                                  Payment Details
+                                      </Paper>
+                                    </Grid>
+                                    
+                                    {payroll.paymentStatus === 'Paid' && payroll.paymentDate && (
+                                      <Grid item xs={12}>
+                                        <Paper variant="outlined" sx={{ p: 2, bgcolor: alpha(theme.palette.success.light, 0.1) }}>
+                                          <Grid container spacing={2} alignItems="center">
+                                            <Grid item>
+                                              <CheckIcon color="success" />
+                                            </Grid>
+                                            <Grid item xs>
+                                              <Typography variant="body2">
+                                                Payment of ₹{payroll.netSalary.toLocaleString('en-IN')} processed on {format(new Date(payroll.paymentDate), 'dd MMM yyyy')} via {payroll.paymentMethod}
                                 </Typography>
-                                <Table size="small">
-                                  <TableBody>
-                                    <TableRow>
-                                      <TableCell>Status</TableCell>
-                                      <TableCell>
-                                        <Chip
-                                          label={payroll.paymentStatus}
-                                          color={
-                                            payroll.paymentStatus === 'Paid'
-                                              ? 'success'
-                                              : payroll.paymentStatus === 'Pending'
-                                              ? 'warning'
-                                              : 'error'
-                                          }
+                                            </Grid>
+                                            <Grid item>
+                                              <Button 
                                           size="small"
-                                        />
-                                      </TableCell>
-                                    </TableRow>
-                                    <TableRow>
-                                      <TableCell>Payment Date</TableCell>
-                                      <TableCell>
-                                        {payroll.paymentDate
-                                          ? format(new Date(payroll.paymentDate), 'PPP')
-                                          : 'Not paid yet'}
-                                      </TableCell>
-                                    </TableRow>
-                                    <TableRow>
-                                      <TableCell>Payment Method</TableCell>
-                                      <TableCell>{payroll.paymentMethod || 'Not specified'}</TableCell>
-                                    </TableRow>
-                                    <TableRow>
-                                      <TableCell>Reference</TableCell>
-                                      <TableCell>{payroll.reference || 'Not available'}</TableCell>
-                                    </TableRow>
-                                  </TableBody>
-                                </Table>
+                                                startIcon={<PrintIcon />}
+                                                variant="outlined"
+                                                color="primary"
+                                              >
+                                                Print Receipt
+                                              </Button>
                               </Grid>
+                                          </Grid>
+                                        </Paper>
+                                      </Grid>
+                                    )}
                             </Grid>
                           </Box>
                         </Collapse>
                       </TableCell>
                     </TableRow>
                   </React.Fragment>
-                ))
-            )}
+                      );
+                    })}
           </TableBody>
         </Table>
+            </TableContainer>
         <TablePagination
           rowsPerPageOptions={[5, 10, 25, 50]}
           component="div"
@@ -1210,13 +1591,10 @@ const PayrollPage = () => {
           page={page}
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
-          sx={{
-            '.MuiTablePagination-select': {
-              color: theme.palette.text.primary
-            }
-          }}
         />
-      </TableContainer>
+          </>
+        )}
+      </Paper>
 
       {/* Generate Payroll Dialog */}
       <Dialog 
@@ -1225,206 +1603,114 @@ const PayrollPage = () => {
         maxWidth="sm" 
         fullWidth
         PaperProps={{
+          elevation: 5,
           sx: {
-            background: theme.palette.mode === 'dark'
-              ? `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.9)})`
-              : `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.9)}, ${alpha(theme.palette.background.paper, 1)})`,
-            backdropFilter: 'blur(10px)'
+            borderRadius: 2,
+            position: 'relative',
+            overflow: 'hidden'
           }
         }}
       >
-        <DialogTitle 
+        <Box sx={{ 
+          position: 'absolute', 
+          top: 0, 
+          left: 0, 
+          right: 0, 
+          height: 6, 
+          bgcolor: theme.palette.primary.main 
+        }} />
+        <DialogTitle sx={{ pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <MonetizationOnIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
+            <Typography variant="h6">Generate Payroll</Typography>
+          </Box>
+        </DialogTitle>
+        <IconButton
+          aria-label="close"
+          onClick={handleCloseGenerateDialog}
           sx={{
-            background: theme.palette.mode === 'dark'
-              ? `linear-gradient(45deg, ${alpha(theme.palette.primary.main, 0.1)}, ${alpha(theme.palette.primary.dark, 0.1)})`
-              : `linear-gradient(45deg, ${alpha(theme.palette.primary.light, 0.1)}, ${alpha(theme.palette.primary.main, 0.1)})`,
-            borderBottom: `1px solid ${theme.palette.divider}`
+            position: 'absolute',
+            right: 8,
+            top: 12,
           }}
         >
-          Generate Payroll
-        </DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
+          <CloseIcon />
+        </IconButton>
+        <DialogContent dividers>
+          <Grid container spacing={3}>
             <Grid item xs={12}>
-              <FormControl fullWidth>
+              <FormControl fullWidth required>
                 <InputLabel>Select Employee</InputLabel>
                 <Select
                   value={selectedEmployee}
-                  label="Select Employee"
                   onChange={(e) => setSelectedEmployee(e.target.value)}
-                  sx={{
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.23) : undefined
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: theme.palette.primary.main
-                    }
-                  }}
+                  label="Select Employee"
                 >
                   {employees.map((employee) => (
                     <MenuItem key={employee._id} value={employee._id}>
-                      {employee.name} - {employee.employeeID}
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Box 
+                          sx={{ 
+                            width: 32, 
+                            height: 32, 
+                            bgcolor: employee.name ? 
+                              `hsl(${employee.name.charCodeAt(0) * 10 % 360}, 70%, 50%)` : 
+                              'grey.500',
+                            color: 'white',
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 'bold',
+                            mr: 2,
+                            fontSize: '0.8rem'
+                          }}
+                        >
+                          {employee.name ? employee.name.charAt(0).toUpperCase() : '?'}
+                        </Box>
+                        <Box>
+                          {employee.name}
+                          <Typography variant="caption" color="textSecondary" display="block">
+                            {employee.department} • ₹{employee.salary.toLocaleString('en-IN')}
+                          </Typography>
+                        </Box>
+                      </Box>
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
             </Grid>
+            
             <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Bonus Amount"
-                type="number"
-                value={bonusAmount}
-                onChange={(e) => setBonusAmount(e.target.value)}
-                InputProps={{
-                  startAdornment: <InputAdornment position="start">₹</InputAdornment>,
-                  sx: {
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.23) : undefined
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: theme.palette.primary.main
-                    }
-                  }
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Deductions"
-                type="number"
-                value={deductions}
-                onChange={(e) => setDeductions(e.target.value)}
-                InputProps={{
-                  startAdornment: <InputAdornment position="start">₹</InputAdornment>,
-                  sx: {
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.23) : undefined
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: theme.palette.primary.main
-                    }
-                  }
-                }}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Deduction Reasons"
-                multiline
-                rows={2}
-                value={deductionReasons}
-                onChange={(e) => setDeductionReasons(e.target.value)}
-                sx={{
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.23) : undefined
-                  },
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: theme.palette.primary.main
-                  }
-                }}
-              />
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions 
-          sx={{
-            background: theme.palette.mode === 'dark'
-              ? `linear-gradient(45deg, ${alpha(theme.palette.primary.main, 0.1)}, ${alpha(theme.palette.primary.dark, 0.1)})`
-              : `linear-gradient(45deg, ${alpha(theme.palette.primary.light, 0.1)}, ${alpha(theme.palette.primary.main, 0.1)})`,
-            borderTop: `1px solid ${theme.palette.divider}`
-          }}
-        >
-          <Button 
-            onClick={handleCloseGenerateDialog}
-            sx={{
-              color: theme.palette.text.secondary,
-              '&:hover': {
-                backgroundColor: alpha(theme.palette.primary.main, 0.1)
-              }
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={generatePayroll}
-            variant="contained"
-            color="primary"
-            disabled={generating || !selectedEmployee}
-            sx={{
-              background: theme.palette.mode === 'dark'
-                ? `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`
-                : `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-              '&:hover': {
-                background: theme.palette.mode === 'dark'
-                  ? `linear-gradient(45deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`
-                  : `linear-gradient(45deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`
-              }
-            }}
-          >
-            {generating ? <CircularProgress size={24} /> : 'Generate'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Payment Dialog */}
-      <Dialog 
-        open={openPaymentDialog} 
-        onClose={handleClosePaymentDialog} 
-        maxWidth="sm" 
-        fullWidth
-        PaperProps={{
-          sx: {
-            background: theme.palette.mode === 'dark'
-              ? `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.9)})`
-              : `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.9)}, ${alpha(theme.palette.background.paper, 1)})`,
-            backdropFilter: 'blur(10px)'
-          }
-        }}
-      >
-        <DialogTitle 
-          sx={{
-            background: theme.palette.mode === 'dark'
-              ? `linear-gradient(45deg, ${alpha(theme.palette.success.main, 0.1)}, ${alpha(theme.palette.success.dark, 0.1)})`
-              : `linear-gradient(45deg, ${alpha(theme.palette.success.light, 0.1)}, ${alpha(theme.palette.success.main, 0.1)})`,
-            borderBottom: `1px solid ${theme.palette.divider}`
-          }}
-        >
-          Mark as Paid
-        </DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
-              <Typography variant="body1">
-                <strong>Employee:</strong>{' '}
-                {selectedPayroll?.employeeId?.name || 'N/A'}
-              </Typography>
-              <Typography variant="body1">
-                <strong>Amount:</strong> ₹{selectedPayroll?.netSalary.toFixed(2) || '0.00'}
-              </Typography>
-            </Grid>
-            <Grid item xs={12}>
               <FormControl fullWidth>
-                <InputLabel>Payment Method</InputLabel>
+                <InputLabel>Month</InputLabel>
                 <Select
-                  value={paymentMethod}
-                  label="Payment Method"
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  sx={{
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.23) : undefined
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: theme.palette.primary.main
-                    }
-                  }}
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  label="Month"
                 >
-                  <MenuItem value="Bank Transfer">Bank Transfer</MenuItem>
-                  <MenuItem value="Cash">Cash</MenuItem>
-                  <MenuItem value="Check">Check</MenuItem>
-                  <MenuItem value="Other">Other</MenuItem>
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <MenuItem key={i + 1} value={i + 1}>
+                      {format(new Date(0, i), 'MMMM')}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Year</InputLabel>
+                <Select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  label="Year"
+                >
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <MenuItem key={i} value={new Date().getFullYear() - i}>
+                      {new Date().getFullYear() - i}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -1433,364 +1719,12 @@ const PayrollPage = () => {
         <DialogActions 
           sx={{
             background: theme.palette.mode === 'dark'
-              ? `linear-gradient(45deg, ${alpha(theme.palette.success.main, 0.1)}, ${alpha(theme.palette.success.dark, 0.1)})`
-              : `linear-gradient(45deg, ${alpha(theme.palette.success.light, 0.1)}, ${alpha(theme.palette.success.main, 0.1)})`,
-            borderTop: `1px solid ${theme.palette.divider}`
-          }}
-        >
-          <Button 
-            onClick={handleClosePaymentDialog}
-            sx={{
-              color: theme.palette.text.secondary,
-              '&:hover': {
-                backgroundColor: alpha(theme.palette.success.main, 0.1)
-              }
-            }}
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={updatePaymentStatus} 
-            variant="contained" 
-            color="success"
-            sx={{
-              background: theme.palette.mode === 'dark'
-                ? `linear-gradient(45deg, ${theme.palette.success.main}, ${theme.palette.success.dark})`
-                : `linear-gradient(45deg, ${theme.palette.success.main}, ${theme.palette.success.dark})`,
-              '&:hover': {
-                background: theme.palette.mode === 'dark'
-                  ? `linear-gradient(45deg, ${theme.palette.success.dark}, ${theme.palette.success.main})`
-                  : `linear-gradient(45deg, ${theme.palette.success.dark}, ${theme.palette.success.main})`
-              }
-            }}
-          >
-            Confirm Payment
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Payroll Details Dialog */}
-      <Dialog 
-        open={openDetailsDialog} 
-        onClose={handleCloseDetailsDialog} 
-        maxWidth="md" 
-        fullWidth
-        PaperProps={{
-          sx: {
-            background: theme.palette.mode === 'dark'
-              ? `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.9)})`
-              : `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.9)}, ${alpha(theme.palette.background.paper, 1)})`,
-            backdropFilter: 'blur(10px)'
-          }
-        }}
-      >
-        <DialogTitle 
-          sx={{
-            background: theme.palette.mode === 'dark'
-              ? `linear-gradient(45deg, ${alpha(theme.palette.primary.main, 0.1)}, ${alpha(theme.palette.primary.dark, 0.1)})`
-              : `linear-gradient(45deg, ${alpha(theme.palette.primary.light, 0.1)}, ${alpha(theme.palette.primary.main, 0.1)})`,
-            borderBottom: `1px solid ${theme.palette.divider}`
-          }}
-        >
-          Payroll Details
-          <IconButton
-            aria-label="close"
-            onClick={handleCloseDetailsDialog}
-            sx={{
-              position: 'absolute',
-              right: 8,
-              top: 8,
-              color: theme.palette.text.secondary,
-              '&:hover': {
-                backgroundColor: alpha(theme.palette.primary.main, 0.1)
-              }
-            }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent>
-          {selectedPayroll && (
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <Typography 
-                  variant="h6" 
-                  gutterBottom
-                  sx={{
-                    color: theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.primary.main
-                  }}
-                >
-                  Employee Information
-                </Typography>
-                <Divider sx={{ mb: 2 }} />
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="body1">
-                      <strong>Name:</strong> {selectedPayroll.employeeId?.name || 'N/A'}
-                    </Typography>
-                    <Typography variant="body1">
-                      <strong>ID:</strong> {selectedPayroll.employeeId?.employeeID || 'N/A'}
-                    </Typography>
-                    <Typography variant="body1">
-                      <strong>Department:</strong> {selectedPayroll.employeeId?.department || 'N/A'}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="body1">
-                      <strong>Position:</strong> {selectedPayroll.employeeId?.position || 'N/A'}
-                    </Typography>
-                    <Typography variant="body1">
-                      <strong>Base Salary:</strong> ₹{selectedPayroll.baseSalary.toFixed(2)}
-                    </Typography>
-                    <Typography variant="body1">
-                      <strong>Period:</strong>{' '}
-                      {new Date(0, selectedPayroll.month - 1).toLocaleString('default', { month: 'long' })}{' '}
-                      {selectedPayroll.year}
-                    </Typography>
-                  </Grid>
-                </Grid>
-              </Grid>
-
-              <Grid item xs={12}>
-                <Typography 
-                  variant="h6" 
-                  gutterBottom
-                  sx={{
-                    color: theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.primary.main
-                  }}
-                >
-                  Attendance Details
-                </Typography>
-                <Divider sx={{ mb: 2 }} />
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Card 
-                      variant="outlined"
-                      sx={{
-                        background: theme.palette.mode === 'dark'
-                          ? `linear-gradient(45deg, ${alpha(theme.palette.primary.main, 0.1)}, ${alpha(theme.palette.primary.dark, 0.1)})`
-                          : `linear-gradient(45deg, ${alpha(theme.palette.primary.light, 0.1)}, ${alpha(theme.palette.primary.main, 0.1)})`,
-                        transition: 'transform 0.2s',
-                        '&:hover': {
-                          transform: 'translateY(-4px)'
-                        }
-                      }}
-                    >
-                      <CardContent>
-                        <Typography variant="h5" align="center" color="primary">
-                          {selectedPayroll.workingDays}
-                        </Typography>
-                        <Typography variant="body2" align="center" color="text.secondary">
-                          Working Days
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Card 
-                      variant="outlined"
-                      sx={{
-                        background: theme.palette.mode === 'dark'
-                          ? `linear-gradient(45deg, ${alpha(theme.palette.success.main, 0.1)}, ${alpha(theme.palette.success.dark, 0.1)})`
-                          : `linear-gradient(45deg, ${alpha(theme.palette.success.light, 0.1)}, ${alpha(theme.palette.success.main, 0.1)})`,
-                        transition: 'transform 0.2s',
-                        '&:hover': {
-                          transform: 'translateY(-4px)'
-                        }
-                      }}
-                    >
-                      <CardContent>
-                        <Typography variant="h5" align="center" color="success.main">
-                          {selectedPayroll.presentDays}
-                        </Typography>
-                        <Typography variant="body2" align="center" color="text.secondary">
-                          Present Days
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Card 
-                      variant="outlined"
-                      sx={{
-                        background: theme.palette.mode === 'dark'
-                          ? `linear-gradient(45deg, ${alpha(theme.palette.error.main, 0.1)}, ${alpha(theme.palette.error.dark, 0.1)})`
-                          : `linear-gradient(45deg, ${alpha(theme.palette.error.light, 0.1)}, ${alpha(theme.palette.error.main, 0.1)})`,
-                        transition: 'transform 0.2s',
-                        '&:hover': {
-                          transform: 'translateY(-4px)'
-                        }
-                      }}
-                    >
-                      <CardContent>
-                        <Typography variant="h5" align="center" color="error.main">
-                          {selectedPayroll.absentDays}
-                        </Typography>
-                        <Typography variant="body2" align="center" color="text.secondary">
-                          Absent Days
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Card 
-                      variant="outlined"
-                      sx={{
-                        background: theme.palette.mode === 'dark'
-                          ? `linear-gradient(45deg, ${alpha(theme.palette.warning.main, 0.1)}, ${alpha(theme.palette.warning.dark, 0.1)})`
-                          : `linear-gradient(45deg, ${alpha(theme.palette.warning.light, 0.1)}, ${alpha(theme.palette.warning.main, 0.1)})`,
-                        transition: 'transform 0.2s',
-                        '&:hover': {
-                          transform: 'translateY(-4px)'
-                        }
-                      }}
-                    >
-                      <CardContent>
-                        <Typography variant="h5" align="center" color="warning.main">
-                          {selectedPayroll.lateDays}
-                        </Typography>
-                        <Typography variant="body2" align="center" color="text.secondary">
-                          Late Days
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                </Grid>
-              </Grid>
-
-              <Grid item xs={12}>
-                <Typography 
-                  variant="h6" 
-                  gutterBottom
-                  sx={{
-                    color: theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.primary.main
-                  }}
-                >
-                  Salary Calculation
-                </Typography>
-                <Divider sx={{ mb: 2 }} />
-                <TableContainer 
-                  component={Paper} 
-                  variant="outlined"
-                  sx={{
-                    background: theme.palette.mode === 'dark'
-                      ? `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.9)})`
-                      : `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.9)}, ${alpha(theme.palette.background.paper, 1)})`,
-                    backdropFilter: 'blur(10px)'
-                  }}
-                >
-                  <Table size="small">
-                    <TableBody>
-                      <TableRow>
-                        <TableCell>Base Salary</TableCell>
-                        <TableCell align="right">₹{selectedPayroll.baseSalary.toFixed(2)}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>Overtime Amount</TableCell>
-                        <TableCell align="right">
-                          {selectedPayroll.overtimeHours > 0 ? (
-                            <div>
-                              <div>₹{selectedPayroll.overtimeAmount.toFixed(2)}</div>
-                              <div className="text-xs text-gray-500">
-                                {selectedPayroll.overtimeHours.toFixed(1)} hours × {selectedPayroll.overtimeRate}x rate
-                              </div>
-                            </div>
-                          ) : (
-                            '₹0.00'
-                          )}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>Bonus Amount</TableCell>
-                        <TableCell align="right">₹{selectedPayroll.bonusAmount.toFixed(2)}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>Deductions</TableCell>
-                        <TableCell align="right">₹{selectedPayroll.deductions.toFixed(2)}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>Tax Amount</TableCell>
-                        <TableCell align="right">₹{selectedPayroll.taxAmount.toFixed(2)}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Net Salary</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                          ₹{selectedPayroll.netSalary.toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Grid>
-
-              <Grid item xs={12}>
-                <Typography 
-                  variant="h6" 
-                  gutterBottom
-                  sx={{
-                    color: theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.primary.main
-                  }}
-                >
-                  Payment Details
-                </Typography>
-                <Divider sx={{ mb: 2 }} />
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="body1">
-                      <strong>Status:</strong>{' '}
-                      <Chip
-                        label={selectedPayroll.paymentStatus}
-                        color={
-                          selectedPayroll.paymentStatus === 'Paid'
-                            ? 'success'
-                            : selectedPayroll.paymentStatus === 'Pending'
-                            ? 'warning'
-                            : 'error'
-                        }
-                        size="small"
-                        sx={{
-                          fontWeight: 'bold',
-                          '& .MuiChip-label': {
-                            px: 1
-                          }
-                        }}
-                      />
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="body1">
-                      <strong>Payment Date:</strong>{' '}
-                      {selectedPayroll.paymentDate
-                        ? format(new Date(selectedPayroll.paymentDate), 'PPP')
-                        : 'Not paid yet'}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="body1">
-                      <strong>Payment Method:</strong>{' '}
-                      {selectedPayroll.paymentMethod || 'Not specified'}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="body1">
-                      <strong>Reference:</strong>{' '}
-                      {selectedPayroll.reference || 'Not available'}
-                    </Typography>
-                  </Grid>
-                </Grid>
-              </Grid>
-            </Grid>
-          )}
-        </DialogContent>
-        <DialogActions 
-          sx={{
-            background: theme.palette.mode === 'dark'
               ? `linear-gradient(45deg, ${alpha(theme.palette.primary.main, 0.1)}, ${alpha(theme.palette.primary.dark, 0.1)})`
               : `linear-gradient(45deg, ${alpha(theme.palette.primary.light, 0.1)}, ${alpha(theme.palette.primary.main, 0.1)})`,
             borderTop: `1px solid ${theme.palette.divider}`
           }}
         >
-          <Button
+          <Button 
             startIcon={<PrintIcon />}
             variant="outlined"
             onClick={() => window.print()}
@@ -1806,29 +1740,218 @@ const PayrollPage = () => {
             Print
           </Button>
           {selectedPayroll && selectedPayroll.paymentStatus === 'Pending' && (
-            <Button
+          <Button 
               startIcon={<MonetizationOnIcon />}
-              variant="contained"
-              color="success"
+            variant="contained" 
+            color="success"
               onClick={(e) => {
                 e.stopPropagation();
                 handleCloseDetailsDialog();
                 handleOpenPaymentDialog(selectedPayroll);
               }}
-              sx={{
+            sx={{
+              background: theme.palette.mode === 'dark'
+                ? `linear-gradient(45deg, ${theme.palette.success.main}, ${theme.palette.success.dark})`
+                : `linear-gradient(45deg, ${theme.palette.success.main}, ${theme.palette.success.dark})`,
+              '&:hover': {
                 background: theme.palette.mode === 'dark'
-                  ? `linear-gradient(45deg, ${theme.palette.success.main}, ${theme.palette.success.dark})`
-                  : `linear-gradient(45deg, ${theme.palette.success.main}, ${theme.palette.success.dark})`,
-                '&:hover': {
-                  background: theme.palette.mode === 'dark'
-                    ? `linear-gradient(45deg, ${theme.palette.success.dark}, ${theme.palette.success.main})`
-                    : `linear-gradient(45deg, ${theme.palette.success.dark}, ${theme.palette.success.main})`
-                }
-              }}
+                  ? `linear-gradient(45deg, ${theme.palette.success.dark}, ${theme.palette.success.main})`
+                  : `linear-gradient(45deg, ${theme.palette.success.dark}, ${theme.palette.success.main})`
+              }
+            }}
+          >
+              Mark as Paid
+          </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Process Payment Dialog */}
+      <Dialog 
+        open={openPaymentDialog} 
+        onClose={handleClosePaymentDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          elevation: 5,
+          sx: {
+            borderRadius: 2,
+            position: 'relative',
+            overflow: 'hidden'
+          }
+        }}
+      >
+        <Box sx={{ 
+          position: 'absolute', 
+          top: 0, 
+          left: 0, 
+          right: 0, 
+          height: 6, 
+          bgcolor: theme.palette.success.main 
+        }} />
+        <DialogTitle sx={{ pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <AttachMoneyIcon sx={{ mr: 1, color: theme.palette.success.main }} />
+            <Typography variant="h6">Process Payment</Typography>
+          </Box>
+        </DialogTitle>
+          <IconButton
+            aria-label="close"
+          onClick={handleClosePaymentDialog}
+            sx={{
+              position: 'absolute',
+              right: 8,
+            top: 12,
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        <DialogContent dividers>
+          {selectedPayroll && (
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <Paper 
+                  variant="outlined" 
+                  sx={{
+                    p: 2, 
+                    bgcolor: alpha(theme.palette.background.paper, 0.5),
+                    mb: 2
+                  }}
+                >
+                  <Grid container spacing={1}>
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        Payment Details
+                    </Typography>
+                  </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="textSecondary">Employee:</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" fontWeight="medium">
+                        {selectedPayroll.employeeId.name}
+                    </Typography>
+              </Grid>
+
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="textSecondary">Period:</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2">
+                        {format(new Date(selectedPayroll.year, selectedPayroll.month - 1), 'MMMM yyyy')}
+                        </Typography>
+                  </Grid>
+                    
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="textSecondary">Net Salary:</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" fontWeight="bold">
+                        ₹{selectedPayroll.netSalary.toLocaleString('en-IN')}
+                        </Typography>
+                  </Grid>
+                </Grid>
+                </Paper>
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControl fullWidth required>
+                  <InputLabel>Payment Method</InputLabel>
+                  <Select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    label="Payment Method"
+                  >
+                    <MenuItem value="Bank Transfer">Bank Transfer</MenuItem>
+                    <MenuItem value="Cash">Cash</MenuItem>
+                    <MenuItem value="Check">Check</MenuItem>
+                    <MenuItem value="Other">Other</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              {paymentMethod === 'Bank Transfer' && (
+              <Grid item xs={12}>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                <Grid container spacing={2}>
+                      <Grid item xs={12}>
+                        <Typography variant="subtitle2" gutterBottom>
+                          Bank Account Details
+                    </Typography>
+                  </Grid>
+                      
+                      <Grid item xs={6}>
+                        <Typography variant="body2" color="textSecondary">Account Number:</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="body2">
+                          {selectedPayroll.employeeId.bankDetails?.accountNumber || 'Not provided'}
+                    </Typography>
+                  </Grid>
+                      
+                      <Grid item xs={6}>
+                        <Typography variant="body2" color="textSecondary">Bank Name:</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="body2">
+                          {selectedPayroll.employeeId.bankDetails?.bankName || 'Not provided'}
+                    </Typography>
+                  </Grid>
+                      
+                      <Grid item xs={6}>
+                        <Typography variant="body2" color="textSecondary">IFSC Code:</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Typography variant="body2">
+                          {selectedPayroll.employeeId.bankDetails?.ifscCode || 'Not provided'}
+                    </Typography>
+                  </Grid>
+                </Grid>
+                    
+                    {(!selectedPayroll.employeeId.bankDetails?.accountNumber || 
+                      !selectedPayroll.employeeId.bankDetails?.ifscCode) && (
+                      <Alert severity="warning" sx={{ mt: 2 }}>
+                        Some bank details are missing. Please update employee profile.
+                      </Alert>
+                    )}
+                  </Paper>
+                </Grid>
+              )}
+              
+              {paymentMethod === 'Check' && (
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Check Number"
+                    placeholder="Enter check number"
+                  />
+                </Grid>
+              )}
+              
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Notes"
+                  multiline
+                  rows={2}
+                  placeholder="Any additional notes about this payment..."
+                />
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2, justifyContent: 'space-between' }}>
+          <Button onClick={handleClosePaymentDialog} color="inherit">
+            Cancel
+          </Button>
+            <Button
+            onClick={updatePaymentStatus} 
+              variant="contained"
+              color="success"
+            startIcon={<CheckIcon />}
             >
               Mark as Paid
             </Button>
-          )}
         </DialogActions>
       </Dialog>
 
@@ -1836,261 +1959,386 @@ const PayrollPage = () => {
       <Dialog 
         open={openEditDialog} 
         onClose={handleCloseEditDialog} 
-        maxWidth="sm" 
+        maxWidth="md"
         fullWidth
         PaperProps={{
+          elevation: 5,
           sx: {
-            background: theme.palette.mode === 'dark'
-              ? `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.9)})`
-              : `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.9)}, ${alpha(theme.palette.background.paper, 1)})`,
-            backdropFilter: 'blur(10px)'
+            borderRadius: 2,
+            position: 'relative',
+            overflow: 'hidden'
           }
         }}
       >
-        <DialogTitle 
+        <Box sx={{ 
+          position: 'absolute', 
+          top: 0, 
+          left: 0, 
+          right: 0, 
+          height: 6, 
+          bgcolor: theme.palette.primary.main 
+        }} />
+        <DialogTitle sx={{ pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <EditIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
+            <Typography variant="h6">Edit Payroll</Typography>
+          </Box>
+        </DialogTitle>
+        <IconButton
+          aria-label="close"
+          onClick={handleCloseEditDialog}
           sx={{
-            background: theme.palette.mode === 'dark'
-              ? `linear-gradient(45deg, ${alpha(theme.palette.info.main, 0.1)}, ${alpha(theme.palette.info.dark, 0.1)})`
-              : `linear-gradient(45deg, ${alpha(theme.palette.info.light, 0.1)}, ${alpha(theme.palette.info.main, 0.1)})`,
-            borderBottom: `1px solid ${theme.palette.divider}`
+            position: 'absolute',
+            right: 8,
+            top: 12,
           }}
         >
-          Edit Payroll
-        </DialogTitle>
-        <DialogContent>
+          <CloseIcon />
+        </IconButton>
+        <DialogContent dividers>
           {editingPayroll && (
-            <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid container spacing={3}>
               <Grid item xs={12}>
+                <Paper 
+                  variant="outlined" 
+                  sx={{ 
+                    p: 2, 
+                    bgcolor: alpha(theme.palette.background.paper, 0.5),
+                    mb: 3
+                  }}
+                >
+                  <Grid container spacing={1}>
+                    <Grid item xs={6} md={3}>
+                      <Typography variant="body2" color="textSecondary">Employee:</Typography>
+                      <Typography variant="body1" fontWeight="medium">
+                        {editingPayroll.employeeId.name}
+                      </Typography>
+                    </Grid>
+                    
+                    <Grid item xs={6} md={3}>
+                      <Typography variant="body2" color="textSecondary">Department:</Typography>
                 <Typography variant="body1">
-                  <strong>Employee:</strong>{' '}
-                  {editingPayroll.employeeId?.name || 'N/A'}
+                        {editingPayroll.employeeId.department}
                 </Typography>
+                    </Grid>
+                    
+                    <Grid item xs={6} md={3}>
+                      <Typography variant="body2" color="textSecondary">Period:</Typography>
                 <Typography variant="body1">
-                  <strong>Base Salary:</strong> ₹{Number(editingPayroll.baseSalary || 0).toFixed(2)}
+                        {format(new Date(editingPayroll.year, editingPayroll.month - 1), 'MMMM yyyy')}
                 </Typography>
               </Grid>
+                    
+                    <Grid item xs={6} md={3}>
+                      <Typography variant="body2" color="textSecondary">Status:</Typography>
+                      <Chip 
+                        label={editingPayroll.paymentStatus} 
+                        size="small"
+                        color={
+                          editingPayroll.paymentStatus === 'Paid' ? 'success' : 
+                          editingPayroll.paymentStatus === 'Pending' ? 'warning' : 'error'
+                        }
+                        sx={{ fontWeight: 'medium' }}
+                      />
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+              
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Attendance Information
+                </Typography>
+                <Paper variant="outlined" sx={{ p: 3 }}>
+                  <Grid container spacing={3}>
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  label="Bonus Amount"
+                        label="Working Days"
                   type="number"
-                  value={editingPayroll.bonusAmount}
+                        InputProps={{
+                          inputProps: { min: 0, max: 31 }
+                        }}
+                        value={editingPayroll.workingDays}
                   onChange={(e) => setEditingPayroll({
                     ...editingPayroll,
-                    bonusAmount: e.target.value
-                  })}
+                          workingDays: Number(e.target.value)
+                        })}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Present Days"
+                        type="number"
                   InputProps={{
-                    startAdornment: <InputAdornment position="start">₹</InputAdornment>,
-                    sx: {
-                      '& .MuiOutlinedInput-notchedOutline': {
-                        borderColor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.23) : undefined
-                      },
-                      '&:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: theme.palette.primary.main
-                      },
-                      '& input::-webkit-inner-spin-button, & input::-webkit-outer-spin-button': {
-                        display: 'none'
-                      }
-                    }
-                  }}
+                          inputProps: { min: 0, max: editingPayroll.workingDays }
+                        }}
+                        value={editingPayroll.presentDays}
+                        onChange={(e) => setEditingPayroll({
+                          ...editingPayroll,
+                          presentDays: Number(e.target.value),
+                          absentDays: editingPayroll.workingDays - Number(e.target.value)
+                        })}
                 />
               </Grid>
+                    
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  label="Deductions"
+                        label="Absent Days"
                   type="number"
-                  value={editingPayroll.deductions}
+                        InputProps={{
+                          inputProps: { min: 0, max: editingPayroll.workingDays }
+                        }}
+                        value={editingPayroll.absentDays}
                   onChange={(e) => setEditingPayroll({
                     ...editingPayroll,
-                    deductions: e.target.value
-                  })}
+                          absentDays: Number(e.target.value),
+                          presentDays: editingPayroll.workingDays - Number(e.target.value)
+                        })}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Late Days"
+                        type="number"
                   InputProps={{
-                    startAdornment: <InputAdornment position="start">₹</InputAdornment>,
-                    sx: {
-                      '& .MuiOutlinedInput-notchedOutline': {
-                        borderColor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.23) : undefined
-                      },
-                      '&:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: theme.palette.primary.main
-                      },
-                      '& input::-webkit-inner-spin-button, & input::-webkit-outer-spin-button': {
-                        display: 'none'
-                      }
-                    }
-                  }}
+                          inputProps: { min: 0, max: editingPayroll.presentDays }
+                        }}
+                        value={editingPayroll.lateDays}
+                        onChange={(e) => setEditingPayroll({
+                          ...editingPayroll,
+                          lateDays: Number(e.target.value)
+                        })}
                 />
               </Grid>
-              <Grid item xs={12}>
+                    
+                    <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  label="Deduction Reasons"
-                  multiline
-                  rows={2}
-                  value={editingPayroll.deductionReasons || ''}
+                        label="Leave Days"
+                        type="number"
+                        InputProps={{
+                          inputProps: { min: 0 }
+                        }}
+                        value={editingPayroll.leaveDays}
                   onChange={(e) => setEditingPayroll({
                     ...editingPayroll,
-                    deductionReasons: e.target.value
-                  })}
-                  sx={{
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.23) : undefined
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: theme.palette.primary.main
-                    }
-                  }}
+                          leaveDays: Number(e.target.value)
+                        })}
                 />
               </Grid>
+                    
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
                   label="Overtime Hours"
                   type="number"
+                        InputProps={{
+                          inputProps: { min: 0, step: 0.5 }
+                        }}
                   value={editingPayroll.overtimeHours}
                   onChange={(e) => setEditingPayroll({
                     ...editingPayroll,
-                    overtimeHours: e.target.value
-                  })}
+                          overtimeHours: Number(e.target.value)
+                        })}
+                      />
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+              
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Salary Information
+                </Typography>
+                <Paper variant="outlined" sx={{ p: 3 }}>
+                  <Grid container spacing={3}>
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        label="Base Salary"
+                        type="number"
                   InputProps={{
-                    sx: {
-                      '& .MuiOutlinedInput-notchedOutline': {
-                        borderColor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.23) : undefined
-                      },
-                      '&:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: theme.palette.primary.main
-                      },
-                      '& input::-webkit-inner-spin-button, & input::-webkit-outer-spin-button': {
-                        display: 'none'
-                      }
-                    }
-                  }}
+                          inputProps: { min: 0 },
+                          startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+                        }}
+                        value={editingPayroll.baseSalary}
+                        onChange={(e) => setEditingPayroll({
+                          ...editingPayroll,
+                          baseSalary: Number(e.target.value)
+                        })}
                 />
               </Grid>
+                    
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  label="Overtime Rate"
+                        label="Overtime Amount"
                   type="number"
-                  value={editingPayroll.overtimeRate}
+                        InputProps={{
+                          inputProps: { min: 0 },
+                          startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+                        }}
+                        value={editingPayroll.overtimeAmount}
                   onChange={(e) => setEditingPayroll({
                     ...editingPayroll,
-                    overtimeRate: e.target.value
-                  })}
+                          overtimeAmount: Number(e.target.value)
+                        })}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Bonus Amount"
+                        type="number"
                   InputProps={{
+                          inputProps: { min: 0 },
                     startAdornment: <InputAdornment position="start">₹</InputAdornment>,
-                    sx: {
-                      '& .MuiOutlinedInput-notchedOutline': {
-                        borderColor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.23) : undefined
-                      },
-                      '&:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: theme.palette.primary.main
-                      },
-                      '& input::-webkit-inner-spin-button, & input::-webkit-outer-spin-button': {
-                        display: 'none'
-                      }
-                    }
-                  }}
+                        }}
+                        value={editingPayroll.bonusAmount}
+                        onChange={(e) => setEditingPayroll({
+                          ...editingPayroll,
+                          bonusAmount: Number(e.target.value)
+                        })}
                 />
               </Grid>
+                    
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Deductions"
+                        type="number"
+                        InputProps={{
+                          inputProps: { min: 0 },
+                          startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+                        }}
+                        value={editingPayroll.deductions}
+                        onChange={(e) => setEditingPayroll({
+                          ...editingPayroll,
+                          deductions: Number(e.target.value)
+                        })}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Tax Amount"
+                        type="number"
+                        InputProps={{
+                          inputProps: { min: 0 },
+                          startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+                        }}
+                        value={editingPayroll.taxAmount}
+                        onChange={(e) => setEditingPayroll({
+                          ...editingPayroll,
+                          taxAmount: Number(e.target.value)
+                        })}
+                      />
+                    </Grid>
+                    
               <Grid item xs={12}>
-                <Typography variant="h6" color="primary" gutterBottom>
-                  Preview
+                      <TextField
+                        fullWidth
+                        label="Net Salary"
+                        type="number"
+                        InputProps={{
+                          inputProps: { min: 0 },
+                          startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+                          readOnly: true,
+                          sx: { bgcolor: alpha(theme.palette.primary.main, 0.05) }
+                        }}
+                        value={
+                          editingPayroll.baseSalary + 
+                          editingPayroll.overtimeAmount + 
+                          editingPayroll.bonusAmount - 
+                          editingPayroll.deductions - 
+                          editingPayroll.taxAmount
+                        }
+                      />
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+              
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Additional Information
                 </Typography>
-                <TableContainer 
-                  component={Paper} 
-                  variant="outlined"
-                  sx={{
-                    background: theme.palette.mode === 'dark'
-                      ? `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.8)}, ${alpha(theme.palette.background.paper, 0.9)})`
-                      : `linear-gradient(45deg, ${alpha(theme.palette.background.paper, 0.9)}, ${alpha(theme.palette.background.paper, 1)})`,
-                    backdropFilter: 'blur(10px)'
-                  }}
-                >
-                  <Table size="small">
-                    <TableBody>
-                      <TableRow>
-                        <TableCell>Base Salary</TableCell>
-                        <TableCell align="right">₹{Number(editingPayroll.baseSalary || 0).toFixed(2)}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>Overtime Amount</TableCell>
-                        <TableCell align="right">
-                          {editingPayroll.overtimeHours > 0 ? (
-                            <div>
-                              <div>₹{editingPayroll.overtimeAmount.toFixed(2)}</div>
-                              <div className="text-xs text-gray-500">
-                                {editingPayroll.overtimeHours.toFixed(1)} hours × {editingPayroll.overtimeRate}x rate
-                              </div>
-                            </div>
-                          ) : (
-                            '₹0.00'
-                          )}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>Bonus Amount</TableCell>
-                        <TableCell align="right">₹{Number(editingPayroll.bonusAmount || 0).toFixed(2)}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>Deductions</TableCell>
-                        <TableCell align="right">₹{Number(editingPayroll.deductions || 0).toFixed(2)}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>Tax Amount</TableCell>
-                        <TableCell align="right">₹{Number(editingPayroll.taxAmount || 0).toFixed(2)}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Net Salary</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                          ₹{Number(editingPayroll.netSalary || 0).toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                <Paper variant="outlined" sx={{ p: 3 }}>
+                  <Grid container spacing={3}>
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        label="Deduction Reasons"
+                        multiline
+                        rows={2}
+                        value={editingPayroll.deductionReasons || ''}
+                        onChange={(e) => setEditingPayroll({
+                          ...editingPayroll,
+                          deductionReasons: e.target.value
+                        })}
+                        placeholder="Explain reasons for deductions (if any)..."
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        label="Notes"
+                        multiline
+                        rows={2}
+                        value={editingPayroll.notes || ''}
+                        onChange={(e) => setEditingPayroll({
+                          ...editingPayroll,
+                          notes: e.target.value
+                        })}
+                        placeholder="Any additional notes about this payroll..."
+                      />
+                    </Grid>
+                  </Grid>
+                </Paper>
               </Grid>
             </Grid>
           )}
         </DialogContent>
-        <DialogActions 
-          sx={{
-            background: theme.palette.mode === 'dark'
-              ? `linear-gradient(45deg, ${alpha(theme.palette.info.main, 0.1)}, ${alpha(theme.palette.info.dark, 0.1)})`
-              : `linear-gradient(45deg, ${alpha(theme.palette.info.light, 0.1)}, ${alpha(theme.palette.info.main, 0.1)})`,
-            borderTop: `1px solid ${theme.palette.divider}`
-          }}
-        >
-          <Button 
-            onClick={handleCloseEditDialog}
-            sx={{
-              color: theme.palette.text.secondary,
-              '&:hover': {
-                backgroundColor: alpha(theme.palette.info.main, 0.1)
-              }
-            }}
-          >
+        <DialogActions sx={{ px: 3, py: 2, justifyContent: 'space-between' }}>
+          <Button onClick={handleCloseEditDialog} color="inherit">
             Cancel
           </Button>
           <Button
             onClick={updatePayroll}
             variant="contained"
-            color="info"
-            sx={{
-              background: theme.palette.mode === 'dark'
-                ? `linear-gradient(45deg, ${theme.palette.info.main}, ${theme.palette.info.dark})`
-                : `linear-gradient(45deg, ${theme.palette.info.main}, ${theme.palette.info.dark})`,
-              '&:hover': {
-                background: theme.palette.mode === 'dark'
-                  ? `linear-gradient(45deg, ${theme.palette.info.dark}, ${theme.palette.info.main})`
-                  : `linear-gradient(45deg, ${theme.palette.info.dark}, ${theme.palette.info.main})`
-              }
-            }}
+            color="primary"
+            startIcon={<SaveIcon />}
           >
-            Update Payroll
+            Save Changes
           </Button>
         </DialogActions>
       </Dialog>
+      
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={handleSnackbarClose} 
+          severity={snackbar.severity} 
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };
