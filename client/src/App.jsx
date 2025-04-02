@@ -10,6 +10,7 @@ import { UserContext } from "./context/UserProvider"; // User Context
 import AttendancePage from "./pages/AttendancePage";
 import PayrollPage from "./pages/PayrollPage";
 import ImageGeneration from "./pages/ImageGenerator";
+import ImageToImagePage from "./pages/ImageToImagePage";
 import RawMaterialsInventory from "./pages/RawMaterialsInventory";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
@@ -26,6 +27,7 @@ function App() {
         <Route path="/raw-materials" element={<ProtectedRoute component={<RawMaterialsInventory />} />} />
         <Route path="/attendance" element={<ProtectedRoute component={<AttendancePage />} />} />
         <Route path="/image-generation" element={<ProtectedRoute component={<ImageGeneration/>} noContainer={true} />} />
+        <Route path="/image-to-image" element={<ProtectedRoute component={<ImageToImagePage/>} noContainer={true} />} />
         <Route path="/products" element={<ProtectedRoute component={<ProductsPage />} />} />
         <Route path="/payroll" element={<ProtectedRoute component={<PayrollPage />} />} />
 
@@ -43,8 +45,8 @@ function LayoutWrapper({ children, noContainer = false }) {
   const { theme } = useContext(ThemeContext);
   const { isAuthenticated } = useContext(UserContext);
   
-  // Check if the current component is ImageGeneration
-  const isImageGenerator = children.type === ImageGeneration;
+  // Check if the current component is ImageGeneration or ImageToImagePage
+  const isImageGenerator = children.type === ImageGeneration || children.type === ImageToImagePage;
 
   return (
     <div className={`flex flex-col md:flex-row h-screen bg-light-background dark:bg-dark-background text-light-text-primary dark:text-dark-text-primary overflow-hidden`}>

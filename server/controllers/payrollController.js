@@ -6,13 +6,6 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend } from '
 
 // Helper function to get attendance statistics for employee in a given month/year
 const getAttendanceStats = async (employeeId, month, year) => {
-  const startDate = startOfMonth(new Date(year, month - 1));
-  const endDate = endOfMonth(new Date(year, month - 1));
-  
-  // Convert to ISO format strings for query
-  const startDateStr = format(startDate, 'yyyy-MM-dd');
-  const endDateStr = format(endDate, 'yyyy-MM-dd');
-  
   // Get employee data first
   const employee = await Employee.findById(employeeId);
   if (!employee) {
@@ -21,6 +14,10 @@ const getAttendanceStats = async (employeeId, month, year) => {
 
   // Convert joining date to Date object
   const joiningDate = new Date(employee.joiningDate);
+  
+  // Create date objects for month range
+  const startDate = startOfMonth(new Date(year, month - 1));
+  const endDate = endOfMonth(new Date(year, month - 1));
   
   // If joining date is after the end of the month, return zero stats
   if (joiningDate > endDate) {
@@ -35,12 +32,11 @@ const getAttendanceStats = async (employeeId, month, year) => {
     };
   }
   
+  // Use the payrollMonth and payrollYear fields instead of date range queries
   const attendanceRecords = await Attendance.find({
     employeeId,
-    date: { 
-      $gte: startDateStr, 
-      $lte: endDateStr 
-    }
+    payrollMonth: parseInt(month),
+    payrollYear: parseInt(year)
   });
   
   // Get all days in the month
@@ -90,14 +86,15 @@ const getAttendanceStats = async (employeeId, month, year) => {
         break;
     }
 
-    // Add overtime hours if present
-    if (record.overtime && record.overtime.hours > 0) {
-      totalOvertimeHours += record.overtime.hours;
+    // Add overtime hours using the new fields
+    if (record.overtimeHours > 0) {
+      totalOvertimeHours += record.overtimeHours;
+      
       // Calculate overtime amount based on rate
-      const overtimeRate = record.overtime.rate;
+      const overtimeRate = record.overtimeRate || 1.5;
       const dailyRate = employee.salary / workingDays;
       const hourlyRate = dailyRate / 8; // Assuming 8 hours per day
-      totalOvertimeAmount += (hourlyRate * record.overtime.hours * overtimeRate);
+      totalOvertimeAmount += (hourlyRate * record.overtimeHours * overtimeRate);
     }
   });
   
@@ -254,16 +251,31 @@ export const generateAllPayrolls = async (req, res) => {
     }
     
     // Get all active employees
-    const employees = await Employee.find({ status: "Active" });
+    const employees = await Employee.find({ status: 'Active' });
     
-    const results = [];
-    const errors = [];
+    const results = {
+      successful: [],
+      failed: []
+    };
     
-    // Generate payroll for each employee
+    // Process each employee
     for (const employee of employees) {
       try {
         // Get attendance stats
         const attendanceStats = await getAttendanceStats(employee._id, month, year);
+        
+        // Skip employees with no working days
+        if (attendanceStats.workingDays === 0) {
+          results.failed.push({
+            employee: {
+              _id: employee._id,
+              name: employee.name,
+              employeeId: employee.employeeId
+            },
+            reason: "No working days in this period"
+          });
+          continue;
+        }
         
         // Calculate salary
         const salaryDetails = calculateSalary(employee, attendanceStats);
@@ -271,12 +283,12 @@ export const generateAllPayrolls = async (req, res) => {
         // Check if payroll already exists
         let payroll = await Payroll.findOne({ 
           employeeId: employee._id, 
-          month, 
-          year 
+          month: parseInt(month), 
+          year: parseInt(year) 
         });
         
         if (payroll) {
-          // Update existing payroll with new calculation
+          // Update existing payroll
           payroll.baseSalary = employee.salary;
           payroll.workingDays = attendanceStats.workingDays;
           payroll.presentDays = attendanceStats.presentDays;
@@ -290,11 +302,11 @@ export const generateAllPayrolls = async (req, res) => {
           
           await payroll.save();
         } else {
-          // Create new payroll record
+          // Create new payroll
           payroll = new Payroll({
             employeeId: employee._id,
-            month,
-            year,
+            month: parseInt(month),
+            year: parseInt(year),
             baseSalary: employee.salary,
             workingDays: attendanceStats.workingDays,
             presentDays: attendanceStats.presentDays,
@@ -310,37 +322,55 @@ export const generateAllPayrolls = async (req, res) => {
           await payroll.save();
         }
         
-        results.push({
-          employee: {
-            id: employee._id,
-            name: employee.name,
-            employeeID: employee.employeeID
+        // Mark attendance records as processed for this employee/month/year
+        await Attendance.updateMany(
+          {
+            employeeId: employee._id,
+            payrollMonth: parseInt(month),
+            payrollYear: parseInt(year)
           },
-          payroll
+          {
+            $set: { isPayrollProcessed: true }
+          }
+        );
+        
+        // Add to successful results
+        results.successful.push({
+          employee: {
+            _id: employee._id,
+            name: employee.name,
+            employeeId: employee.employeeId
+          },
+          payroll: {
+            _id: payroll._id,
+            netSalary: payroll.netSalary
+          }
         });
         
       } catch (error) {
-        console.error(`Error generating payroll for employee ${employee._id}:`, error);
-        errors.push({
+        // Add to failed results
+        results.failed.push({
           employee: {
-            id: employee._id,
+            _id: employee._id,
             name: employee.name,
-            employeeID: employee.employeeID
+            employeeId: employee.employeeId
           },
-          error: error.message
+          reason: error.message
         });
       }
     }
     
     return res.status(200).json({
-      message: `Payroll generated for ${results.length} employees, ${errors.length} failures`,
-      results,
-      errors
+      message: `Payroll generated for ${results.successful.length} employees. Failed: ${results.failed.length}`,
+      results
     });
     
   } catch (error) {
-    console.error('Error generating all payrolls:', error);
-    return res.status(500).json({ error: "Failed to generate payrolls" });
+    console.error('Error generating payrolls:', error);
+    return res.status(500).json({ 
+      error: "Failed to generate payrolls",
+      details: error.message 
+    });
   }
 };
 

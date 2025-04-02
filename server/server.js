@@ -9,6 +9,8 @@ import AttendanceRoutes from "./routes/attendanceRoutes.js"; // Import Attendanc
 import payrollRoutes from "./routes/payrollRoutes.js"; // Import Payroll Routes
 import productRoutes from "./routes/productRoutes.js"; // Import Product Routes
 import uploadRoutes from "./routes/uploadRoutes.js"; // Import Upload Routes
+import imageGenerationRoutes from "./routes/imageGenerationRoutes.js"; // Import Image Generation Routes
+import falProxyRoutes from "./routes/falProxyRoutes.js"; // Import fal.ai Proxy Routes
 import path from "path";
 import rawMaterialRoutes from './routes/rawMaterialRoutes.js';
 import { config } from './config/index.js';
@@ -26,7 +28,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'x-fal-target-url', 'Accept', 'Origin', 'x-requested-with'],
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // Increased limit for image uploads
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads"))); // Serve images
 
 // Routes
@@ -37,6 +40,8 @@ app.use("/api/payroll", payrollRoutes); // Add Payroll Routes
 app.use('/api/raw-materials', rawMaterialRoutes);
 app.use('/api/products', productRoutes); // Add Product Routes
 app.use('/api/uploads', uploadRoutes); // Add Upload Routes
+app.use('/api/image-generation', imageGenerationRoutes); // Add Image Generation Routes
+app.use('/api/fal', falProxyRoutes); // Add fal.ai Proxy Routes
 // Routes
 app.use('/api', apiRoutes);
 

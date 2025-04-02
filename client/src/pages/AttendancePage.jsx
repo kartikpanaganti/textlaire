@@ -9,7 +9,6 @@ import "react-toastify/dist/ReactToastify.css";
 import { ThemeContext } from '../context/ThemeProvider';
 
 import { format, startOfWeek, endOfWeek, addDays, differenceInMinutes } from 'date-fns';
-import AttendanceFilters from '../components/attendance/AttendanceFilters';
 import { exportToExcel, exportToPDF } from '../utils/exportUtils';
 import AttendanceForm from '../components/attendance/AttendanceForm';
 import QuickAttendanceForm from '../components/attendance/QuickAttendanceForm';
@@ -445,11 +444,7 @@ const AttendancePage = () => {
           </div>
         </div>
 
-        {/* Attendance Filters */}
-        <div className="mb-6">
-          <AttendanceFilters onFilterChange={handleFilterChange} />
-        </div>
-
+       
         {/* Replace the existing table with the new AttendanceTable component */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mt-6">
           {loading ? (

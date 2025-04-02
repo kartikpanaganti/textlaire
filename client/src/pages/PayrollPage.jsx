@@ -207,35 +207,14 @@ const PayrollPage = () => {
   const fetchAttendanceData = async () => {
     try {
       setAutoGenerating(true);
-      // Fetch all attendance data and filter by month/year on client side
-      // since there's no specific endpoint for attendance by month/year
+      // Use the new endpoint to fetch attendance data by month/year
       console.log(`Fetching attendance data for ${selectedMonth}/${selectedYear}...`);
-      const response = await axios.get('/api/attendance');
-      const allAttendanceData = response.data;
-      console.log(`Received ${allAttendanceData.length} attendance records from API`);
-      
-      // Filter the attendance data for the selected month and year
-      const filteredAttendanceData = allAttendanceData.filter(record => {
-        try {
-          // Check if date exists and is in a valid format
-          if (!record.date) return false;
-          
-          const recordDate = new Date(record.date);
-          // Check if the date is valid
-          if (isNaN(recordDate.getTime())) return false;
-          
-          return recordDate.getMonth() + 1 === selectedMonth && 
-                 recordDate.getFullYear() === selectedYear;
-        } catch (err) {
-          console.warn('Invalid date format in attendance record:', record);
-          return false;
-        }
-      });
-      
-      console.log(`Found ${filteredAttendanceData.length} attendance records for ${selectedMonth}/${selectedYear}`);
+      const response = await axios.get(`/api/attendance/month/${selectedMonth}/${selectedYear}`);
+      const attendanceData = response.data;
+      console.log(`Received ${attendanceData.length} attendance records for ${selectedMonth}/${selectedYear}`);
       
       // Check if attendance data exists
-      if (!filteredAttendanceData || filteredAttendanceData.length === 0) {
+      if (!attendanceData || attendanceData.length === 0) {
         console.log('No attendance data available for the selected period');
         showSnackbar(`No attendance data found for ${format(new Date(selectedYear, selectedMonth - 1), 'MMMM yyyy')}. Please add attendance records first.`, 'warning');
         setAutoGenerating(false);
@@ -256,7 +235,7 @@ const PayrollPage = () => {
       // Group attendance by employee
       const attendanceByEmployee = {};
       
-      filteredAttendanceData.forEach(record => {
+      attendanceData.forEach(record => {
         // Skip records without valid employee ID
         if (!record.employeeId || (!record.employeeId._id && typeof record.employeeId !== 'string')) {
           console.warn('Attendance record missing employeeId:', record);
@@ -283,10 +262,9 @@ const PayrollPage = () => {
         // Update attendance counts based on status
         if (status.includes('present')) {
           attendanceByEmployee[employeeId].presentDays++;
-          // Add overtime hours if available
-          const overtimeHours = record.overtimeHours || record.overtime || 0;
-          if (overtimeHours) {
-            attendanceByEmployee[employeeId].overtimeHours += Number(overtimeHours);
+          // Use the new overtimeHours field directly
+          if (record.overtimeHours > 0) {
+            attendanceByEmployee[employeeId].overtimeHours += Number(record.overtimeHours);
           }
         } else if (status.includes('absent')) {
           attendanceByEmployee[employeeId].absentDays++;
@@ -328,11 +306,12 @@ const PayrollPage = () => {
             baseSalary = employee.salary || employee.baseSalary || 0;
           }
           
-          // Get overtime rate from employee data or use default
-          const overtimeRate = (employee.overtimeRate || employee.hourlyRate || 250); 
+          // Get overtime rate from employee or use default
+          const overtimeRate = (employee.overtimeRate || 1.5);
           
-          // Calculate overtime amount
-          const overtimeAmount = attendance.overtimeHours * overtimeRate;
+          // Calculate overtime amount - use hourlyRate if available or estimate from base salary
+          const hourlyRate = employee.hourlyRate || (baseSalary / (workingDays * 8));
+          const overtimeAmount = attendance.overtimeHours * hourlyRate * overtimeRate;
           
           // Calculate tax amount (simplified)
           const taxAmount = baseSalary * 0.1; // Assuming 10% tax
@@ -1835,7 +1814,7 @@ const PayrollPage = () => {
 
                     <Grid item xs={6}>
                       <Typography variant="body2" color="textSecondary">Period:</Typography>
-                    </Grid>
+                  </Grid>
                     <Grid item xs={6}>
                       <Typography variant="body2">
                         {format(new Date(selectedPayroll.year, selectedPayroll.month - 1), 'MMMM yyyy')}
@@ -1844,7 +1823,7 @@ const PayrollPage = () => {
                     
                     <Grid item xs={6}>
                       <Typography variant="body2" color="textSecondary">Net Salary:</Typography>
-                    </Grid>
+                  </Grid>
                     <Grid item xs={6}>
                       <Typography variant="body2" fontWeight="bold">
                         ₹{selectedPayroll.netSalary.toLocaleString('en-IN')}

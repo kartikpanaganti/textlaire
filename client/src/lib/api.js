@@ -1,43 +1,39 @@
 import axios from 'axios';
 
-// Configure API URL based on hostname or env var
-const API_URL = import.meta.env.VITE_API_URL || 
-  (window.location.hostname === 'localhost' ? 
-    'http://localhost:5000' : 
-    `//${window.location.host}`);
-
-// Create an axios instance with default configuration
-const apiClient = axios.create({
-  baseURL: API_URL,
+// Create axios instance with base URL
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 
+    (window.location.hostname === 'localhost' ? 
+      'http://localhost:5000' : 
+      `${window.location.protocol}//${window.location.host}`),
   headers: {
-    'Content-Type': 'application/json',
-  },
+    'Content-Type': 'application/json'
+  }
 });
 
 /**
  * Configure the fal.ai client
- * @returns {Promise<Object>} - Configuration result
+ * @returns {Promise<boolean>} - Configuration result
  */
 export const configureFalClient = async () => {
   try {
-    // This functionality is now handled server-side
-    // Client just needs to know where to send requests
-    return { success: true, baseUrl: API_URL };
+    // Initialize necessary configurations
+    console.log('Configuring fal.ai client...');
+    // Any initialization code here
+    return true;
   } catch (error) {
-    console.error('Error configuring client:', error);
+    console.error('Error configuring fal.ai client:', error);
     throw error;
   }
 };
 
 /**
  * Connect to realtime API
- * @param {string} modelId - The model ID to connect to
- * @param {Object} options - Connection options
  * @returns {Promise<Object>} - WebSocket connection details
  */
 export const getWebSocketDetails = async () => {
   try {
-    const response = await apiClient.get('/api/ws-proxy');
+    const response = await api.get('/api/fal/ws-details');
     return response.data;
   } catch (error) {
     console.error('Error getting WebSocket details:', error);
@@ -52,7 +48,7 @@ export const getWebSocketDetails = async () => {
  */
 export const submitBulkAttendance = async (attendanceData) => {
   try {
-    const response = await apiClient.post('/api/attendance/bulk', attendanceData);
+    const response = await api.post('/api/attendance/bulk', attendanceData);
     return response.data;
   } catch (error) {
     console.error('Error submitting bulk attendance:', error);
@@ -66,7 +62,7 @@ export const submitBulkAttendance = async (attendanceData) => {
  */
 export const getAllPatterns = async () => {
   try {
-    const response = await apiClient.get('/api/patterns');
+    const response = await api.get('/api/patterns');
     return response.data;
   } catch (error) {
     console.error('Error fetching patterns:', error);
@@ -81,7 +77,7 @@ export const getAllPatterns = async () => {
  */
 export const getPatternById = async (id) => {
   try {
-    const response = await apiClient.get(`/api/patterns/${id}`);
+    const response = await api.get(`/api/patterns/${id}`);
     return response.data;
   } catch (error) {
     console.error(`Error fetching pattern with ID ${id}:`, error);
@@ -117,7 +113,7 @@ export const savePattern = async (data, imageFile) => {
       formData.append('image', file);
     }
     
-    const response = await apiClient.post('/api/patterns', formData, {
+    const response = await api.post('/api/patterns', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -137,7 +133,7 @@ export const savePattern = async (data, imageFile) => {
  */
 export const deletePattern = async (id) => {
   try {
-    const response = await apiClient.delete(`/api/patterns/${id}`);
+    const response = await api.delete(`/api/patterns/${id}`);
     return response.data;
   } catch (error) {
     console.error(`Error deleting pattern with ID ${id}:`, error);
@@ -145,4 +141,50 @@ export const deletePattern = async (id) => {
   }
 };
 
-export default apiClient; 
+// Save a generated image
+export const saveGeneratedImage = async (imageData) => {
+  try {
+    const response = await api.post('/api/image-generation/save', imageData);
+    return response.data;
+  } catch (error) {
+    console.error('Error saving generated image:', error);
+    throw error;
+  }
+};
+
+// Get all generated images
+export const getAllImageResults = async (page = 1, limit = 20) => {
+  try {
+    const response = await api.get('/api/image-generation', {
+      params: { page, limit }
+    });
+    return response.data.images;
+  } catch (error) {
+    console.error('Error fetching image results:', error);
+    throw error;
+  }
+};
+
+// Get a single generated image by ID
+export const getImageResultById = async (id) => {
+  try {
+    const response = await api.get(`/api/image-generation/${id}`);
+    return response.data.image;
+  } catch (error) {
+    console.error('Error fetching image result:', error);
+    throw error;
+  }
+};
+
+// Delete a generated image
+export const deleteGeneratedImage = async (id) => {
+  try {
+    const response = await api.delete(`/api/image-generation/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error deleting generated image:', error);
+    throw error;
+  }
+};
+
+export default api; 

@@ -7,7 +7,8 @@ import {
   FaShoppingCart
 } from "react-icons/fa";
 import { IoPersonCircleOutline } from "react-icons/io5";
-import { IoImagesOutline} from "react-icons/io5";
+import { IoImagesOutline, IoImageOutline } from "react-icons/io5";
+import { MdAutoFixHigh } from "react-icons/md";
 import { ThemeContext } from "../../context/ThemeProvider";
 
 function Sidebar() {
@@ -166,34 +167,23 @@ function Sidebar() {
               colors={colors}
             />
             <SidebarItem 
+              icon={<MdAutoFixHigh className={colors.icon} />} 
+              label="Image-to-Image" 
+              isCollapsed={isCollapsed && !isMobileMenuOpen} 
+              isActive={location.pathname === "/image-to-image"}
+              onClick={() => {
+                navigate("/image-to-image");
+                if (isMobileView) toggleMobileMenu();
+              }}
+              colors={colors}
+            />
+            <SidebarItem 
               icon={<FaShoppingCart className={colors.icon} />} 
               label="Products" 
               isCollapsed={isCollapsed && !isMobileMenuOpen} 
               isActive={location.pathname === "/products"}
               onClick={() => {
                 navigate("/products");
-                if (isMobileView) toggleMobileMenu();
-              }}
-              colors={colors}
-            />
-            <SidebarItem 
-              icon={<FaChartPie className={colors.icon} />} 
-              label="Analytics" 
-              isCollapsed={isCollapsed && !isMobileMenuOpen} 
-              isActive={location.pathname === "/analytics"}
-              onClick={() => {
-                navigate("/analytics");
-                if (isMobileView) toggleMobileMenu();
-              }}
-              colors={colors}
-            />
-            <SidebarItem 
-              icon={<FaTruck className={colors.icon} />} 
-              label="Production" 
-              isCollapsed={isCollapsed && !isMobileMenuOpen} 
-              isActive={location.pathname === "/production"}
-              onClick={() => {
-                navigate("/production");
                 if (isMobileView) toggleMobileMenu();
               }}
               colors={colors}

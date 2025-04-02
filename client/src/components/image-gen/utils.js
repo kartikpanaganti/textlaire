@@ -1,11 +1,11 @@
 // Utility functions for the image generator
 
 /**
- * Generates a random seed for stable diffusion image generation
- * Returns a random integer between 1 and 1,000,000,000
+ * Generate a random seed for image generation
+ * @returns {Number} Random integer between 0 and 2147483647
  */
 export const randomSeed = () => {
-  return Math.floor(Math.random() * 1000000000) + 1;
+  return Math.floor(Math.random() * 2147483647);
 };
 
 /**
@@ -74,35 +74,129 @@ export const generateFileName = (prefix = 'image', extension = 'png') => {
 };
 
 /**
- * Apply image filters based on filter values
+ * Convert a file to base64 data URL
+ * @param {File} file - File object to convert
+ * @returns {Promise<string>} Base64 data URL
  */
-export const applyImageFilters = (canvas, filters) => {
+export const fileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = error => reject(error);
+  });
+};
+
+/**
+ * Get file extension from file object
+ * @param {File} file - File object
+ * @returns {string} File extension
+ */
+export const getFileExtension = (file) => {
+  return file.name.split('.').pop().toLowerCase();
+};
+
+/**
+ * Check if file is an image
+ * @param {File} file - File object to check
+ * @returns {boolean} True if file is an image
+ */
+export const isImageFile = (file) => {
+  const validExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+  const extension = getFileExtension(file);
+  return validExtensions.includes(extension);
+};
+
+/**
+ * Format bytes to human-readable string
+ * @param {number} bytes - Bytes to format
+ * @param {number} decimals - Decimal places
+ * @returns {string} Formatted string
+ */
+export const formatBytes = (bytes, decimals = 2) => {
+  if (bytes === 0) return '0 Bytes';
+  
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+};
+
+/**
+ * Apply image filters to a canvas
+ * @param {HTMLCanvasElement} canvas - Canvas element
+ * @param {Object} filters - Filter settings
+ * @returns {HTMLCanvasElement} Canvas with filters applied
+ */
+export const applyFiltersToCanvas = (canvas, filters) => {
   const ctx = canvas.getContext('2d');
   
-  // Reset filters
-  ctx.filter = 'none';
-  
-  // Apply new filters if provided
-  if (filters) {
-    const { brightness, contrast, saturation } = filters;
-    const filterString = [];
+  // Apply brightness
+  if (filters.brightness !== 100) {
+    const brightnessFilter = `brightness(${filters.brightness}%)`;
+    ctx.filter = brightnessFilter;
     
-    if (brightness !== undefined && brightness !== 100) {
-      filterString.push(`brightness(${brightness}%)`);
-    }
+    // Draw the image onto itself with the filter applied
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCtx.drawImage(canvas, 0, 0);
     
-    if (contrast !== undefined && contrast !== 100) {
-      filterString.push(`contrast(${contrast}%)`);
-    }
-    
-    if (saturation !== undefined && saturation !== 100) {
-      filterString.push(`saturate(${saturation}%)`);
-    }
-    
-    if (filterString.length > 0) {
-      ctx.filter = filterString.join(' ');
-    }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(tempCanvas, 0, 0);
   }
   
-  return ctx;
+  // Apply contrast
+  if (filters.contrast !== 100) {
+    const contrastFilter = `contrast(${filters.contrast}%)`;
+    ctx.filter = contrastFilter;
+    
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCtx.drawImage(canvas, 0, 0);
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(tempCanvas, 0, 0);
+  }
+  
+  // Apply saturation
+  if (filters.saturation !== 100) {
+    const saturationFilter = `saturate(${filters.saturation}%)`;
+    ctx.filter = saturationFilter;
+    
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCtx.drawImage(canvas, 0, 0);
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(tempCanvas, 0, 0);
+  }
+  
+  // Reset filter
+  ctx.filter = 'none';
+  
+  return canvas;
+};
+
+/**
+ * Convert canvas to blob
+ * @param {HTMLCanvasElement} canvas - Canvas element
+ * @param {string} type - MIME type
+ * @param {number} quality - Image quality (0-1)
+ * @returns {Promise<Blob>} Image blob
+ */
+export const canvasToBlob = (canvas, type = 'image/jpeg', quality = 0.9) => {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      resolve(blob);
+    }, type, quality);
+  });
 }; 
