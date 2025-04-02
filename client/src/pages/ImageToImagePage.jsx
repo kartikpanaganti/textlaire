@@ -93,7 +93,7 @@ function ImageToImagePage() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [activeTab, setActiveTab] = useState(0);
   const [selectedImage, setSelectedImage] = useState(null);
-  const [imageStrength, setImageStrength] = useState(0.7); // How much to preserve the original image
+  const [imageStrength, setImageStrength] = useState(0.85); // Increased from 0.7 for more transformation
   const [errorMessage, setErrorMessage] = useState("");
 
   // Reference to track loading interval
@@ -191,13 +191,15 @@ function ImageToImagePage() {
       
       // Direct API call to fal.ai - bypassing the server proxy
       try {
-        // Use fal.ai client directly
+        // Use fal.ai client directly with improved accuracy settings
         const result = await fal.subscribe("fal-ai/fast-lightning-sdxl/image-to-image", {
           input: {
             image_url: base64Data,
             prompt: prompt,
             seed: parseInt(seed, 10),
-            strength: parseFloat(imageStrength)
+            strength: parseFloat(imageStrength),
+            num_inference_steps: 8, // Increase from default 4 to 8 for higher accuracy
+            guidance_scale: 7.5, // Add guidance scale for better prompt adherence
           },
           logs: true,
           onQueueUpdate: (update) => {
@@ -631,9 +633,10 @@ function ImageToImagePage() {
                             rows={3}
                             variant="outlined"
                             label="Prompt"
-                            placeholder="Describe what you want the AI to create from your image..."
+                            placeholder="Be specific and detailed. Example: 'Convert the pink roses to vibrant yellow roses with dewdrops, morning sunlight, professional photography, high detail'"
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
+                            helperText="More detailed prompts lead to more accurate results. Include colors, styles, lighting, and details you want to see."
                           />
                         </Grid>
 
@@ -645,15 +648,18 @@ function ImageToImagePage() {
                             aria-labelledby="strength-slider"
                             value={imageStrength}
                             onChange={(_, value) => setImageStrength(value)}
-                            min={0.1}
-                            max={0.9}
+                            min={0.25}
+                            max={0.95}
                             step={0.05}
                             marks={[
-                              { value: 0.1, label: 'Subtle' },
-                              { value: 0.5, label: 'Balanced' },
-                              { value: 0.9, label: 'Creative' }
+                              { value: 0.25, label: 'Subtle' },
+                              { value: 0.6, label: 'Balanced' },
+                              { value: 0.95, label: 'Complete' }
                             ]}
                           />
+                          <Typography variant="caption" color="text.secondary">
+                            Higher values produce more accurate transformations based on your prompt
+                          </Typography>
                         </Grid>
 
                         <Grid item xs={12} sm={6}>
