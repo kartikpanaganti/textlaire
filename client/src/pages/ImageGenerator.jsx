@@ -13,6 +13,8 @@ import {
   deletePattern as deletePatternFromServer
 } from '../lib/api';
 
+import ImageToImagePage from './ImageToImagePage';
+
 // Import components
 import DesignControls from '../components/image-gen/DesignControls';
 import ProductDetails from '../components/image-gen/ProductDetails';
@@ -88,6 +90,7 @@ function ImageGenerator() {
   
   const timer = useRef(null);
   const [activeTab, setActiveTab] = useState('generate');
+  const [generationMode, setGenerationMode] = useState('text-to-image');
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
@@ -623,6 +626,120 @@ function ImageGenerator() {
     updateProduct
   };
 
+  // Create an adapted wrapper for ImageToImagePage
+  const AdaptedImageToImagePage = () => {
+    const viewport = useViewportSize();
+    const [mobileModeActive, setMobileModeActive] = useState(viewport.isMobile);
+    const [mobileScrollPos, setMobileScrollPos] = useState(0);
+    const containerRef = useRef(null);
+
+    // Track mobile scroll position
+    const handleScroll = () => {
+      if (containerRef.current && mobileModeActive) {
+        setMobileScrollPos(containerRef.current.scrollTop);
+      }
+    };
+
+    // Add effect to measure and adjust content height
+    useEffect(() => {
+      setMobileModeActive(viewport.isMobile);
+      
+      // Add scroll listener for mobile adaptive UI
+      const currentRef = containerRef.current;
+      if (currentRef && mobileModeActive) {
+        currentRef.addEventListener('scroll', handleScroll);
+        return () => currentRef.removeEventListener('scroll', handleScroll);
+      }
+    }, [viewport, mobileModeActive]);
+
+    // Force rerender on generation mode changes
+    useEffect(() => {
+      // This effect runs when generationMode changes to ensure proper rendering
+      if (containerRef.current) {
+        containerRef.current.scrollTop = 0;
+      }
+    }, [generationMode]);
+
+    // Add sticky header class based on scroll position
+    const headerClass = mobileModeActive && mobileScrollPos > 50 
+      ? "p-2 flex justify-between items-center border-b border-[#2A2F38] bg-[#1A1D24]/90 backdrop-blur-sm sticky top-0 z-10 shadow-md"
+      : "p-3 flex justify-between items-center border-b border-[#2A2F38] bg-[#1A1D24] sticky top-0 z-10";
+
+    // Function to toggle between modes
+    const resetView = () => {
+      if (containerRef.current) {
+        containerRef.current.scrollTop = 0;
+      }
+      // Toggle to force rerender with clean state
+      setGenerationMode('text-to-image');
+      setTimeout(() => setGenerationMode('image-to-image'), 10);
+    };
+
+    return (
+      <div className="h-full bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50 overflow-hidden flex flex-col">
+        <div className={headerClass}>
+          <h2 className={`${viewport.isMobile ? 'text-sm' : 'text-lg'} font-semibold text-white flex items-center`}>
+            <span className="mr-2">🖼️</span> Image to Image Transformation
+          </h2>
+          
+          <div className="flex items-center gap-2">
+            {viewport.isMobile && (
+              <span className="text-xs text-gray-400">
+                Scroll for options
+              </span>
+            )}
+            <button 
+              onClick={resetView} 
+              className="text-xs px-2 py-1 bg-blue-600/20 text-blue-400 rounded-md hover:bg-blue-600/30"
+            >
+              Reset View
+            </button>
+          </div>
+        </div>
+        
+        {/* Frame for ImageToImagePage component */}
+        <div 
+          ref={containerRef}
+          className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-[#2A2F38] scrollbar-track-transparent" 
+          onScroll={handleScroll}
+        >
+          {mobileModeActive ? (
+            // Mobile-optimized version with padding adjustments for better fit
+            <div className="px-0 pb-16">
+              {/* Force the MUI container to be fullwidth in mobile */}
+              <style jsx global>{`
+                .MuiContainer-root {
+                  padding-left: 4px !important;
+                  padding-right: 4px !important;
+                  max-width: 100% !important;
+                }
+                
+                /* Adjust slider styles for better mobile experience */
+                .MuiSlider-root {
+                  margin-left: 8px !important;
+                  margin-right: 8px !important;
+                  width: calc(100% - 16px) !important;
+                }
+                
+                /* Adjust card padding in mobile */
+                .MuiCard-root, .MuiPaper-root {
+                  padding-left: 8px !important;
+                  padding-right: 8px !important;
+                }
+              `}</style>
+              <ImageToImagePage />
+            </div>
+          ) : (
+            // Desktop version with adaptive container
+            <div className="pb-16">
+              <ImageToImagePage />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <motion.div 
       className="relative h-full flex flex-col bg-[#0F1115]"
@@ -652,6 +769,34 @@ function ImageGenerator() {
           </div>
 
           <div className="flex gap-2">
+            {/* Generation Mode Switching */}
+            <div className="bg-[#1A1D24] p-1 rounded-full shadow-inner flex">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setGenerationMode('text-to-image')}
+                className={`px-4 py-1.5 rounded-full transition-all text-xs font-medium ${
+                  generationMode === 'text-to-image' 
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg' 
+                    : 'bg-transparent text-gray-400 hover:text-white'
+                }`}
+              >
+                Text to Image
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setGenerationMode('image-to-image')}
+                className={`px-4 py-1.5 rounded-full transition-all text-xs font-medium ${
+                  generationMode === 'image-to-image' 
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg' 
+                    : 'bg-transparent text-gray-400 hover:text-white'
+                }`}
+              >
+                Image to Image
+              </motion.button>
+            </div>
+
             {/* Tab Switching - Modern Pill Style */}
             <div className="bg-[#1A1D24] p-1 rounded-full shadow-inner flex">
               <motion.button
@@ -694,137 +839,144 @@ function ImageGenerator() {
               exit={{ opacity: 0 }}
               className="h-full mx-auto max-w-[1400px] p-2"
             >
-              {viewport.isMobile ? (
-                // Mobile Layout - Swipeable Panels
-                <div className="h-full flex flex-col">
-                  {/* Mobile Panel Navigation */}
-                  <div className="bg-[#1A1D24] p-1.5 rounded-lg mb-2 flex justify-between items-center shadow-md">
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => setActiveMobilePanel('preview')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                          activeMobilePanel === 'preview' 
-                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' 
-                            : 'bg-[#232830] text-gray-400'
-                        }`}
-                      >
-                       IMG Preview
-                      </button>
-                      <button
-                        onClick={() => setActiveMobilePanel('controls')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                          activeMobilePanel === 'controls' 
-                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' 
-                            : 'bg-[#232830] text-gray-400'
-                        }`}
-                      >
-                        Design Controls
-                      </button>
-                      <button
-                        onClick={() => setActiveMobilePanel('details')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                          activeMobilePanel === 'details' 
-                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' 
-                            : 'bg-[#232830] text-gray-400'
-                        }`}
-                      >
-                        Product Details
-                      </button>
-                    </div>
-                    {activeMobilePanel === 'preview' && !isLoading && image && (
+              {generationMode === 'text-to-image' ? (
+                viewport.isMobile ? (
+                  // Mobile Layout - Swipeable Panels
+                  <div className="h-full flex flex-col">
+                    {/* Mobile Panel Navigation */}
+                    <div className="bg-[#1A1D24] p-1.5 rounded-lg mb-2 flex justify-between items-center shadow-md">
                       <div className="flex gap-1">
-                        <motion.button
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={generateImage}
-                          className="p-1.5 rounded-md bg-blue-600 text-white text-xs shadow-md"
+                        <button
+                          onClick={() => setActiveMobilePanel('preview')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            activeMobilePanel === 'preview' 
+                              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' 
+                              : 'bg-[#232830] text-gray-400'
+                          }`}
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                        </motion.button>
-                        <motion.button
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={saveImage}
-                          className="p-1.5 rounded-md bg-green-600 text-white text-xs shadow-md"
+                         IMG Preview
+                        </button>
+                        <button
+                          onClick={() => setActiveMobilePanel('controls')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            activeMobilePanel === 'controls' 
+                              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' 
+                              : 'bg-[#232830] text-gray-400'
+                          }`}
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                          </svg>
-                        </motion.button>
+                          Design Controls
+                        </button>
+                        <button
+                          onClick={() => setActiveMobilePanel('details')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            activeMobilePanel === 'details' 
+                              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' 
+                              : 'bg-[#232830] text-gray-400'
+                          }`}
+                        >
+                          Product Details
+                        </button>
                       </div>
-                    )}
+                      {activeMobilePanel === 'preview' && !isLoading && image && (
+                        <div className="flex gap-1">
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={generateImage}
+                            className="p-1.5 rounded-md bg-blue-600 text-white text-xs shadow-md"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          </motion.button>
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={saveImage}
+                            className="p-1.5 rounded-md bg-green-600 text-white text-xs shadow-md"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                            </svg>
+                          </motion.button>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Mobile Panels Content */}
+                    <div className="flex-1 overflow-hidden">
+                      <AnimatePresence mode="wait">
+                        {activeMobilePanel === 'preview' && (
+                          <motion.div
+                            key="preview"
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 10 }}
+                            className="h-full overflow-y-auto pb-24"
+                          >
+                            <PatternPreview {...patternPreviewProps} />
+                          </motion.div>
+                        )}
+                        
+                        {activeMobilePanel === 'controls' && (
+                          <motion.div
+                            key="controls"
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 10 }}
+                            className="h-full overflow-y-auto"
+                          >
+                            <DesignControls {...designControlsProps} />
+                          </motion.div>
+                        )}
+                        
+                        {activeMobilePanel === 'details' && (
+                          <motion.div
+                            key="details"
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 10 }}
+                            className="h-full overflow-y-auto"
+                          >
+                            <ProductDetails {...productDetailsProps} />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
-                  
-                  {/* Mobile Panels Content */}
-                  <div className="flex-1 overflow-hidden">
-                    <AnimatePresence mode="wait">
-                      {activeMobilePanel === 'preview' && (
-                        <motion.div
-                          key="preview"
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: 10 }}
-                          className="h-full overflow-y-auto pb-24"
-                        >
-                          <PatternPreview {...patternPreviewProps} />
-                        </motion.div>
-                      )}
-                      
-                      {activeMobilePanel === 'controls' && (
-                        <motion.div
-                          key="controls"
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: 10 }}
-                          className="h-full overflow-y-auto"
-                        >
-                          <DesignControls {...designControlsProps} />
-                        </motion.div>
-                      )}
-                      
-                      {activeMobilePanel === 'details' && (
-                        <motion.div
-                          key="details"
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: 10 }}
-                          className="h-full overflow-y-auto"
-                        >
-                          <ProductDetails {...productDetailsProps} />
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                ) : viewport.isTablet ? (
+                  // Tablet Layout - Two Column
+                  <div className="h-full grid grid-cols-5 gap-3">
+                    <div className="col-span-2 grid grid-rows-2 gap-3 h-full">
+                      <div className="overflow-y-auto bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50">
+                        <DesignControls {...designControlsProps} />
+                      </div>
+                      <div className="overflow-y-auto bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50">
+                        <ProductDetails {...productDetailsProps} />
+                      </div>
+                    </div>
+                    <div className="col-span-3 h-full bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50 overflow-hidden">
+                      <PatternPreview {...patternPreviewProps} />
+                    </div>
                   </div>
-                </div>
-              ) : viewport.isTablet ? (
-                // Tablet Layout - Two Column
-                <div className="h-full grid grid-cols-5 gap-3">
-                  <div className="col-span-2 grid grid-rows-2 gap-3 h-full">
-                    <div className="overflow-y-auto bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50">
+                ) : (
+                  // Desktop Layout - Three Column
+                  <div className="h-full grid grid-cols-12 gap-3">
+                    <div className="col-span-3 h-full bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50 overflow-y-auto">
                       <DesignControls {...designControlsProps} />
                     </div>
-                    <div className="overflow-y-auto bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50">
+                    <div className="col-span-6 h-full bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50 overflow-hidden">
+                      <PatternPreview {...patternPreviewProps} />
+                    </div>
+                    <div className="col-span-3 h-full bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50 overflow-y-auto">
                       <ProductDetails {...productDetailsProps} />
                     </div>
                   </div>
-                  <div className="col-span-3 h-full bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50 overflow-hidden">
-                    <PatternPreview {...patternPreviewProps} />
-                  </div>
-                </div>
+                )
               ) : (
-                // Desktop Layout - Three Column
-                <div className="h-full grid grid-cols-12 gap-3">
-                  <div className="col-span-3 h-full bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50 overflow-y-auto">
-                    <DesignControls {...designControlsProps} />
-                  </div>
-                  <div className="col-span-6 h-full bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50 overflow-hidden">
-                    <PatternPreview {...patternPreviewProps} />
-                  </div>
-                  <div className="col-span-3 h-full bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50 overflow-y-auto">
-                    <ProductDetails {...productDetailsProps} />
-                  </div>
+                // Image to Image Mode
+                <div className="h-full overflow-hidden">
+                  <AdaptedImageToImagePage />
                 </div>
               )}
             </motion.div>

@@ -8,7 +8,6 @@ import EmployeePage from "./pages/EmployeePage";
 import { ThemeContext } from "./context/ThemeProvider"; // Theme Context
 import { UserContext } from "./context/UserProvider"; // User Context
 import AttendancePage from "./pages/AttendancePage";
-import PayrollPage from "./pages/PayrollPage";
 import ImageGeneration from "./pages/ImageGenerator";
 import ImageToImagePage from "./pages/ImageToImagePage";
 import RawMaterialsInventory from "./pages/RawMaterialsInventory";
@@ -29,7 +28,6 @@ function App() {
         <Route path="/image-generation" element={<ProtectedRoute component={<ImageGeneration/>} noContainer={true} />} />
         <Route path="/image-to-image" element={<ProtectedRoute component={<ImageToImagePage/>} noContainer={true} />} />
         <Route path="/products" element={<ProtectedRoute component={<ProductsPage />} />} />
-        <Route path="/payroll" element={<ProtectedRoute component={<PayrollPage />} />} />
 
         {/* profile and settings pages */}
         <Route path="/profile" element={<ProtectedRoute component={<ProfilePage />} />} />
