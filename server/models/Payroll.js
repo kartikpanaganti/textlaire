@@ -1,9 +1,9 @@
 import mongoose from "mongoose";
 
-const PayrollSchema = new mongoose.Schema({
+const payrollSchema = new mongoose.Schema({
   employeeId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Employee",
+    ref: 'Employee',
     required: true
   },
   month: {
@@ -14,135 +14,208 @@ const PayrollSchema = new mongoose.Schema({
   },
   year: {
     type: Number,
-    required: true
+    required: true,
+    min: 2020,
+    max: 2100
   },
-  baseSalary: {
-    type: Number,
-    required: true
-  },
-  daysWorked: {
-    type: Number,
-    default: 0
-  },
-  totalWorkingDays: {
-    type: Number,
-    default: 0
-  },
-  overtimeHours: {
-    type: Number,
-    default: 0
-  },
-  overtimeAmount: {
-    type: Number,
-    default: 0
-  },
-  deductions: {
-    tax: {
-      type: Number,
-      default: 0
-    },
-    leave: {
-      type: Number,
-      default: 0
-    },
-    insurance: {
-      type: Number,
-      default: 0
-    },
-    providentFund: {
-      type: Number,
-      default: 0
-    },
-    other: {
-      type: Number,
-      default: 0
-    },
-    description: {
-      type: String
+  // Basic details (from Employee model)
+  employeeDetails: {
+    name: { type: String },
+    employeeID: { type: String },
+    department: { type: String },
+    position: { type: String },
+    joiningDate: { type: Date },
+    bankDetails: {
+      bankName: { type: String },
+      accountNumber: { type: String },
+      accountHolderName: { type: String },
+      ifscCode: { type: String }
     }
+  },
+  // Attendance details
+  attendanceSummary: {
+    present: { type: Number, default: 0 },
+    absent: { type: Number, default: 0 },
+    late: { type: Number, default: 0 },
+    onLeave: { type: Number, default: 0 },
+    workingDays: { type: Number, default: 0 },
+    totalWorkingDays: { type: Number, default: 0 }
+  },
+  // Salary components
+  basicSalary: {
+    type: Number,
+    required: true
   },
   allowances: {
-    housing: {
-      type: Number,
-      default: 0
-    },
-    medical: {
-      type: Number,
-      default: 0
-    },
-    transport: {
-      type: Number,
-      default: 0
-    },
-    bonus: {
-      type: Number,
-      default: 0
-    },
-    other: {
-      type: Number,
-      default: 0
-    },
-    description: {
-      type: String
-    }
+    houseRent: { type: Number, default: 0 },
+    medical: { type: Number, default: 0 },
+    travel: { type: Number, default: 0 },
+    food: { type: Number, default: 0 },
+    special: { type: Number, default: 0 },
+    other: { type: Number, default: 0 }
   },
-  grossSalary: {
-    type: Number,
-    default: 0
+  deductions: {
+    professionalTax: { type: Number, default: 0 },
+    incomeTax: { type: Number, default: 0 },
+    providentFund: { type: Number, default: 0 },
+    healthInsurance: { type: Number, default: 0 },
+    loanRepayment: { type: Number, default: 0 },
+    absentDeduction: { type: Number, default: 0 },
+    lateDeduction: { type: Number, default: 0 },
+    other: { type: Number, default: 0 }
   },
-  netSalary: {
-    type: Number,
-    default: 0
+  overtime: {
+    hours: { type: Number, default: 0 },
+    rate: { type: Number, default: 0 },
+    amount: { type: Number, default: 0 }
   },
+  bonus: { type: Number, default: 0 },
+  // New: Detailed bonus information
+  bonusDetails: {
+    performanceBonus: { type: Number, default: 0 },
+    festivalBonus: { type: Number, default: 0 },
+    incentives: { type: Number, default: 0 },
+    commission: { type: Number, default: 0 },
+    oneTimeBonus: { type: Number, default: 0 },
+    description: { type: String, default: '' }
+  },
+  // New: Enhanced tax calculation details
+  taxDetails: {
+    taxableIncome: { type: Number, default: 0 },
+    taxBrackets: [{
+      bracketStart: { type: Number },
+      bracketEnd: { type: Number },
+      taxRate: { type: Number },
+      taxAmount: { type: Number }
+    }],
+    taxDeductions: {
+      section80C: { type: Number, default: 0 },
+      section80D: { type: Number, default: 0 },
+      housingLoanInterest: { type: Number, default: 0 },
+      educationLoanInterest: { type: Number, default: 0 },
+      other: { type: Number, default: 0 }
+    },
+    finalTaxAmount: { type: Number, default: 0 }
+  },
+  leaveDeduction: { type: Number, default: 0 },
+  grossSalary: { type: Number, default: 0 },
+  totalDeductions: { type: Number, default: 0 },
+  netSalary: { type: Number, default: 0 },
   paymentStatus: {
     type: String,
-    enum: ["Pending", "Paid", "Cancelled"],
-    default: "Pending"
+    enum: ['Pending', 'Processing', 'Paid', 'Failed'],
+    default: 'Pending'
+  },
+  paymentMethod: {
+    type: String,
+    enum: ['Bank Transfer', 'Cash', 'Check', 'Other'],
+    default: 'Bank Transfer'
   },
   paymentDate: {
     type: Date
   },
-  paymentMethod: {
-    type: String,
-    enum: ["Bank Transfer", "Cash", "Check", "Other"],
-    default: "Bank Transfer"
+  remarks: { type: String },
+  attendanceRecords: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Attendance'
+  }],
+  isAutoGenerated: {
+    type: Boolean,
+    default: true
   },
-  transactionId: {
-    type: String
-  },
-  remarks: {
-    type: String
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
+  lastCalculated: {
     type: Date,
     default: Date.now
   }
+}, {
+  timestamps: true
 });
 
-// Compound index for month, year, and employeeId to ensure uniqueness
-PayrollSchema.index({ month: 1, year: 1, employeeId: 1 }, { unique: true });
+// Helper function to format amount to 2 decimal places
+const formatToDecimal = (amount) => {
+  return Math.round(amount * 100) / 100;
+};
 
-// Update the updatedAt timestamp before saving
-PayrollSchema.pre("save", function(next) {
-  this.updatedAt = Date.now();
+// Pre-save middleware to calculate totals
+payrollSchema.pre('save', function(next) {
+  // Format all monetary values in allowances to 2 decimal places
+  Object.keys(this.allowances).forEach(key => {
+    this.allowances[key] = formatToDecimal(this.allowances[key] || 0);
+  });
+  
+  // Format all monetary values in deductions to 2 decimal places
+  Object.keys(this.deductions).forEach(key => {
+    this.deductions[key] = formatToDecimal(this.deductions[key] || 0);
+  });
+
+  // Calculate and format bonus details
+  if (this.bonusDetails) {
+    Object.keys(this.bonusDetails).forEach(key => {
+      if (key !== 'description') {
+        this.bonusDetails[key] = formatToDecimal(this.bonusDetails[key] || 0);
+      }
+    });
+
+    // Update total bonus from bonus details
+    const totalBonus = formatToDecimal(
+      (this.bonusDetails.performanceBonus || 0) +
+      (this.bonusDetails.festivalBonus || 0) +
+      (this.bonusDetails.incentives || 0) +
+      (this.bonusDetails.commission || 0) +
+      (this.bonusDetails.oneTimeBonus || 0)
+    );
+    this.bonus = totalBonus;
+  }
+  
+  // Calculate total allowances
+  const allowanceTotal = formatToDecimal(
+    Object.values(this.allowances).reduce((sum, val) => sum + (val || 0), 0)
+  );
+  
+  // Calculate total deductions
+  const deductionTotal = formatToDecimal(
+    Object.values(this.deductions).reduce((sum, val) => sum + (val || 0), 0)
+  );
+  
+  // Calculate and format overtime
+  this.overtime.rate = formatToDecimal(this.overtime.rate || 0);
+  this.overtime.amount = formatToDecimal((this.overtime.hours || 0) * (this.overtime.rate || 0));
+  
+  // Format other monetary fields
+  this.basicSalary = formatToDecimal(this.basicSalary || 0);
+  this.bonus = formatToDecimal(this.bonus || 0);
+  this.leaveDeduction = formatToDecimal(this.leaveDeduction || 0);
   
   // Calculate gross salary
-  this.grossSalary = this.baseSalary + this.overtimeAmount + 
-    this.allowances.housing + this.allowances.medical + 
-    this.allowances.transport + this.allowances.bonus + 
-    this.allowances.other;
+  this.grossSalary = formatToDecimal(
+    this.basicSalary + allowanceTotal + this.bonus + this.overtime.amount
+  );
+  
+  // Calculate total deductions
+  this.totalDeductions = formatToDecimal(deductionTotal + this.leaveDeduction);
   
   // Calculate net salary
-  this.netSalary = this.grossSalary - 
-    (this.deductions.tax + this.deductions.leave + 
-     this.deductions.insurance + this.deductions.providentFund + 
-     this.deductions.other);
-     
+  this.netSalary = formatToDecimal(this.grossSalary - this.totalDeductions);
+
+  // Update tax details if present
+  if (this.taxDetails) {
+    this.taxDetails.finalTaxAmount = formatToDecimal(this.taxDetails.finalTaxAmount || 0);
+    this.taxDetails.taxableIncome = formatToDecimal(this.taxDetails.taxableIncome || 0);
+    
+    // Make sure tax deductions on both are in sync
+    if (this.taxDetails.finalTaxAmount) {
+      this.deductions.incomeTax = this.taxDetails.finalTaxAmount;
+    }
+  }
+  
   next();
 });
 
-export default mongoose.model("Payroll", PayrollSchema); 
+// Compound index for faster queries
+payrollSchema.index({ employeeId: 1, month: 1, year: 1 }, { unique: true });
+payrollSchema.index({ paymentStatus: 1 });
+payrollSchema.index({ month: 1, year: 1 });
+
+const Payroll = mongoose.model("Payroll", payrollSchema);
+
+export default Payroll;

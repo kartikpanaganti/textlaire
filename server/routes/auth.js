@@ -1,31 +1,30 @@
 import express from "express";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
+import { 
+  register, 
+  login, 
+  logout, 
+  getCurrentUser, 
+  getActiveSessions, 
+  forceLogout, 
+  getSessionHistory,
+  getUserActivityStats
+} from "../controllers/authController.js";
+import { authMiddleware, adminMiddleware } from "../middleware/authMiddleware.js";
 
-dotenv.config();
 const router = express.Router();
 
-const users = []; // Temporary in-memory user store
+// Public routes
+router.post("/register", register);
+router.post("/login", login);
 
-// Register
-router.post("/register", async (req, res) => {
-  const { email, password } = req.body;
-  const hashedPassword = await bcrypt.hash(password, 10);
-  users.push({ email, password: hashedPassword });
-  res.json({ message: "User registered" });
-});
+// Protected routes
+router.get("/me", authMiddleware, getCurrentUser);
+router.post("/logout", authMiddleware, logout);
 
-// Login
-router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-  const user = users.find((u) => u.email === email);
-  if (!user) return res.status(400).json({ message: "User not found" });
+// Admin routes
+router.get("/sessions/active", authMiddleware, adminMiddleware, getActiveSessions);
+router.get("/sessions/history", authMiddleware, adminMiddleware, getSessionHistory);
+router.post("/sessions/:sessionId/logout", authMiddleware, adminMiddleware, forceLogout);
+router.get("/stats/activity", authMiddleware, adminMiddleware, getUserActivityStats);
 
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
-
-  const token = jwt.sign({ email }, process.env.JWT_SECRET, { expiresIn: "1h" });
-  res.json({ token });
-});
 export default router;

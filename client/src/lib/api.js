@@ -179,10 +179,44 @@ export const getImageResultById = async (id) => {
 // Delete a generated image
 export const deleteGeneratedImage = async (id) => {
   try {
-    const response = await api.delete(`/api/image-generation/${id}`);
+    const response = await api.delete(`/api/images/${id}`);
     return response.data;
   } catch (error) {
-    console.error('Error deleting generated image:', error);
+    console.error(`Error deleting image with ID ${id}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Save a generated design as a product in inventory
+ * @param {Object} productData - Product data including image, name, description, etc.
+ * @returns {Promise<Object>} - Saved product details
+ */
+export const saveProductToInventory = async (productData) => {
+  try {
+    const formData = new FormData();
+    
+    // Add all data fields to the form
+    Object.entries(productData).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        if (key === 'image' && typeof value === 'object') {
+          // If it's an image file or blob
+          formData.append('image', value);
+        } else {
+          formData.append(key, typeof value === 'object' ? JSON.stringify(value) : value);
+        }
+      }
+    });
+    
+    const response = await api.post('/api/products', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error saving product to inventory:', error);
     throw error;
   }
 };

@@ -105,6 +105,22 @@ const AttendancePage = () => {
   const handleSubmit = async (formData) => {
     setTempFormData(formData);
 
+    // Validate required fields
+    if (!formData.employeeId) {
+      toast.error("Employee is required");
+      return;
+    }
+
+    if (!formData.date) {
+      toast.error("Date is required");
+      return;
+    }
+
+    if (!formData.status) {
+      toast.error("Status is required");
+      return;
+    }
+
     try {
       const attendanceData = {
         employeeId: formData.employeeId,
@@ -112,11 +128,11 @@ const AttendancePage = () => {
         checkIn: formData.checkIn,
         checkOut: formData.checkOut || "",
         date: formData.date,
-        shift: formData.shift,
-        breakTime: formData.breakTime,
-        workFromHome: formData.workFromHome,
-        notes: formData.notes,
-        location: formData.location
+        shift: formData.shift || "Day",
+        breakTime: formData.breakTime || "",
+        workFromHome: formData.workFromHome || false,
+        notes: formData.notes || "",
+        location: formData.location || {}
       };
 
       let response;
@@ -133,15 +149,31 @@ const AttendancePage = () => {
       setEditRecord(null);
       setTempFormData(null);
     } catch (error) {
+      console.error('Error saving attendance:', error);
+      
       if (error.response?.status === 400) {
-        const employee = employees.find(emp => emp._id === tempFormData.employeeId);
-        setDuplicateEmployee(employee);
-        setDuplicateDate(tempFormData.date);
-        setShowDuplicateModal(true);
-        setShowModal(false);
-        return;
+        // Check if it's a duplicate entry error
+        if (error.response?.data?.error?.includes('duplicate key') || 
+            error.response?.data?.error?.includes('already has an attendance')) {
+          // Find employee safely
+          const employee = tempFormData?.employeeId ? 
+            employees.find(emp => emp._id === tempFormData.employeeId) : null;
+          
+          if (employee) {
+            setDuplicateEmployee(employee);
+            setDuplicateDate(tempFormData.date);
+            setShowDuplicateModal(true);
+            setShowModal(false);
+            return;
+          }
+        }
+        
+        // Handle other 400 errors
+        const errorMessage = error.response?.data?.error || "Invalid data submitted";
+        toast.error(errorMessage);
+      } else {
+        toast.error("Failed to save attendance: " + (error.message || "Unknown error"));
       }
-      toast.error("Failed to save attendance");
     }
   };
 

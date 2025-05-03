@@ -14,6 +14,9 @@ import RawMaterialsInventory from "./pages/RawMaterialsInventory";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
 import ProductsPage from "./pages/ProductsPage";
+import UserManagementPage from "./pages/UserManagementPage";
+import UserActivityPage from "./pages/UserActivityPage";
+import PayrollManagementPage from "./pages/PayrollManagementPage";
 
 function App() {
   return (
@@ -28,6 +31,9 @@ function App() {
         <Route path="/image-generation" element={<ProtectedRoute component={<ImageGeneration/>} noContainer={true} />} />
         <Route path="/image-to-image" element={<ProtectedRoute component={<ImageToImagePage/>} noContainer={true} />} />
         <Route path="/products" element={<ProtectedRoute component={<ProductsPage />} />} />
+        <Route path="/user-management" element={<ProtectedRoute component={<UserManagementPage />} />} />
+        <Route path="/user-activity" element={<ProtectedRoute component={<UserActivityPage />} />} />
+        <Route path="/payroll" element={<ProtectedRoute component={<PayrollManagementPage />} />} />
 
         {/* profile and settings pages */}
         <Route path="/profile" element={<ProtectedRoute component={<ProfilePage />} />} />

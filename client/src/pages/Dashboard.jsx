@@ -5,9 +5,13 @@ import { format } from 'date-fns';
 import { 
   FaCalendarAlt, FaUserCheck, FaChartBar, FaSpinner, 
   FaUsers, FaBoxes, FaMoneyBillWave, FaChartLine, FaTachometerAlt,
-  FaUsersCog, FaWarehouse, FaChartPie, FaTh, FaHistory
+  FaUsersCog, FaWarehouse, FaChartPie, FaTh, FaHistory, FaTshirt
 } from "react-icons/fa";
 import AttendanceAnalytics from "../components/dashboard/AttendanceAnalytics";
+import PayrollDashboard from "../components/dashboard/PayrollDashboard";
+import WorkforceDashboard from "../components/dashboard/WorkforceDashboard";
+import RawMaterialDashboard from "../components/dashboard/RawMaterialDashboard";
+import ProductDashboard from "../components/dashboard/ProductDashboard";
 import { toast } from "react-toastify";
 import apiClient from "../lib/api";
 
@@ -42,11 +46,8 @@ function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (localStorage.getItem("isAuthenticated") !== "true") {
-      navigate("/", { replace: true });
-    } else {
-      fetchAttendanceData();
-    }
+    // Remove the authentication check as it's now handled by the ProtectedRoute component
+    fetchAttendanceData();
   }, [selectedDate]);
 
   const fetchAttendanceData = async () => {
@@ -138,9 +139,10 @@ function Dashboard() {
   // Dashboard tabs
   const dashboardTabs = [
     { id: 'attendance', label: 'Attendance', icon: <FaUserCheck /> },
-    { id: 'workforce', label: 'Workforce', icon: <FaUsers />, comingSoon: true },
-    { id: 'inventory', label: 'Inventory', icon: <FaBoxes />, comingSoon: true },
-    { id: 'finance', label: 'Finance', icon: <FaMoneyBillWave />, comingSoon: true },
+    { id: 'workforce', label: 'Workforce', icon: <FaUsers /> },
+    { id: 'payroll', label: 'Payroll', icon: <FaMoneyBillWave /> },
+    { id: 'rawmaterials', label: 'Raw Materials', icon: <FaBoxes /> },
+    { id: 'products', label: 'Products', icon: <FaTshirt /> },
     { id: 'analytics', label: 'Analytics', icon: <FaChartLine />, comingSoon: true }
   ];
 
@@ -313,42 +315,44 @@ function Dashboard() {
               <h2 className="text-lg font-semibold flex items-center text-gray-800 dark:text-white mb-3">
                 <FaUsers className="mr-2 text-blue-500" /> Workforce Management
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1">
-                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-base font-semibold mb-2 text-gray-800 dark:text-white">Employee Distribution</h3>
-                  <div className="h-56 flex items-center justify-center">
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">Employee distribution chart will appear here</p>
-                  </div>
-                </div>
-                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-base font-semibold mb-2 text-gray-800 dark:text-white">Department Overview</h3>
-                  <div className="h-56 flex items-center justify-center">
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">Department overview chart will appear here</p>
-                  </div>
-                </div>
+              <div className="flex-1">
+                <WorkforceDashboard />
+              </div>
+            </div>
+          )}
+
+          {/* Payroll Tab */}
+          {activeTab === 'payroll' && (
+            <div className="flex flex-col h-full">
+              <h2 className="text-lg font-semibold flex items-center text-gray-800 dark:text-white mb-3">
+                <FaMoneyBillWave className="mr-2 text-blue-500" /> Payroll Management
+              </h2>
+              <div className="flex-1">
+                <PayrollDashboard />
               </div>
             </div>
           )}
 
           {/* Raw Material Inventory Tab */}
-          {activeTab === 'rawmaterialinventory' && (
+          {activeTab === 'rawmaterials' && (
             <div className="flex flex-col h-full">
               <h2 className="text-lg font-semibold flex items-center text-gray-800 dark:text-white mb-3">
                 <FaBoxes className="mr-2 text-blue-500" /> Raw Material Inventory
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1">
-                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-base font-semibold mb-2 text-gray-800 dark:text-white">Inventory Levels</h3>
-                  <div className="h-56 flex items-center justify-center">
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">Inventory levels chart will appear here</p>
-                  </div>
-                </div>
-                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-base font-semibold mb-2 text-gray-800 dark:text-white">Stock Status</h3>
-                  <div className="h-56 flex items-center justify-center">
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">Stock status chart will appear here</p>
-                  </div>
-                </div>
+              <div className="flex-1">
+                <RawMaterialDashboard />
+              </div>
+            </div>
+          )}
+
+          {/* Products Tab */}
+          {activeTab === 'products' && (
+            <div className="flex flex-col h-full">
+              <h2 className="text-lg font-semibold flex items-center text-gray-800 dark:text-white mb-3">
+                <FaTshirt className="mr-2 text-blue-500" /> Products
+              </h2>
+              <div className="flex-1">
+                <ProductDashboard />
               </div>
             </div>
           )}

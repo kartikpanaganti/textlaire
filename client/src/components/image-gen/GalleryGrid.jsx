@@ -239,7 +239,7 @@ const GalleryGrid = ({ savedImages, deleteProduct, openPreview, renderImage, upd
                     
                     <div className="absolute bottom-3 left-3 pointer-events-none">
                       <div className="px-2 py-1 bg-blue-600/90 backdrop-blur-sm rounded-md text-xs font-medium text-white shadow-lg">
-                        {product.price || 'No price'}
+                        {product.price ? (product.price.startsWith('₹') ? product.price : `₹${product.price.replace(/[^0-9.]/g, '')}`) : '₹0'}
                       </div>
                     </div>
                   </div>
@@ -317,7 +317,9 @@ const GalleryGrid = ({ savedImages, deleteProduct, openPreview, renderImage, upd
                 </div>
                 
                 <div className="flex flex-col justify-between p-3 border-l border-[#3A4149]/30">
-                  <div className="text-sm font-medium text-blue-400">{product.price}</div>
+                  <div className="text-sm font-medium text-blue-400">
+                    {product.price ? (product.price.startsWith('₹') ? product.price : `₹${product.price.replace(/[^0-9.]/g, '')}`) : '₹0'}
+                  </div>
                   <div className="flex gap-2">
                     <motion.button 
                       whileHover={{ scale: 1.1 }}

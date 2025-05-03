@@ -58,8 +58,7 @@ function SettingsPage() {
 
   const tabs = [
     { id: "appearance", label: "Appearance", icon: <FaDesktop /> },
-    { id: "security", label: "Security", icon: <FaLock /> },
-    { id: "language", label: "Language", icon: <FaGlobe /> },
+
   ];
 
   return (

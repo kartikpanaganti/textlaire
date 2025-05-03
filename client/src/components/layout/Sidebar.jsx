@@ -4,17 +4,19 @@ import {
   FaUserCog, FaBox, FaChartPie, FaSignOutAlt, 
   FaBars, FaTachometerAlt, FaIndustry, FaClipboardList, 
   FaTruck, FaCogs, FaBoxOpen, FaMoneyBillWave,
-  FaShoppingCart
+  FaShoppingCart, FaUsers, FaUserShield, FaDesktop
 } from "react-icons/fa";
 import { IoPersonCircleOutline } from "react-icons/io5";
 import { IoImagesOutline, IoImageOutline } from "react-icons/io5";
 import { MdAutoFixHigh } from "react-icons/md";
 import { ThemeContext } from "../../context/ThemeProvider";
+import { UserContext } from "../../context/UserProvider";
 
 function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme } = useContext(ThemeContext);
+  const { user } = useContext(UserContext);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileView, setIsMobileView] = useState(window.innerWidth < 768);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -166,17 +168,7 @@ function Sidebar() {
               }}
               colors={colors}
             />
-            <SidebarItem 
-              icon={<MdAutoFixHigh className={colors.icon} />} 
-              label="Image-to-Image" 
-              isCollapsed={isCollapsed && !isMobileMenuOpen} 
-              isActive={location.pathname === "/image-to-image"}
-              onClick={() => {
-                navigate("/image-to-image");
-                if (isMobileView) toggleMobileMenu();
-              }}
-              colors={colors}
-            />
+           
             <SidebarItem 
               icon={<FaShoppingCart className={colors.icon} />} 
               label="Products" 
@@ -199,6 +191,40 @@ function Sidebar() {
               }}
               colors={colors}
             />
+            
+            {/* Admin-only menu items */}
+            {user?.role === 'admin' && (
+              <>
+                <div className={`mt-6 mb-2 ${isCollapsed && !isMobileMenuOpen ? 'hidden' : 'block'}`}>
+                  <div className="text-xs uppercase tracking-wider text-blue-300 font-semibold px-4">Admin Area</div>
+                  <div className="border-t border-blue-800 my-2"></div>
+                </div>
+                
+                <SidebarItem 
+                  icon={<FaUserShield className={colors.icon} />} 
+                  label="User Management" 
+                  isCollapsed={isCollapsed && !isMobileMenuOpen} 
+                  isActive={location.pathname === "/user-management"}
+                  onClick={() => {
+                    navigate("/user-management");
+                    if (isMobileView) toggleMobileMenu();
+                  }}
+                  colors={colors}
+                />
+                
+                <SidebarItem 
+                  icon={<FaDesktop className={colors.icon} />} 
+                  label="User Activity" 
+                  isCollapsed={isCollapsed && !isMobileMenuOpen} 
+                  isActive={location.pathname === "/user-activity"}
+                  onClick={() => {
+                    navigate("/user-activity");
+                    if (isMobileView) toggleMobileMenu();
+                  }}
+                  colors={colors}
+                />
+              </>
+            )}
           </ul>
         </nav>
 

@@ -62,23 +62,14 @@ const ProductsPage = () => {
     }
   };
 
-  // Format price with currency symbol
+  // Format price with currency symbol (always in Rupees)
   const formatPriceWithCurrency = (price, currency = 'INR') => {
-    if (!price) return currency === 'INR' ? '₹0' : currency === 'USD' ? '$0' : currency === 'EUR' ? '€0' : '£0';
+    if (!price) return '₹0';
     
     // Remove any existing currency symbols and spaces
     const cleanPrice = price.replace(/[^0-9.]/g, '');
     
-    if (currency === 'INR') {
-      return `₹${cleanPrice}`;
-    } else if (currency === 'USD') {
-      return `$${cleanPrice}`;
-    } else if (currency === 'EUR') {
-      return `€${cleanPrice}`;
-    } else if (currency === 'GBP') {
-      return `£${cleanPrice}`;
-    }
-    
+    // Always return price in rupees regardless of the currency parameter
     return `₹${cleanPrice}`;
   };
 

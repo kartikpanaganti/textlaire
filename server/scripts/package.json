@@ -1,0 +1,7 @@
+{
+  "name": "textlaire-cleanup-scripts",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Clean-up scripts for the Textlaire application",
+  "private": true
+}

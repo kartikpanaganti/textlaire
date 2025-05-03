@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect } from "react";
+import axios from "axios";
 
 // Create User Context
 export const UserContext = createContext();
@@ -8,32 +9,96 @@ export const UserProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Setup axios interceptor for authentication
+  useEffect(() => {
+    const setupAxiosInterceptors = () => {
+      axios.interceptors.request.use(
+        (config) => {
+          const storedUser = localStorage.getItem("user");
+          if (storedUser) {
+            const userData = JSON.parse(storedUser);
+            if (userData.token) {
+              config.headers["Authorization"] = `Bearer ${userData.token}`;
+            }
+          }
+          return config;
+        },
+        (error) => {
+          return Promise.reject(error);
+        }
+      );
+
+      // Keep track of if we're already redirecting to prevent loops
+      let isRedirecting = false;
+      
+      axios.interceptors.response.use(
+        (response) => response,
+        (error) => {
+          if (error.response && error.response.status === 401 && !isRedirecting) {
+            // Token expired or invalid, log out user
+            isRedirecting = true;
+            logout();
+            // Use navigate from react-router instead of window.location for better handling
+            setTimeout(() => {
+              window.location.href = "/";
+              isRedirecting = false;
+            }, 100);
+          }
+          return Promise.reject(error);
+        }
+      );
+    };
+
+    setupAxiosInterceptors();
+  }, []);
+
   // Check if user is authenticated on mount
   useEffect(() => {
     const checkAuth = async () => {
-      const storedAuth = localStorage.getItem("isAuthenticated");
       const storedUser = localStorage.getItem("user");
       
-      if (storedAuth) {
-        // In a real app, you would verify the token with your backend
-        // For now, we'll just simulate a user
-        const userData = storedUser ? JSON.parse(storedUser) : {
-          id: "user123",
-          name: "John Doe",
-          email: "john.doe@example.com",
-          avatar: null,
-          role: "user",
-          preferences: {
-            notifications: true,
-            emailAlerts: true,
-            fontSize: "medium",
-            language: "en",
-            twoFactorEnabled: false
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          
+          if (userData.token) {
+            // Verify token with backend
+            try {
+              const response = await axios.get(`/api/auth/me`, {
+                headers: {
+                  Authorization: `Bearer ${userData.token}`
+                }
+              });
+              
+              // Update user data with latest from server
+              const updatedUserData = {
+                ...userData,
+                ...response.data.user,
+                token: userData.token // Keep the token
+              };
+              
+              setUser(updatedUserData);
+              setIsAuthenticated(true);
+              localStorage.setItem("user", JSON.stringify(updatedUserData));
+            } catch (error) {
+              console.error("Token verification failed:", error);
+              // Token invalid, clear user data
+              localStorage.removeItem("user");
+              setUser(null);
+              setIsAuthenticated(false);
+            }
+          } else {
+            // No token, clear user data
+            localStorage.removeItem("user");
+            setUser(null);
+            setIsAuthenticated(false);
           }
-        };
-        
-        setUser(userData);
-        setIsAuthenticated(true);
+        } catch (error) {
+          console.error("Error parsing user data:", error);
+          localStorage.removeItem("user");
+          setUser(null);
+          setIsAuthenticated(false);
+        }
       }
       
       setIsLoading(false);
@@ -41,13 +106,6 @@ export const UserProvider = ({ children }) => {
 
     checkAuth();
   }, []);
-
-  // Save user data to localStorage
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem("user", JSON.stringify(user));
-    }
-  }, [user]);
 
   // Apply font size preference
   useEffect(() => {
@@ -74,16 +132,28 @@ export const UserProvider = ({ children }) => {
     
     setUser(userWithDefaults);
     setIsAuthenticated(true);
-    localStorage.setItem("isAuthenticated", "true");
     localStorage.setItem("user", JSON.stringify(userWithDefaults));
   };
 
   // Logout function
-  const logout = () => {
-    setUser(null);
-    setIsAuthenticated(false);
-    localStorage.removeItem("isAuthenticated");
-    localStorage.removeItem("user");
+  const logout = async () => {
+    try {
+      if (user && user.token) {
+        // Call logout API using the proxy
+        await axios.post(`/api/auth/logout`, {}, {
+          headers: {
+            Authorization: `Bearer ${user.token}`
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      // Clear user data regardless of API success
+      setUser(null);
+      setIsAuthenticated(false);
+      localStorage.removeItem("user");
+    }
   };
 
   // Update user profile

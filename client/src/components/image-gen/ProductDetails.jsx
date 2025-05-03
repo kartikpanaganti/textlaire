@@ -29,25 +29,15 @@ const ProductDetails = ({
     }
   };
 
-  // Format price based on currency
+  // Format price (always in Rupees)
   const formatPrice = (value) => {
     if (!value) return '';
     
     // Remove non-numeric characters
     const numericValue = value.replace(/[^0-9.]/g, '');
     
-    if (currency === 'INR') {
-      // Format for INR (Rupees)
-      return `₹${numericValue}`;
-    } else if (currency === 'USD') {
-      return `$${numericValue}`;
-    } else if (currency === 'EUR') {
-      return `€${numericValue}`;
-    } else if (currency === 'GBP') {
-      return `£${numericValue}`;
-    }
-    
-    return numericValue;
+    // Always return price in rupees regardless of the currency selected
+    return `₹${numericValue}`;
   };
 
   // Handle price input

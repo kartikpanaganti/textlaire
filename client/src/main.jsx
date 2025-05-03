@@ -2,6 +2,8 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ThemeProvider } from "./context/ThemeProvider"; // Import ThemeProvider
 import { UserProvider } from "./context/UserProvider"; // Import UserProvider
+import { SocketProvider } from "./context/SocketProvider"; // Import SocketProvider
+import { NotificationProvider } from "./context/NotificationProvider"; // Import NotificationProvider
 import axios from 'axios'; // Import axios for configuration
 
 import './index.css'
@@ -44,7 +46,11 @@ createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeProvider>
       <UserProvider>
-        <App />
+        <NotificationProvider>
+          <SocketProvider>
+            <App />
+          </SocketProvider>
+        </NotificationProvider>
       </UserProvider>
     </ThemeProvider>
   </StrictMode>,

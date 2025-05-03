@@ -255,19 +255,26 @@ const RawMaterialModal = ({ isOpen, onClose, material, onSave }) => {
     e.preventDefault();
     setLoading(true);
 
+    // Validate required fields
+    if (!formData.name || formData.name.trim() === '') {
+      toast.error('Material name is required');
+      setLoading(false);
+      return;
+    }
+
     try {
       // Create FormData instance
       const formDataToSend = new FormData();
       
       // Add all form fields to FormData
       const materialData = {
-        name: formData.name,
+        name: formData.name.trim(),
         category: formData.materialType,
-        stock: Number(formData.stock),
+        stock: Number(formData.stock) || 0,
         supplier: formData.supplier,
-        unit: formData.unit,
-        unitPrice: Number(formData.unitPrice),
-        reorderLevel: Number(formData.reorderLevel),
+        unit: formData.unit || 'kg',
+        unitPrice: Number(formData.unitPrice) || 0,
+        reorderLevel: Number(formData.reorderLevel) || 10,
         location: formData.location,
         lastRestocked: formData.lastRestocked ? new Date(formData.lastRestocked).toISOString() : new Date().toISOString(),
         expiryDate: formData.expiryDate ? new Date(formData.expiryDate).toISOString() : null,
@@ -275,24 +282,27 @@ const RawMaterialModal = ({ isOpen, onClose, material, onSave }) => {
       };
 
       // Add basic fields
-        Object.keys(materialData).forEach(key => {
+      Object.keys(materialData).forEach(key => {
         if (materialData[key] !== null && materialData[key] !== undefined) {
           formDataToSend.append(key, materialData[key]);
         }
       });
 
+      // Ensure specifications object is properly structured
+      const specifications = {
+        color: formData.specifications?.color || '',
+        colorHex: formData.specifications?.colorHex || '',
+        weight: formData.specifications?.weight || '',
+        weightUnit: formData.specifications?.weightUnit || 'g/m²',
+        width: formData.specifications?.width || '',
+        length: formData.specifications?.length || '',
+        dimensionsUnit: formData.specifications?.dimensionsUnit || 'cm',
+        quality: formData.specifications?.quality || '',
+        additionalInfo: formData.specifications?.additionalInfo || ''
+      };
+
       // Add specifications as a JSON string
-      formDataToSend.append('specifications', JSON.stringify({
-        color: formData.specifications.color,
-        colorHex: formData.specifications.colorHex,
-        weight: formData.specifications.weight,
-        weightUnit: formData.specifications.weightUnit,
-        width: formData.specifications.width,
-        length: formData.specifications.length,
-        dimensionsUnit: formData.specifications.dimensionsUnit,
-        quality: formData.specifications.quality,
-        additionalInfo: formData.specifications.additionalInfo
-      }));
+      formDataToSend.append('specifications', JSON.stringify(specifications));
 
       // Add image if there's a new one
       if (imageFile) {
@@ -301,22 +311,22 @@ const RawMaterialModal = ({ isOpen, onClose, material, onSave }) => {
         
       // Determine URL and method
       const baseURL = import.meta.env.VITE_API_URL || '';
-        const url = material
+      const url = material
         ? `${baseURL}/api/raw-materials/${material._id}`
         : `${baseURL}/api/raw-materials`;
         
-        const method = material ? 'put' : 'post';
+      const method = material ? 'put' : 'post';
         
       // Make the API call
-        const response = await axios[method](url, formDataToSend, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
+      const response = await axios[method](url, formDataToSend, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
         
       // Handle success
       toast.success(`Material ${material ? 'updated' : 'added'} successfully`);
-        onSave(response.data);
+      onSave(response.data);
     } catch (error) {
       console.error('Error saving material:', error);
       
@@ -333,6 +343,8 @@ const RawMaterialModal = ({ isOpen, onClose, material, onSave }) => {
           errorMessage = 'Image file is too large. Please choose a smaller image.';
         } else if (error.response.status === 415) {
           errorMessage = 'Invalid file type. Please upload a valid image file.';
+        } else if (error.response.status === 400) {
+          errorMessage = 'Missing required fields or invalid data. Please check your input.';
         }
       } else if (error.request) {
         // Request made but no response
