@@ -9,6 +9,7 @@ import AttendanceTab from './AttendanceTab';
 import { toast } from 'react-hot-toast';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import defaultProfileImage from '../../assets/images/default-profile.png';
 
 const EmployeeDetailsModal = ({ employee, onClose }) => {
   const [activeTab, setActiveTab] = useState('profile');
@@ -82,7 +83,7 @@ const EmployeeDetailsModal = ({ employee, onClose }) => {
   };
 
   const getImageUrl = (url) => {
-    if (!url) return null;
+    if (!url) return defaultProfileImage;
     return url.startsWith('http') ? url : `http://${window.location.hostname}:5000${url}`;
   };
 
@@ -1125,7 +1126,7 @@ const EmployeeDetailsModal = ({ employee, onClose }) => {
                 </div>
                 <div class="info-item">
                   <span class="info-label">Salary</span>
-                  <span class="info-value">₹${employee.salary.toLocaleString('en-IN')}</span>
+                  <span class="info-value">₹${employee.salary.toLocaleString()}</div>
                 </div>
                 <div class="info-item">
                   <span class="info-label">Status</span>
@@ -1550,7 +1551,7 @@ Status: ${employee.status}
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     e.target.onerror = null;
-                    e.target.src = '/default-profile.png';
+                    e.target.src = defaultProfileImage;
                   }}
                 />
               </div>

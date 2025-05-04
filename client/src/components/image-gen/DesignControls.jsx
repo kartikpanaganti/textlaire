@@ -45,7 +45,7 @@ const DesignControls = ({
               updatePromptFromMetadata();
             }
           }}
-          className="flex items-center gap-1 px-2 py-1 bg-[#2A2F38] rounded text-[11px] text-gray-300 hover:bg-[#3A4149]"
+          className="flex items-center gap-1 px-2 py-1 bg-[#2A2F38] rounded text-[11px] text-white hover:bg-[#3A4149]"
         >
           {advancedPromptMode ? "Simple Mode" : "Advanced Mode"}
           <div className={`relative inline-flex h-3.5 w-7 items-center rounded-full transition-colors ${advancedPromptMode ? 'bg-blue-500' : 'bg-gray-600'}`}>
@@ -64,15 +64,15 @@ const DesignControls = ({
           >
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="text-xs font-medium text-gray-300">Custom Prompt</label>
+                <label className="text-xs font-medium text-white">Custom Prompt</label>
                 <div className="flex gap-1">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => updatePromptFromMetadata()}
-                    className="text-[10px] px-2 py-1 bg-[#2A2F38] text-gray-300 hover:bg-[#3A4149] rounded"
+                    className="text-[10px] px-2 py-1 bg-[#2A2F38] text-white hover:bg-[#3A4149] rounded"
                   >
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1 text-white">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
@@ -83,9 +83,9 @@ const DesignControls = ({
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => setCustomPrompt("")}
-                    className="text-[10px] px-2 py-1 bg-[#2A2F38] text-gray-300 hover:bg-[#3A4149] rounded"
+                    className="text-[10px] px-2 py-1 bg-[#2A2F38] text-white hover:bg-[#3A4149] rounded"
                   >
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1 text-white">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
@@ -97,12 +97,12 @@ const DesignControls = ({
               <textarea
                 value={customPrompt}
                 onChange={(e) => setCustomPrompt(e.target.value)}
-                className="w-full px-3 py-2 bg-[#2A2F38] border border-[#3A4149] rounded text-gray-100 text-xs focus:ring-1 focus:ring-blue-500 h-40 resize-none"
+                className="w-full px-3 py-2 bg-[#2A2F38] border border-[#3A4149] rounded text-white text-xs focus:ring-1 focus:ring-blue-500 h-40 resize-none"
                 placeholder="Enter your complete custom prompt here..."
               />
               <div className="bg-[#2A2F38] p-2 rounded mt-2">
                 <p className="text-[11px] text-blue-400 mb-1 font-medium">Prompt Tips:</p>
-                <ul className="text-[10px] text-gray-300 space-y-1 list-disc pl-3">
+                <ul className="text-[10px] text-white space-y-1 list-disc pl-3">
                   <li>Describe pattern style, colors, and details specifically</li>
                   <li>Include terms like "seamless", "tileable", "repeating pattern"</li>
                   <li>Mention "textile design" or "fabric pattern" for context</li>
@@ -113,17 +113,17 @@ const DesignControls = ({
             </div>
 
             <div>
-              <label className="text-xs font-medium text-gray-300 mb-1 block">Base Pattern Type</label>
+              <label className="text-xs font-medium text-white mb-1 block">Base Pattern Type</label>
               <select 
                 value={seamlessType}
                 onChange={(e) => setSeamlessType(e.target.value)}
-                className="w-full px-3 py-2 bg-[#2A2F38] border border-[#3A4149] rounded text-gray-100 text-xs focus:ring-1 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-[#2A2F38] border border-[#3A4149] rounded text-white text-xs focus:ring-1 focus:ring-blue-500"
               >
                 {SEAMLESS_PATTERN_TYPES.map(type => (
                   <option key={type.id} value={type.id}>{type.name}</option>
                 ))}
               </select>
-              <p className="text-[10px] text-gray-400 mt-1 italic">
+              <p className="text-[10px] text-white mt-1 italic">
                 {SEAMLESS_PATTERN_TYPES.find(t => t.id === seamlessType)?.description}
               </p>
             </div>
@@ -138,8 +138,8 @@ const DesignControls = ({
             {/* Pattern Selection with Visual Grid */}
             <div>
               <div className="flex justify-between items-center mb-2">
-                <label className="text-xs font-medium text-gray-300">Pattern Style</label>
-                <span className="text-[10px] text-gray-500">Selected: {selectedPattern.name}</span>
+                <label className="text-xs font-medium text-white">Pattern Style</label>
+                <span className="text-[10px] text-white">Selected: {selectedPattern.name}</span>
               </div>
               
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-2">
@@ -201,10 +201,10 @@ const DesignControls = ({
                       : 'border-[#3A4149] hover:border-gray-400'
                   }`}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
                   </svg>
-                  <span className="text-[9px] text-gray-400 mt-1">Custom</span>
+                  <span className="text-[9px] text-white mt-1">Custom</span>
                 </motion.button>
                 
                 <motion.button
@@ -217,24 +217,24 @@ const DesignControls = ({
                   }}
                   className="aspect-square rounded-lg overflow-hidden bg-[#2A2F38] flex flex-col items-center justify-center border-2 border-[#3A4149] hover:border-gray-400"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
                   </svg>
-                  <span className="text-[9px] text-gray-400 mt-1">More</span>
+                  <span className="text-[9px] text-white mt-1">More</span>
                 </motion.button>
               </div>
               
               {/* Custom Pattern Description */}
               {selectedPattern.id === "custom" && (
                 <div className="mt-2">
-                  <label className="text-[10px] font-medium text-gray-400 block mb-1">Custom Pattern Description</label>
+                  <label className="text-[10px] font-medium text-white block mb-1">Custom Pattern Description</label>
                   <textarea
                     value={customPrompt}
                     onChange={(e) => {
                       setCustomPrompt(e.target.value);
                       updatePromptFromMetadata();
                     }}
-                    className="w-full px-3 py-2 bg-[#2A2F38] border border-[#3A4149] rounded text-gray-100 text-xs focus:ring-1 focus:ring-blue-500 h-16 resize-none"
+                    className="w-full px-3 py-2 bg-[#2A2F38] border border-[#3A4149] rounded text-white text-xs focus:ring-1 focus:ring-blue-500 h-16 resize-none"
                     placeholder="Describe your custom pattern..."
                   />
                 </div>
@@ -243,7 +243,7 @@ const DesignControls = ({
 
             {/* Seamless Pattern Type */}
             <div>
-              <label className="text-xs font-medium text-gray-300 block mb-1">Seamless Type</label>
+              <label className="text-xs font-medium text-white block mb-1">Seamless Type</label>
               <div className="grid grid-cols-2 gap-2">
                 {SEAMLESS_PATTERN_TYPES.map(type => (
                   <motion.button
@@ -257,11 +257,11 @@ const DesignControls = ({
                     className={`p-2 rounded-lg flex flex-col items-center justify-center transition-all ${
                       seamlessType === type.id 
                         ? 'bg-blue-600 text-white' 
-                        : 'bg-[#2A2F38] text-gray-300 hover:bg-[#3A4149]'
+                        : 'bg-[#2A2F38] text-white hover:bg-[#3A4149]'
                     }`}
                   >
-                    <span className="text-xs font-medium">{type.name}</span>
-                    <span className="text-[9px] text-center mt-1 opacity-80">{type.description}</span>
+                    <span className="text-xs font-medium text-white">{type.name}</span>
+                    <span className="text-[9px] text-center mt-1 opacity-80 text-white">{type.description}</span>
                   </motion.button>
                 ))}
               </div>
@@ -269,27 +269,27 @@ const DesignControls = ({
 
             {/* Design Style / Technique */}
             <div>
-              <label className="text-xs font-medium text-gray-300 block mb-1">Design Technique</label>
+              <label className="text-xs font-medium text-white block mb-1">Design Technique</label>
               <select 
                 value={designStyle}
                 onChange={(e) => {
                   setDesignStyle(e.target.value);
                   updatePromptFromMetadata();
                 }}
-                className="w-full px-3 py-2 bg-[#2A2F38] border border-[#3A4149] rounded text-gray-100 text-xs focus:ring-1 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-[#2A2F38] border border-[#3A4149] rounded text-white text-xs focus:ring-1 focus:ring-blue-500"
               >
                 {DESIGN_STYLES.map(style => (
                   <option key={style.id} value={style.id}>{style.name}</option>
                 ))}
               </select>
-              <p className="text-[10px] text-gray-400 mt-1 italic">
+              <p className="text-[10px] text-white mt-1 italic">
                 {DESIGN_STYLES.find(s => s.id === designStyle)?.technique || ''}
               </p>
             </div>
 
             {/* Color Scheme with Presets */}
             <div>
-              <label className="text-xs font-medium text-gray-300 block mb-1">Color Scheme</label>
+              <label className="text-xs font-medium text-white block mb-1">Color Scheme</label>
               <div className="flex flex-wrap gap-1 mb-2">
                 {colorPresets.map((color, index) => (
                   <motion.button
@@ -303,7 +303,7 @@ const DesignControls = ({
                     className={`px-2 py-1 rounded text-[10px] transition-all ${
                       customColor === color 
                         ? 'bg-blue-500 text-white' 
-                        : 'bg-[#2A2F38] text-gray-300 hover:bg-[#3A4149]'
+                        : 'bg-[#2A2F38] text-white hover:bg-[#3A4149]'
                     }`}
                   >
                     {color}
@@ -317,7 +317,7 @@ const DesignControls = ({
                   setCustomColor(e.target.value);
                   updatePromptFromMetadata();
                 }}
-                className="w-full px-3 py-2 bg-[#2A2F38] border border-[#3A4149] rounded text-gray-100 text-xs focus:ring-1 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-[#2A2F38] border border-[#3A4149] rounded text-white text-xs focus:ring-1 focus:ring-blue-500"
                 placeholder="Custom color scheme (e.g., deep blue with gold accents)"
               />
             </div>
@@ -343,7 +343,7 @@ const DesignControls = ({
               onClick={e => e.stopPropagation()}
             >
               <h3 className="text-lg font-bold text-white mb-2">{currentPattern.name}</h3>
-              <p className="text-sm text-gray-300 mb-4">{currentPattern.prompt}</p>
+              <p className="text-sm text-white mb-4">{currentPattern.prompt}</p>
               <div className="flex justify-end">
                 <motion.button
                   whileHover={{ scale: 1.05 }}

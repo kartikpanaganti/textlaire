@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { FiPlus, FiEdit, FiTrash2, FiSearch, FiFilter, FiRefreshCw, FiX, FiGrid, FiList } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiSearch, FiFilter, FiRefreshCw, FiX, FiGrid, FiList, FiCheck, FiAlertCircle, FiAlertTriangle, FiUserMinus } from 'react-icons/fi';
 import EmployeeForm from '../components/employee/EmployeeForm';
 import EmployeeDetailsModal from '../components/employee/EmployeeDetailsModal';
 import EmployeeCard from '../components/employee/EmployeeCard';
 import apiClient from '../lib/api';
+import { toast } from 'react-toastify';
+import defaultProfileImage from '../assets/images/default-profile.png';
 
 const EmployeePage = () => {
   // State management
@@ -54,15 +56,56 @@ const EmployeePage = () => {
     fetchEmployees();
   }, []);
 
+  // Get image URL with default handling
+  const getImageUrl = (url) => {
+    if (!url) return defaultProfileImage;
+    return url.startsWith('http') ? url : `http://${window.location.hostname}:5000${url}`;
+  };
+
   // Handle employee deletion
   const handleDelete = async (id) => {
     try {
+      const employee = employees.find(emp => emp._id === id);
       await apiClient.delete(`/api/employees/${id}`);
+      
+      // Delete success toast - Purple theme
+      toast.success(
+        <div className="flex items-center">
+          <FiUserMinus className="w-6 h-6 mr-2 text-white" />
+          <div className="text-white">
+            <h4 className="font-medium">Employee Removed</h4>
+            <p className="text-sm opacity-90">{employee?.name || 'Employee'} has been removed from the system</p>
+          </div>
+        </div>,
+        {
+          style: { background: '#8B5CF6' }, // Purple-500
+          className: "!bg-purple-500 border-l-4 !border-purple-600",
+          progressClassName: "!bg-purple-400",
+          autoClose: 3000
+        }
+      );
+      
       fetchEmployees();
       setConfirmDelete(null);
     } catch (err) {
       console.error('Error deleting employee:', err);
-      setError('Failed to delete employee. Please try again.');
+      
+      // Delete error toast - Red theme
+      toast.error(
+        <div className="flex items-center">
+          <FiAlertCircle className="w-6 h-6 mr-2 text-white" />
+          <div className="text-white">
+            <h4 className="font-medium">Delete Failed</h4>
+            <p className="text-sm opacity-90">Unable to remove employee. Please try again.</p>
+          </div>
+        </div>,
+        {
+          style: { background: '#EF4444' }, // Red-500
+          className: "!bg-red-500 border-l-4 !border-red-600",
+          progressClassName: "!bg-red-400",
+          autoClose: 5000
+        }
+      );
     }
   };
 
@@ -145,12 +188,6 @@ const EmployeePage = () => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleDateString();
-  };
-
-  // Get image URL
-  const getImageUrl = (url) => {
-    if (!url) return null;
-    return url.startsWith('http') ? url : `http://${window.location.hostname}:5000${url}`;
   };
 
   // Get sort indicator
@@ -336,11 +373,11 @@ const EmployeePage = () => {
                       <div className="h-10 w-10 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-700">
                         <img
                           src={getImageUrl(employee.image)}
-                          alt={employee.name}
+                          alt={`${employee.name}'s profile`}
                           className="h-full w-full object-cover"
                           onError={(e) => {
                             e.target.onerror = null;
-                            e.target.src = '/default-profile.png';
+                            e.target.src = defaultProfileImage;
                           }}
                         />
                       </div>
@@ -465,24 +502,37 @@ const EmployeePage = () => {
       {confirmDelete && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Confirm Delete
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Are you sure you want to delete this employee? This action cannot be undone.
+            <div className="flex items-center gap-3 mb-6">
+              <div className="bg-red-100 dark:bg-red-900 p-2 rounded-full">
+                <FiAlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  Confirm Delete
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  This action cannot be undone
+                </p>
+              </div>
+            </div>
+            
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              Are you sure you want to delete this employee? All their data will be permanently removed from the system.
             </p>
-            <div className="flex justify-end space-x-4">
+
+            <div className="flex justify-end gap-3">
               <button
                 onClick={() => setConfirmDelete(null)}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg transition-colors duration-200"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleDelete(confirmDelete)}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200 flex items-center gap-2"
               >
-                Delete
+                <FiTrash2 className="w-4 h-4" />
+                Delete Employee
               </button>
             </div>
           </div>

@@ -22,6 +22,7 @@ import PatternPreview from '../components/image-gen/PatternPreview';
 import GalleryGrid from '../components/image-gen/GalleryGrid';
 import PreviewModal from '../components/image-gen/PreviewModal';
 import ToastNotification from '../components/image-gen/ToastNotification';
+import ProductCodes from '../components/image-gen/ProductCodes';
 
 // Import constants
 import { 
@@ -145,6 +146,9 @@ function ImageGenerator() {
   
   // Add state for mobile panel navigation
   const [activeMobilePanel, setActiveMobilePanel] = useState('preview');
+
+  const [showCodesModal, setShowCodesModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
   useEffect(() => {
     // Update prompt when pattern selection changes
@@ -386,56 +390,111 @@ function ImageGenerator() {
   
   // Helper function to save image with given blob
   const saveImageWithBlob = (blob) => {
-    // Prepare the product data with all details
-    const productData = {
-      id: uuidv4(),
-      name: productName,
-      code: productCode || `PRD-${Date.now().toString().slice(-6)}`,
-      type: towelType,
-      material: towelMaterial,
-      color: towelColor,
-      dimensions: dimensions || '50cm x 100cm',
-      price: price || '$29.99',
-      application: application,
-      finish: textileFinish,
-      prompt: prompt,
-      seed: seed,
-      createdAt: new Date().toISOString(),
-      pattern: selectedPattern?.name || 'Custom Pattern',
-      style: designStyle,
-      scale: patternScale,
-      density: patternDensity,
-      // Store filter values for future reference
-      filters: {
-        brightness,
-        contrast,
-        saturation
-      }
-    };
+    // Get reference to the ProductDetails component
+    const productDetailsRef = document.getElementById('product-details-form');
+    if (!productDetailsRef) {
+      console.error('Product details component not found');
+      showNotification('Error saving product: Unable to access form data');
+      return;
+    }
     
-    // Convert blob to file
-    const file = new File([blob], `pattern-${Date.now()}.jpg`, { type: 'image/jpeg' });
-    
-    // Save pattern using API
-    savePatternToServer(productData, file)
-      .then(response => {
-        // Update local state with server response
-        const newProduct = response.product;
-        const updatedProducts = [...savedImages, newProduct];
-        setSavedImages(updatedProducts);
-        
-        showNotification("Product saved successfully!");
-        
-        // Clear form fields after saving
-        setProductName("");
-        setProductCode("");
-        setDimensions("");
-        setPrice("");
-      })
-      .catch(error => {
-        console.error('Error saving product:', error);
-        showNotification(`Error saving product: ${error.message || 'Unknown error'}`);
+    try {
+      // Use data attributes to get form field values more reliably
+      const getFieldValue = (fieldName) => {
+        const element = productDetailsRef.querySelector(`[data-field="${fieldName}"]`);
+        if (!element) {
+          console.warn(`Field ${fieldName} not found`);
+          return null;
+        }
+        return element.value;
+      };
+      
+      // Get all form values using data attributes
+      const type = getFieldValue('type');
+      const material = getFieldValue('material');
+      const color = getFieldValue('color');
+      const width = getFieldValue('width');
+      const height = getFieldValue('height');
+      const unit = getFieldValue('unit');
+      const qualityGrade = getFieldValue('qualityGrade');
+      const weight = getFieldValue('weight');
+      const description = getFieldValue('description');
+      
+      // For tags, we need to extract from the DOM
+      const tagElements = productDetailsRef.querySelectorAll('[data-tag]');
+      const tags = Array.from(tagElements || []).map(el => el.getAttribute('data-tag')).filter(Boolean);
+      
+      // Format dimensions properly
+      const formattedDimensions = width && height ? `${width}x${height} ${unit || 'cm'}` : '';
+      
+      // Debug log the values being collected
+      console.log('Collected form values:', {
+        type,
+        material,
+        color,
+        width,
+        height,
+        unit,
+        qualityGrade,
+        weight,
+        description,
+        tags
       });
+      
+      // Prepare the product data with all details
+      const productData = {
+        id: uuidv4(),
+        name: productName,
+        code: productCode,
+        type: type,
+        material: material,
+        color: color,
+        dimensions: formattedDimensions,
+        width: width,
+        height: height,
+        unit: unit,
+        price: price,
+        currency: 'INR',
+        prompt: prompt,
+        seed: seed,
+        pattern: selectedPattern?.name || 'Custom Pattern',
+        style: designStyle,
+        scale: patternScale,
+        density: patternDensity,
+        description: description,
+        tags: tags,
+        qualityGrade: qualityGrade,
+        weight: weight,
+        createdAt: new Date().toISOString()
+      };
+      
+      // Convert blob to file
+      const file = new File([blob], `pattern-${Date.now()}.jpg`, { type: 'image/jpeg' });
+      
+      // Save pattern using API
+      savePatternToServer(productData, file)
+        .then(response => {
+          // Update local state with server response
+          const newProduct = response.product;
+          const updatedProducts = [...savedImages, newProduct];
+          setSavedImages(updatedProducts);
+          
+          showNotification("Product saved successfully!");
+          
+          // Clear form fields after saving
+          setProductName("");
+          setProductCode("");
+          setDimensions("");
+          setPrice("");
+        })
+        .catch(error => {
+          console.error('Error saving product:', error);
+          showNotification(`Error saving product: ${error.message || 'Unknown error'}`);
+        });
+    } catch (error) {
+      console.error('Error preparing product data:', error);
+      showNotification(`Error preparing product data: ${error.message || 'Unknown error'}`);
+    }
   };
 
   const deleteProduct = async (productId) => {
@@ -660,84 +719,45 @@ function ImageGenerator() {
       }
     }, [generationMode]);
 
-    // Add sticky header class based on scroll position
-    const headerClass = mobileModeActive && mobileScrollPos > 50 
-      ? "p-2 flex justify-between items-center border-b border-[#2A2F38] bg-[#1A1D24]/90 backdrop-blur-sm sticky top-0 z-10 shadow-md"
-      : "p-3 flex justify-between items-center border-b border-[#2A2F38] bg-[#1A1D24] sticky top-0 z-10";
-
-    // Function to toggle between modes
-    const resetView = () => {
-      if (containerRef.current) {
-        containerRef.current.scrollTop = 0;
-      }
-      // Toggle to force rerender with clean state
-      setGenerationMode('text-to-image');
-      setTimeout(() => setGenerationMode('image-to-image'), 10);
-    };
-
     return (
-      <div className="h-full bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50 overflow-hidden flex flex-col">
-        <div className={headerClass}>
-          <h2 className={`${viewport.isMobile ? 'text-sm' : 'text-lg'} font-semibold text-white flex items-center`}>
-            <span className="mr-2">🖼️</span> Image to Image Transformation
-          </h2>
-          
-          <div className="flex items-center gap-2">
-            {viewport.isMobile && (
-              <span className="text-xs text-gray-400">
-                Scroll for options
-              </span>
-            )}
-            <button 
-              onClick={resetView} 
-              className="text-xs px-2 py-1 bg-blue-600/20 text-blue-400 rounded-md hover:bg-blue-600/30"
-            >
-              Reset View
-            </button>
+      <div className="h-full overflow-auto scrollbar-thin scrollbar-thumb-[#2A2F38] scrollbar-track-transparent" ref={containerRef} onScroll={handleScroll}>
+        {mobileModeActive ? (
+          // Mobile-optimized version with padding adjustments for better fit
+          <div className="px-0 pb-16">
+            {/* Force the MUI container to be fullwidth in mobile */}
+            <style jsx global>{`
+              .MuiContainer-root {
+                padding-left: 4px !important;
+                padding-right: 4px !important;
+                max-width: 100% !important;
+              }
+              
+              /* Adjust slider styles for better mobile experience */
+              .MuiSlider-root {
+                margin-left: 8px !important;
+                margin-right: 8px !important;
+                width: calc(100% - 16px) !important;
+              }
+              
+              /* Adjust card padding in mobile */
+              .MuiCard-root, .MuiPaper-root {
+                padding-left: 8px !important;
+                padding-right: 8px !important;
+              }
+            `}</style>
+            <ImageToImagePage />
           </div>
-        </div>
-        
-        {/* Frame for ImageToImagePage component */}
-        <div 
-          ref={containerRef}
-          className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-[#2A2F38] scrollbar-track-transparent" 
-          onScroll={handleScroll}
-        >
-          {mobileModeActive ? (
-            // Mobile-optimized version with padding adjustments for better fit
-            <div className="px-0 pb-16">
-              {/* Force the MUI container to be fullwidth in mobile */}
-              <style jsx global>{`
-                .MuiContainer-root {
-                  padding-left: 4px !important;
-                  padding-right: 4px !important;
-                  max-width: 100% !important;
-                }
-                
-                /* Adjust slider styles for better mobile experience */
-                .MuiSlider-root {
-                  margin-left: 8px !important;
-                  margin-right: 8px !important;
-                  width: calc(100% - 16px) !important;
-                }
-                
-                /* Adjust card padding in mobile */
-                .MuiCard-root, .MuiPaper-root {
-                  padding-left: 8px !important;
-                  padding-right: 8px !important;
-                }
-              `}</style>
-              <ImageToImagePage />
-            </div>
-          ) : (
-            // Desktop version with adaptive container
-            <div className="pb-16">
-              <ImageToImagePage />
-            </div>
-          )}
-        </div>
+        ) : (
+          // Desktop version with direct component
+          <ImageToImagePage />
+        )}
       </div>
     );
+  };
+
+  const handleViewCodes = (product) => {
+    setSelectedProduct(product);
+    setShowCodesModal(true);
   };
 
   return (
@@ -938,7 +958,23 @@ function ImageGenerator() {
                             exit={{ opacity: 0, x: 10 }}
                             className="h-full overflow-y-auto"
                           >
-                            <ProductDetails {...productDetailsProps} />
+                            <ProductDetails 
+                              {...productDetailsProps}
+                              id="product-details-form"
+                              onViewCodes={() => handleViewCodes({
+                                id: uuidv4(),
+                                name: productName,
+                                code: productCode,
+                                type,
+                                material,
+                                dimensions: `${width}x${height} ${unit}`,
+                                price,
+                                currency,
+                                qualityGrade,
+                                weight,
+                                tags
+                              })}
+                            />
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -952,7 +988,23 @@ function ImageGenerator() {
                         <DesignControls {...designControlsProps} />
                       </div>
                       <div className="overflow-y-auto bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50">
-                        <ProductDetails {...productDetailsProps} />
+                        <ProductDetails 
+                          {...productDetailsProps}
+                          id="product-details-form"
+                          onViewCodes={() => handleViewCodes({
+                            id: uuidv4(),
+                            name: productName,
+                            code: productCode,
+                            type,
+                            material,
+                            dimensions: `${width}x${height} ${unit}`,
+                            price,
+                            currency,
+                            qualityGrade,
+                            weight,
+                            tags
+                          })}
+                        />
                       </div>
                     </div>
                     <div className="col-span-3 h-full bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50 overflow-hidden">
@@ -969,7 +1021,23 @@ function ImageGenerator() {
                       <PatternPreview {...patternPreviewProps} />
                     </div>
                     <div className="col-span-3 h-full bg-[#1A1D24] rounded-xl shadow-lg border border-[#2A2F38]/50 overflow-y-auto">
-                      <ProductDetails {...productDetailsProps} />
+                      <ProductDetails 
+                        {...productDetailsProps}
+                        id="product-details-form"
+                        onViewCodes={() => handleViewCodes({
+                          id: uuidv4(),
+                          name: productName,
+                          code: productCode,
+                          type,
+                          material,
+                          dimensions: `${width}x${height} ${unit}`,
+                          price,
+                          currency,
+                          qualityGrade,
+                          weight,
+                          tags
+                        })}
+                      />
                     </div>
                   </div>
                 )
@@ -1010,6 +1078,28 @@ function ImageGenerator() {
         showToast={showToast}
         toastMessage={toastMessage}
       />
+
+      {/* Product Codes Modal */}
+      {showCodesModal && selectedProduct && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1A1D24] rounded-xl shadow-xl w-full max-w-lg">
+            <div className="p-4 border-b border-[#2A2F38] flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-white">Product Codes</h2>
+              <button
+                onClick={() => setShowCodesModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <ProductCodes product={selectedProduct} />
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { FiEdit, FiTrash2, FiBriefcase, FiCalendar } from 'react-icons/fi';
 import { FaRupeeSign } from 'react-icons/fa';
 import EmployeeDetailsModal from './EmployeeDetailsModal';
+import defaultProfileImage from '../../assets/images/default-profile.png';
 
 const EmployeeCard = ({ employee, onEdit, onDelete }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
   const getImageUrl = (url) => {
-    if (!url) return null;
+    if (!url) return defaultProfileImage;
     return url.startsWith('http') ? url : `http://${window.location.hostname}:5000${url}`;
   };
 
@@ -74,11 +75,11 @@ const EmployeeCard = ({ employee, onEdit, onDelete }) => {
             <div className="w-16 h-16 rounded-full border-2 border-white dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-800 shadow-md">
               <img
                 src={getImageUrl(employee.image)}
-                alt={employee.name}
+                alt={`${employee.name}'s profile`}
                 className="w-full h-full object-cover"
                 onError={(e) => {
                   e.target.onerror = null;
-                  e.target.src = '/default-profile.png';
+                  e.target.src = defaultProfileImage;
                 }}
               />
             </div>

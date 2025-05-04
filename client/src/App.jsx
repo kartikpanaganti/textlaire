@@ -17,12 +17,25 @@ import ProductsPage from "./pages/ProductsPage";
 import UserManagementPage from "./pages/UserManagementPage";
 import UserActivityPage from "./pages/UserActivityPage";
 import PayrollManagementPage from "./pages/PayrollManagementPage";
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function App() {
   return (
     <Router>
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="colored"
+      />
       <Routes>
-
         <Route path="/" element={<LoginWrapper />} />
         <Route path="/dashboard" element={<ProtectedRoute component={<Dashboard />} />} />
         <Route path="/employees" element={<ProtectedRoute component={<EmployeePage />} />} />
@@ -38,7 +51,6 @@ function App() {
         {/* profile and settings pages */}
         <Route path="/profile" element={<ProtectedRoute component={<ProfilePage />} />} />
         <Route path="/settings" element={<ProtectedRoute component={<SettingsPage />} />} />
-      
       </Routes>
     </Router>
   );

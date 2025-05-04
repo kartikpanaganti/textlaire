@@ -9,7 +9,6 @@ import userRoutes from "./routes/userRoutes.js"; // Import User Routes
 import AttendanceRoutes from "./routes/attendanceRoutes.js"; // Import Attendance Routes
 import productRoutes from "./routes/productRoutes.js"; // Import Product Routes
 import uploadRoutes from "./routes/uploadRoutes.js"; // Import Upload Routes
-import imageGenerationRoutes from "./routes/imageGenerationRoutes.js"; // Import Image Generation Routes
 import falProxyRoutes from "./routes/falProxyRoutes.js"; // Import fal.ai Proxy Routes
 import payrollRoutes from "./routes/payrollRoutes.js"; // Import Payroll Routes
 import networkRoutes from "./routes/networkRoutes.js"; // Import Network Routes
@@ -52,7 +51,6 @@ app.use("/api/attendance", AttendanceRoutes); // Add Attendance Routes
 app.use('/api/raw-materials', rawMaterialRoutes);
 app.use('/api/products', productRoutes); // Add Product Routes
 app.use('/api/uploads', uploadRoutes); // Add Upload Routes
-app.use('/api/image-generation', imageGenerationRoutes); // Add Image Generation Routes
 app.use('/api/fal', falProxyRoutes); // Add fal.ai Proxy Routes
 app.use('/api/payroll', payrollRoutes); // Add Payroll Management Routes
 app.use('/api/network', networkRoutes); // Add Network Information Routes
@@ -110,7 +108,7 @@ const server = app.listen(PORT, () => console.log(`✅ Server running on port ${
 import { Server } from 'socket.io';
 const io = new Server(server, {
   cors: {
-    origin: ['http://localhost:5173', 'http://192.168.140.141:5173', 'http://192.168.101.141:5173'],
+    origin: ['http://localhost:5173', 'http://192.168.140.141:5173', 'http://192.168.101.141:5173', ],
     methods: ['GET', 'POST'],
     credentials: true
   }
@@ -121,11 +119,13 @@ const userSockets = new Map();
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-  console.log('New client connected:', socket.id);
+  console.log('New client connected:', socket.id, 'from address:', socket.handshake.address);
   
   // Associate user ID with socket ID when user logs in
-  socket.on('user_connected', (userId) => {
-    console.log(`User ${userId} connected with socket ${socket.id}`);
+  socket.on('user_connected', (data) => {
+    // Handle both formats: string ID or object with userId
+    const userId = typeof data === 'object' ? data.userId : data;
+    console.log(`User ${userId} connected with socket ${socket.id} from ${socket.handshake.address}`);
     
     // Store user's socket connection
     if (!userSockets.has(userId)) {
@@ -135,6 +135,15 @@ io.on('connection', (socket) => {
     
     // Update socket with user ID for later reference
     socket.userId = userId;
+    
+    // Join a room specific to this user for easier broadcasting
+    socket.join(`user-${userId}`);
+    
+    // Log current active connections
+    console.log('Current active connections:');
+    for (const [uid, sockets] of userSockets.entries()) {
+      console.log(`- User ${uid}: ${sockets.size} connections`);
+    }
   });
   
   // Handle registration for session updates (admin users only)

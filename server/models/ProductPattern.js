@@ -28,8 +28,22 @@ const productPatternSchema = new mongoose.Schema({
   dimensions: {
     type: String
   },
+  width: {
+    type: String
+  },
+  height: {
+    type: String
+  },
+  unit: {
+    type: String,
+    default: 'cm'
+  },
   price: {
     type: String
+  },
+  currency: {
+    type: String,
+    default: 'INR'
   },
   prompt: {
     type: String
@@ -40,6 +54,22 @@ const productPatternSchema = new mongoose.Schema({
   imageUrl: {
     type: String,
     required: true
+  },
+  description: {
+    type: String
+  },
+  tags: {
+    type: [String],
+    default: []
+  },
+  qualityGrade: {
+    type: String,
+    enum: ['premium', 'standard', 'economy'],
+    default: 'premium'
+  },
+  weight: {
+    type: String,
+    default: '400'
   },
   createdAt: {
     type: Date,

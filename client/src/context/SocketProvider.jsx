@@ -43,7 +43,10 @@ export const SocketProvider = ({ children }) => {
       console.log('Initializing socket connection for user:', user.id);
       
       // Create socket connection with robust error handling for different networks
-      const socketInstance = io(import.meta.env.VITE_API_URL || 'http://localhost:5000', {
+      const socketInstance = io(import.meta.env.VITE_API_URL || 
+        (window.location.hostname === 'localhost' ? 
+          'http://localhost:5000' : 
+          'https://textlaire.onrender.com'), {
         withCredentials: true,
         reconnection: true,
         reconnectionAttempts: 10, // Increased attempts for network switches
@@ -63,15 +66,9 @@ export const SocketProvider = ({ children }) => {
         console.log('Socket connected:', socketInstance.id);
         setIsConnected(true);
         
-        // Register user with socket
-        socketInstance.emit('user_connected', {
-          userId: user.id,
-          deviceInfo: {
-            userAgent: navigator.userAgent,
-            platform: navigator.platform,
-            networkType: navigator.connection ? navigator.connection.type : 'unknown'
-          }
-        });
+        // Register user with socket - simplify to just send the user ID as a string
+        // This matches what the server expects in most cases
+        socketInstance.emit('user_connected', user.id);
       });
 
       socketInstance.on('disconnect', () => {
@@ -88,29 +85,54 @@ export const SocketProvider = ({ children }) => {
       socketInstance.on('force_logout', (data) => {
         console.log('Received force logout event:', data);
         
-        // Show notification to user
-        alert(data.message || 'Your session has been terminated by an administrator');
-        
-        // Perform logout
-        logout();
-        window.location.href = '/';
-      });
-      
-      // Handle global force logout events (broadcasts to all connected clients)
-      socketInstance.on('global_force_logout', (data) => {
-        console.log('Received global force logout event:', data);
-        
-        // Check if this event is for the current user
-        if (data.userId === user.id || data.userId === user._id) {
-          console.log('This global force logout applies to current user');
-          
+        try {
           // Show notification to user
           alert(data.message || 'Your session has been terminated by an administrator');
           
           // Perform logout
           logout();
           
-          // Redirect to login page
+          // Wait a moment then redirect
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 500);
+        } catch (error) {
+          console.error('Error handling force logout:', error);
+          // Attempt to do a basic redirect if the logout fails
+          window.location.href = '/';
+        }
+      });
+      
+      // Handle global force logout events (broadcasts to all connected clients)
+      socketInstance.on('global_force_logout', (data) => {
+        console.log('Received global force logout event:', data);
+        
+        try {
+          // Check if this event is for the current user - compare IDs as strings to be safe
+          const currentUserId = user.id?.toString() || user._id?.toString();
+          const logoutUserId = data.userId?.toString();
+          
+          console.log(`Comparing IDs: current=${currentUserId}, logout=${logoutUserId}`);
+          
+          if (currentUserId && logoutUserId && currentUserId === logoutUserId) {
+            console.log('This global force logout applies to current user');
+            
+            // Show notification to user
+            alert(data.message || 'Your session has been terminated by an administrator');
+            
+            // Perform logout
+            logout();
+            
+            // Wait a moment then redirect
+            setTimeout(() => {
+              window.location.href = '/';
+            }, 500);
+          } else {
+            console.log('Global force logout does not apply to current user');
+          }
+        } catch (error) {
+          console.error('Error handling global force logout:', error);
+          // Attempt to do a basic redirect if the logout fails
           window.location.href = '/';
         }
       });

@@ -653,19 +653,38 @@ export const forceLogout = async (req, res) => {
         
         await user.save();
         
-        // Send real-time logout notification to the user's active sockets
+        // Emit force_logout event to all of the user's connected sockets
         if (userSockets.has(user._id.toString())) {
           const userSocketIds = userSockets.get(user._id.toString());
           
           // Emit force_logout event to all of the user's connected sockets
           userSocketIds.forEach(socketId => {
-            io.to(socketId).emit('force_logout', {
-              message: 'Your session has been terminated by an administrator',
-              sessionId
-            });
+            console.log(`Attempting to send force logout to socket ${socketId} for user ${user._id}`);
             
-            console.log(`Force logout notification sent to socket ${socketId} for user ${user._id}`);
+            try {
+              io.to(socketId).emit('force_logout', {
+                message: 'Your session has been terminated by an administrator',
+                sessionId
+              });
+              
+              console.log(`Force logout notification sent to socket ${socketId} for user ${user._id}`);
+            } catch (socketError) {
+              console.error(`Error sending force logout to socket ${socketId}:`, socketError);
+            }
           });
+        } else {
+          console.log(`No active sockets found for user ${user._id}`);
+        }
+        
+        // Also try broadcasting to user-specific room
+        try {
+          io.to(`user-${user._id.toString()}`).emit('force_logout', {
+            message: 'Your session has been terminated by an administrator',
+            sessionId
+          });
+          console.log(`Force logout also sent to user room: user-${user._id.toString()}`);
+        } catch (roomError) {
+          console.error(`Error broadcasting to user room:`, roomError);
         }
       }
     }
@@ -683,15 +702,35 @@ export const forceLogout = async (req, res) => {
       timestamp: new Date()
     });
     
-    // Broadcast a global force logout event for this user
-    // This ensures all devices get the message even if socket mappings are incomplete
-    io.emit('global_force_logout', {
-      userId: session.userId.toString(),
-      sessionId: sessionId,
-      message: 'Your session has been terminated by an administrator'
-    });
+    // Try targeted broadcast to user-specific room first
+    try {
+      console.log(`Broadcasting targeted force logout to user-${session.userId.toString()}`);
+      
+      io.to(`user-${session.userId.toString()}`).emit('global_force_logout', {
+        userId: session.userId.toString(),
+        sessionId: sessionId,
+        message: 'Your session has been terminated by an administrator'
+      });
+      
+      console.log(`Targeted force logout sent to user-${session.userId.toString()}`);
+    } catch (roomError) {
+      console.error(`Error broadcasting to user room:`, roomError);
+    }
     
-    console.log(`Global force logout broadcast sent for user ${session.userId}`);
+    // Broadcast a global force logout event as backup
+    try {
+      console.log(`Broadcasting global force logout for user ${session.userId}`);
+      
+      io.emit('global_force_logout', {
+        userId: session.userId.toString(),
+        sessionId: sessionId,
+        message: 'Your session has been terminated by an administrator'
+      });
+      
+      console.log(`Global force logout broadcast sent for user ${session.userId}`);
+    } catch (socketError) {
+      console.error(`Error broadcasting global force logout:`, socketError);
+    }
     
     // Also invalidate all other active sessions for this user to prevent multiple logins
     try {

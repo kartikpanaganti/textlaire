@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ProductCodes from './ProductCodes';
 
 const ProductDetailsModal = ({ show, product, onClose, onUpdate, onDelete }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -9,12 +10,52 @@ const ProductDetailsModal = ({ show, product, onClose, onUpdate, onDelete }) => 
   const [imageRotation, setImageRotation] = useState(0);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [zoomDisplay, setZoomDisplay] = useState('100%');
 
   useEffect(() => {
     if (product) {
       setEditedProduct({ ...product });
     }
   }, [product]);
+
+  useEffect(() => {
+    if (show) {
+      setZoomLevel(1);
+      setImageRotation(0);
+      setZoomDisplay('100%');
+    }
+  }, [show]);
+
+  useEffect(() => {
+    setZoomDisplay(`${Math.round(zoomLevel * 100)}%`);
+  }, [zoomLevel]);
+
+  const handleZoomIn = useCallback(() => {
+    setZoomLevel(prev => {
+      const newZoom = prev + 0.2;
+      return newZoom;
+    });
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoomLevel(prev => {
+      const newZoom = prev - 0.2;
+      return newZoom > 0.1 ? newZoom : 0.1;
+    });
+  }, []);
+
+  const handleZoomReset = useCallback(() => {
+    setZoomLevel(1);
+    setImageRotation(0);
+  }, []);
+
+  const handleFitToView = useCallback(() => {
+    setZoomLevel(0.4);
+  }, []);
+
+  const handleRotate = useCallback(() => {
+    setImageRotation(prev => (prev + 90) % 360);
+  }, []);
 
   if (!show || !product || !editedProduct) return null;
 
@@ -349,14 +390,14 @@ const ProductDetailsModal = ({ show, product, onClose, onUpdate, onDelete }) => 
               <motion.button 
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => setActiveTab('preview')}
+                onClick={() => setActiveTab('codes')}
                 className={`text-sm font-medium px-4 py-2 rounded-lg transition-all ${
-                  activeTab === 'preview' 
+                  activeTab === 'codes' 
                     ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg' 
                     : 'text-gray-400 hover:text-white hover:bg-[#2A2F38]'
                 }`}
               >
-                Pattern Preview
+                Barcodes & QR
               </motion.button>
             </div>
           </div>
@@ -364,44 +405,108 @@ const ProductDetailsModal = ({ show, product, onClose, onUpdate, onDelete }) => 
           <div className="p-6">
             {activeTab === 'details' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Image Section */}
+                {/* Image Section - Square image in rectangular container */}
                 <motion.div 
-                  className="relative aspect-square rounded-xl overflow-hidden bg-[#2A2F38] shadow-xl"
+                  className="relative bg-[#2A2F38] rounded-xl overflow-hidden shadow-xl h-[600px] flex items-center justify-center"
                   whileHover={{ scale: 1.02 }}
                 >
-                  <img
-                    src={product.image}
-                    alt={product.name}
-                    className="w-full h-full object-contain"
-                    style={{ transform: `rotate(${imageRotation}deg)`, transition: 'transform 0.3s ease' }}
-                  />
-                  <div className="absolute bottom-3 right-3 flex items-center space-x-2 bg-black/70 backdrop-blur-sm rounded-lg p-2">
+                  <div className="relative w-full h-full flex items-center justify-center p-6">
+                    {/* Container for image */}
+                    <div className="relative w-full h-full flex items-center justify-center">
+                      <div 
+                        className="relative bg-[#232830] rounded-lg overflow-hidden cursor-crosshair group"
+                        style={{
+                          maxWidth: `${100 * zoomLevel}%`,
+                          maxHeight: '100%',
+                          width: 'auto',
+                          height: 'auto',
+                          transition: 'all 0.3s ease'
+                        }}
+                      >
+                        <div className="relative flex items-center justify-center">
+                          <img
+                            src={product.image}
+                            alt={product.name}
+                            className="max-w-full max-h-[500px] w-auto h-auto object-contain transition-all duration-300 ease-out cursor-crosshair select-none"
+                            style={{ 
+                              transform: `rotate(${imageRotation}deg)`,
+                            }}
+                            draggable="false"
+                          />
+                        </div>
+                        
+                        {/* Grid overlay for better visual reference */}
+                        <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity duration-200">
+                          {Array(9).fill(null).map((_, i) => (
+                            <div key={i} className="border border-[#3A4149]/10"></div>
+                          ))}
+                        </div>
+
+                        {/* Center crosshair */}
+                        <div className="absolute inset-0 pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity duration-200">
+                          <div className="absolute left-1/2 top-0 bottom-0 w-px bg-[#3A4149]/20"></div>
+                          <div className="absolute top-1/2 left-0 right-0 h-px bg-[#3A4149]/20"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Image Controls */}
+                  <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center space-x-2 bg-black/70 backdrop-blur-sm rounded-lg p-2 z-10">
                     <motion.button
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
-                      onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.1))}
+                      onClick={handleZoomOut}
                       className="p-1.5 rounded-md bg-[#2A2F38]/80 hover:bg-[#3A4149]/80 text-white"
+                      title="Zoom Out"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
                       </svg>
                     </motion.button>
-                    <span className="text-xs text-white">{Math.round(zoomLevel * 100)}%</span>
+                    <span className="text-xs text-white font-medium min-w-[70px] text-center bg-[#1A1D24] px-2 py-1 rounded">
+                      {zoomDisplay}
+                    </span>
                     <motion.button
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
-                      onClick={() => setZoomLevel(prev => Math.min(2, prev + 0.1))}
+                      onClick={handleZoomIn}
                       className="p-1.5 rounded-md bg-[#2A2F38]/80 hover:bg-[#3A4149]/80 text-white"
+                      title="Zoom In"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                       </svg>
                     </motion.button>
+                    <div className="w-px h-6 bg-gray-600 mx-1"></div>
                     <motion.button
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
-                      onClick={() => setImageRotation(prev => prev + 90)}
+                      onClick={handleFitToView}
                       className="p-1.5 rounded-md bg-[#2A2F38]/80 hover:bg-[#3A4149]/80 text-white"
+                      title="Fit to View"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-2V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                      </svg>
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={handleRotate}
+                      className="p-1.5 rounded-md bg-[#2A2F38]/80 hover:bg-[#3A4149]/80 text-white"
+                      title="Rotate"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={handleZoomReset}
+                      className="p-1.5 rounded-md bg-[#2A2F38]/80 hover:bg-[#3A4149]/80 text-white"
+                      title="Reset View"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -414,58 +519,7 @@ const ProductDetailsModal = ({ show, product, onClose, onUpdate, onDelete }) => 
                 {isEditing ? renderEditForm() : renderDetailsView()}
               </div>
             ) : (
-              <div className="h-[500px] bg-[#232830] rounded-xl overflow-hidden p-4">
-                <div className="h-full flex items-center justify-center">
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="relative"
-                    style={{
-                      transform: `scale(${zoomLevel}) rotate(${imageRotation}deg)`,
-                      transition: 'transform 0.3s ease-out'
-                    }}
-                  >
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      className="max-w-full max-h-[460px] object-contain"
-                    />
-                  </motion.div>
-                </div>
-                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex items-center space-x-4 bg-black/70 backdrop-blur-sm rounded-lg p-3">
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.1))}
-                    className="p-1.5 rounded-md bg-[#2A2F38]/80 hover:bg-[#3A4149]/80 text-white"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                    </svg>
-                  </motion.button>
-                  <span className="text-xs text-white">Zoom: {Math.round(zoomLevel * 100)}%</span>
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => setZoomLevel(prev => Math.min(2, prev + 0.1))}
-                    className="p-1.5 rounded-md bg-[#2A2F38]/80 hover:bg-[#3A4149]/80 text-white"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => setImageRotation(prev => prev + 90)}
-                    className="p-1.5 rounded-md bg-[#2A2F38]/80 hover:bg-[#3A4149]/80 text-white"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  </motion.button>
-                </div>
-              </div>
+              <ProductCodes product={product} />
             )}
           </div>
         </motion.div>

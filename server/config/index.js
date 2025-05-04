@@ -4,12 +4,18 @@ export const config = {
   allowedUrls: [
     "https://rest.alpha.fal.ai",
     "wss://realtime.fal.ai",
-    "https://realtime.fal.ai"
+    "https://realtime.fal.ai",
+    "https://textlaire.onrender.com"
   ],
   wsUrl: 'wss://realtime.fal.ai/handler',
   corsOptions: {
-    origin: true, // Allow all origins in development
-    methods: ['GET', 'POST', 'OPTIONS'],
+    origin: [
+      'http://localhost:5173',
+      'http://192.168.140.141:5173',
+      'http://192.168.101.141:5173',
+      'https://textlaire.onrender.com'
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type',
       'Authorization',
