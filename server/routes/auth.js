@@ -9,7 +9,10 @@ import {
   getSessionHistory,
   getUserActivityStats
 } from "../controllers/authController.js";
+import deviceInfoController from '../controllers/deviceInfoController.js';
+import sessionActivityController from '../controllers/sessionActivityController.js';
 import { authMiddleware, adminMiddleware } from "../middleware/authMiddleware.js";
+import { recordPageView } from "../middleware/activityTrackingMiddleware.js";
 
 const router = express.Router();
 
@@ -26,5 +29,14 @@ router.get("/sessions/active", authMiddleware, adminMiddleware, getActiveSession
 router.get("/sessions/history", authMiddleware, adminMiddleware, getSessionHistory);
 router.post("/sessions/:sessionId/logout", authMiddleware, adminMiddleware, forceLogout);
 router.get("/stats/activity", authMiddleware, adminMiddleware, getUserActivityStats);
+
+// Session activity route
+router.get("/sessions/:sessionId/activity", authMiddleware, adminMiddleware, sessionActivityController.getSessionActivity);
+
+// Page view tracking route
+router.post("/track/pageview", authMiddleware, recordPageView);
+
+// Device information route
+router.post("/update-device-info", authMiddleware, deviceInfoController.updateDeviceInfo);
 
 export default router;

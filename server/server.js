@@ -17,6 +17,7 @@ import rawMaterialRoutes from './routes/rawMaterialRoutes.js';
 import { config } from './config/index.js';
 import apiRoutes from './routes/api.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { trackApiActivity } from './middleware/activityTrackingMiddleware.js';
 
 
 dotenv.config();
@@ -42,6 +43,9 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '50mb' })); // Increased limit for image uploads
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads"))); // Serve images
+
+// Activity tracking middleware - track API requests
+app.use(trackApiActivity);
 
 // Routes
 app.use("/api/employees", employeesRoutes);

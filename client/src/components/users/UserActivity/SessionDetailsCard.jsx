@@ -1,13 +1,48 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { 
   FaDesktop, FaMobile, FaTablet, FaGlobe, FaClock, FaUserClock, 
   FaCalendarAlt, FaMapMarkerAlt, FaNetworkWired, FaSignal, 
   FaExclamationTriangle, FaEye, FaServer, FaHistory, 
-  FaLocationArrow, FaFlag
+  FaLocationArrow, FaFlag, FaSpinner
 } from 'react-icons/fa';
 import { HiStatusOnline } from 'react-icons/hi';
 
 const SessionDetailsCard = ({ session }) => {
+  const [sessionActivity, setSessionActivity] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Fetch session activity data when the session changes
+  useEffect(() => {
+    if (session && session.sessionId) {
+      fetchSessionActivity(session.sessionId);
+    }
+  }, [session]);
+
+  // Function to fetch session activity data
+  const fetchSessionActivity = async (sessionId) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Fetch session activity data from the API
+      const response = await axios.get(`/api/auth/sessions/${sessionId}/activity`);
+      
+      if (response.data.success) {
+        setSessionActivity(response.data.activity);
+        console.log('Session activity data:', response.data.activity);
+      } else {
+        setError('Failed to load session activity data');
+      }
+    } catch (err) {
+      console.error('Error fetching session activity:', err);
+      setError(err.response?.data?.message || 'Failed to load session activity');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!session) return null;
 
   // Format date for display
@@ -52,6 +87,34 @@ const SessionDetailsCard = ({ session }) => {
     if (device.toLowerCase().includes('mobile')) return <FaMobile className="text-blue-500" />;
     if (device.toLowerCase().includes('tablet')) return <FaTablet className="text-green-500" />;
     return <FaDesktop className="text-purple-500" />;
+  };
+
+  // Get page views count from session activity data
+  const getPageViewsCount = () => {
+    if (loading) return <FaSpinner className="animate-spin" />;
+    if (error) return 0;
+    
+    // Check if we have activity data from the API
+    if (sessionActivity && sessionActivity.pageViews) {
+      return sessionActivity.pageViews;
+    }
+    
+    // Fallback to session data if available
+    return session.pageViews || 0;
+  };
+
+  // Get API calls count from session activity data
+  const getApiCallsCount = () => {
+    if (loading) return <FaSpinner className="animate-spin" />;
+    if (error) return 0;
+    
+    // Check if we have activity data from the API
+    if (sessionActivity && sessionActivity.apiCalls) {
+      return sessionActivity.apiCalls;
+    }
+    
+    // Fallback to session data if available
+    return session.apiCalls || 0;
   };
 
   return (
@@ -152,7 +215,8 @@ const SessionDetailsCard = ({ session }) => {
             <div className="ml-3">
               <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300">Page Views</h5>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                {session.pageViews || 0}
+                {getPageViewsCount()}
+                {loading && <span className="ml-2"><FaSpinner className="inline animate-spin text-blue-500" /></span>}
               </p>
             </div>
           </div>
@@ -164,7 +228,8 @@ const SessionDetailsCard = ({ session }) => {
             <div className="ml-3">
               <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300">API Calls</h5>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                {session.apiCalls || 0}
+                {getApiCallsCount()}
+                {loading && <span className="ml-2"><FaSpinner className="inline animate-spin text-blue-500" /></span>}
               </p>
             </div>
           </div>
@@ -181,7 +246,7 @@ const SessionDetailsCard = ({ session }) => {
               <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300">Device</h5>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 {session.deviceInfo?.device || 'Unknown'}
-                {session.deviceInfo?.osVersion && ` (${session.deviceInfo.os} ${session.deviceInfo.osVersion})`}
+                {session.deviceInfo?.os && ` (${session.deviceInfo.os})`}
               </p>
             </div>
           </div>
@@ -194,7 +259,6 @@ const SessionDetailsCard = ({ session }) => {
               <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300">Browser</h5>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 {session.deviceInfo?.browser || 'Unknown'}
-                {session.deviceInfo?.browserVersion && ` ${session.deviceInfo.browserVersion}`}
               </p>
             </div>
           </div>
@@ -314,25 +378,34 @@ const SessionDetailsCard = ({ session }) => {
       )}
 
       {/* Activity log if available */}
-      {session.activityLog && session.activityLog.length > 0 && (
+      {(sessionActivity?.activityLog || session.activityLog) && (sessionActivity?.activityLog?.length > 0 || session.activityLog?.length > 0) && (
         <div className="px-6 pb-6">
           <h4 className="font-medium text-gray-700 dark:text-gray-300 border-b pb-2 mb-4 dark:border-gray-700">Activity Log</h4>
-          <div className="space-y-2 max-h-48 overflow-y-auto">
-            {session.activityLog.map((activity, index) => (
-              <div key={index} className="text-sm py-2 border-b dark:border-gray-700 last:border-0">
-                <div className="flex justify-between">
-                  <span>{activity.action}</span>
-                  <span className="text-gray-500 dark:text-gray-400">{formatDate(activity.timestamp)}</span>
+          {loading ? (
+            <div className="flex justify-center items-center py-4">
+              <FaSpinner className="animate-spin text-blue-500 mr-2" />
+              <span>Loading activity data...</span>
+            </div>
+          ) : error ? (
+            <div className="text-red-500 text-center py-2">{error}</div>
+          ) : (
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {(sessionActivity?.activityLog || session.activityLog || []).map((activity, index) => (
+                <div key={index} className="text-sm py-2 border-b dark:border-gray-700 last:border-0">
+                  <div className="flex justify-between">
+                    <span>{activity.action}</span>
+                    <span className="text-gray-500 dark:text-gray-400">{formatDate(activity.timestamp)}</span>
+                  </div>
+                  {activity.details && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{activity.details}</p>
+                  )}
+                  {activity.path && (
+                    <p className="text-xs text-blue-500 dark:text-blue-400 mt-1">{activity.path}</p>
+                  )}
                 </div>
-                {activity.details && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{activity.details}</p>
-                )}
-                {activity.path && (
-                  <p className="text-xs text-blue-500 dark:text-blue-400 mt-1">{activity.path}</p>
-                )}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

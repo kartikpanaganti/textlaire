@@ -17,12 +17,22 @@ import ProductsPage from "./pages/ProductsPage";
 import UserManagementPage from "./pages/UserManagementPage";
 import UserActivityPage from "./pages/UserActivityPage";
 import PayrollManagementPage from "./pages/PayrollManagementPage";
+import DeviceDetector from "./components/common/DeviceDetector";
+import PageViewTracker from "./components/common/PageViewTracker";
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 function App() {
+  const { isAuthenticated } = useContext(UserContext);
+  
   return (
     <Router>
+      {/* Add DeviceDetector component for authenticated users */}
+      {isAuthenticated && <DeviceDetector />}
+      
+      {/* Add PageViewTracker component for authenticated users */}
+      {isAuthenticated && <PageViewTracker />}
+      
       <ToastContainer
         position="top-right"
         autoClose={3000}

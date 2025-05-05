@@ -1,8 +1,13 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import DeviceDetector from 'device-detector-js';
 import User from '../models/User.js';
 import UserSession from '../models/UserSession.js';
+import { io, userSockets } from '../server.js';
+
+// Initialize the device detector
+const deviceDetector = new DeviceDetector();
 
 // Helper function to extract device info from request
 const getDeviceInfo = (req) => {
@@ -63,67 +68,148 @@ const getDeviceInfo = (req) => {
     ipAddress = ipAddress.substring(7);
   }
   
-  // Better check for mobile devices
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(userAgent);
+  // Use device-detector-js for accurate device detection
+  const device = deviceDetector.parse(userAgent);
+  console.log('Device Detection Result:', device);
   
-  // Log detected mobile status for debugging
-  console.log('Is Mobile:', isMobile);
+  // Direct user agent checks for mobile detection
+  const containsAndroid = userAgent.includes('Android');
+  const containsIOS = userAgent.includes('iPhone') || userAgent.includes('iPad') || userAgent.includes('iPod');
+  const containsMobile = userAgent.includes('Mobile') || userAgent.includes('mobile');
   
-  // Check for mobile browser-specific indicators
-  const hasMobileBrowser = 
-    userAgent.includes('Mobile') || 
-    userAgent.includes('Android') || 
-    userAgent.includes('iPhone') || 
-    userAgent.includes('iPad') || 
-    userAgent.includes('Silk/');
+  // Log our direct checks
+  console.log('Direct UA checks:', { containsAndroid, containsIOS, containsMobile });
   
-  // Extract browser name from user agent
+  // If user agent directly indicates mobile OS, prioritize that over other detection
+  const isDefinitelyMobile = containsAndroid || containsIOS || (containsMobile && !userAgent.includes('Chrome'));
+  
+  // Extract browser information
   let browser = 'Unknown';
-  if (userAgent.includes('Chrome') && !userAgent.includes('Edg')) {
-    browser = 'Chrome';
-  } else if (userAgent.includes('Firefox')) {
-    browser = 'Firefox';
-  } else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
-    browser = 'Safari';
-  } else if (userAgent.includes('Edg')) {
-    browser = 'Edge';
-  } else if (userAgent.includes('MSIE') || userAgent.includes('Trident/')) {
-    browser = 'Internet Explorer';
+  if (device.client && device.client.name) {
+    browser = device.client.name;
+    if (device.client.version) {
+      browser += ` ${device.client.version}`;
+    }
   }
   
-  // Extract OS from user agent
+  // Extract OS information
   let os = 'Unknown';
-  if (userAgent.includes('Windows')) {
-    os = 'Windows';
-  } else if (userAgent.includes('Mac OS')) {
-    os = 'macOS';
-  } else if (userAgent.includes('Linux') && !userAgent.includes('Android')) {
-    os = 'Linux';
-  } else if (userAgent.includes('Android')) {
-    os = 'Android';
-  } else if (userAgent.includes('iOS') || userAgent.includes('iPhone') || userAgent.includes('iPad')) {
-    os = 'iOS';
+  if (device.os && device.os.name) {
+    os = device.os.name;
+    if (device.os.version) {
+      os += ` ${device.os.version}`;
+    }
   }
   
-  // Check if connecting through a mobile hotspot (network IP with mobile origin)
-  const isConnectingThroughHotspot = networkIpFromOrigin !== null || ipAddress.startsWith('192.168.') || ipAddress.startsWith('10.') || /^172\.(1[6-9]|2[0-9]|3[0-1])/.test(ipAddress);
-  console.log('Connecting through hotspot/network:', isConnectingThroughHotspot);
+  // Check if connecting through a private network IP
+  const isPrivateNetworkIP = ipAddress.startsWith('192.168.') || 
+                            ipAddress.startsWith('10.') || 
+                            /^172\.(1[6-9]|2[0-9]|3[0-1])/.test(ipAddress);
+  console.log('Connecting through private network:', isPrivateNetworkIP);
   
-  // Check for mobile app or WebView
-  const isWebView = /WebView|FBAN|FBAV|Instagram|Line\/|FB_IAB|Twitter/.test(userAgent);
+  // Fix IP if it has duplicate Network Device tags
+  if (ipAddress.includes('(Network Device)')) {
+    // Remove all occurrences and add just one
+    ipAddress = ipAddress.replace(/\(Network Device\)/g, '');
+    ipAddress = `${ipAddress}(Network Device)`;
+  }
   
-  // Determine device type based on multiple factors
+  // Check if the IP already contains a Network Device tag to avoid duplication
+  const hasNetworkDeviceTag = ipAddress.includes('(Network Device)');
+  
+  // PRIORITY MOBILE DETECTION: If direct user agent check indicates mobile, override everything
   let deviceType;
-  if (isMobile || hasMobileBrowser || isWebView) {
+  if (isDefinitelyMobile) {
+    console.log('Direct user agent check indicates mobile device, overriding other detection');
     deviceType = 'Mobile';
-  } else if (userAgent.includes('iPad') || userAgent.includes('Tablet')) {
-    deviceType = 'Tablet';
-  } else if (isConnectingThroughHotspot && origin && origin.includes('192.168.')) {
-    // If connecting through a network IP that's likely a mobile hotspot,
-    // and the origin has the same network IP, it's probably a mobile device
-    deviceType = 'Mobile (Hotspot)';
+    
+    if (isPrivateNetworkIP && ipAddress !== 'localhost (127.0.0.1)') {
+      deviceType = 'Mobile (Hotspot)';
+    }
+  }
+  // Otherwise use device-detector results
+  else if (device.device && device.device.type) {
+    // Map the device type from the detector to our simplified categories
+    switch(device.device.type) {
+      case 'smartphone':
+      case 'feature phone':
+      case 'phablet':
+        deviceType = 'Mobile';
+        break;
+      case 'tablet':
+        deviceType = 'Tablet';
+        break;
+      case 'console':
+      case 'portable media player':
+      case 'car browser':
+        deviceType = 'Mobile Device';
+        break;
+      case 'tv':
+      case 'smart display':
+        deviceType = 'Smart TV';
+        break;
+      case 'desktop':
+      default:
+        deviceType = 'Desktop';
+    }
+    
+    // Additional mobile detection check based on user agent
+    const mobileUserAgentPatterns = [
+      'Android', 'webOS', 'iPhone', 'iPad', 'iPod', 'BlackBerry', 'IEMobile', 
+      'Opera Mini', 'Mobile', 'mobile', 'CriOS', 'Silk/', 'Phone'
+    ];
+    
+    // Override to Mobile if device type is Desktop but user agent contains mobile patterns
+    if (deviceType === 'Desktop' && 
+        mobileUserAgentPatterns.some(pattern => userAgent.includes(pattern))) {
+      console.log('User agent contains mobile patterns, overriding device type to Mobile');
+      deviceType = 'Mobile';
+    }
+    
+    // Add network information for non-localhost IPs
+    if (isPrivateNetworkIP && ipAddress !== 'localhost (127.0.0.1)') {
+      if (deviceType === 'Mobile' || deviceType === 'Tablet' || deviceType === 'Mobile Device') {
+        deviceType = 'Mobile (Hotspot)';
+      } else if (deviceType === 'Desktop' && !hasNetworkDeviceTag) {
+        // Add network indicator to the IP address for desktop devices (but only if not already there)
+        ipAddress = `${ipAddress}(Network Device)`;
+      }
+    }
   } else {
-    deviceType = 'Desktop';
+    // Fallback detection based on user agent if device-detector-js fails
+    const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i;
+    const isMobileUserAgent = mobileRegex.test(userAgent);
+    
+    if (isMobileUserAgent) {
+      deviceType = 'Mobile';
+      if (isPrivateNetworkIP && ipAddress !== 'localhost (127.0.0.1)') {
+        deviceType = 'Mobile (Hotspot)';
+      }
+    } else {
+      deviceType = 'Desktop';
+      // Add network indicator for desktop on private networks (if not already there)
+      if (isPrivateNetworkIP && ipAddress !== 'localhost (127.0.0.1)' && !hasNetworkDeviceTag) {
+        ipAddress = `${ipAddress}(Network Device)`;
+      }
+    }
+  }
+  
+  // If client sent explicit device information, use it as a hint
+  const clientDeviceType = req.headers['x-client-device-type'];
+  if (clientDeviceType) {
+    console.log('Client reported device type:', clientDeviceType);
+    // Override detection if the client explicitly reports being mobile or desktop
+    if (clientDeviceType === 'mobile' && deviceType === 'Desktop') {
+      deviceType = 'Mobile';
+      if (isPrivateNetworkIP && ipAddress !== 'localhost (127.0.0.1)') {
+        deviceType = 'Mobile (Hotspot)';
+      }
+    } else if (clientDeviceType === 'desktop' && deviceType !== 'Desktop') {
+      deviceType = 'Desktop';
+      if (isPrivateNetworkIP && ipAddress !== 'localhost (127.0.0.1)' && !hasNetworkDeviceTag) {
+        ipAddress = `${ipAddress}(Network Device)`;
+      }
+    }
   }
   
   // Log final device info for debugging
@@ -131,7 +217,10 @@ const getDeviceInfo = (req) => {
     ipAddress,
     browser,
     os,
-    device: deviceType
+    device: deviceType,
+    // Add brand and model if available
+    brand: device.device?.brand || undefined,
+    model: device.device?.model || undefined
   };
   console.log('Device info:', deviceInfo);
   
@@ -319,8 +408,12 @@ export const login = async (req, res) => {
           if (formatted.loginTime) {
             const loginDate = new Date(formatted.loginTime);
             formatted.formattedLoginTime = loginDate.toLocaleString('en-US', { 
-              month: 'short', day: 'numeric', year: 'numeric',
-              hour: 'numeric', minute: 'numeric', hour12: true 
+              month: 'short', 
+              day: 'numeric', 
+              year: 'numeric',
+              hour: 'numeric', 
+              minute: 'numeric',
+              hour12: true 
             });
           }
           return formatted;
@@ -387,7 +480,7 @@ export const logout = async (req, res) => {
       await user.save();
     }
 
-    // Update session
+    // Update session - IMPORTANT: Set isActive to false to ensure it doesn't show in active sessions
     const updatedSession = await UserSession.findOneAndUpdate(
       { sessionId },
       { 
@@ -402,11 +495,14 @@ export const logout = async (req, res) => {
     // Emit event for real-time session updates to admin users
     try {
       if (updatedSession) {
-        // Get all active sessions after this logout
+        // Get all potentially active sessions after this logout
+        // Use the same query pattern as getActiveSessions
         const activeSessions = await UserSession.find({
           $or: [
-            { logoutTime: { $exists: false } },
-            { isActive: true }
+            // Sessions explicitly marked as active
+            { isActive: true },
+            // Sessions without a logout time
+            { logoutTime: { $exists: false } }
           ]
         }).populate('userId', 'name email role').sort({ loginTime: -1 });
         
@@ -416,10 +512,26 @@ export const logout = async (req, res) => {
           if (formatted.loginTime) {
             const loginDate = new Date(formatted.loginTime);
             formatted.formattedLoginTime = loginDate.toLocaleString('en-US', { 
-              month: 'short', day: 'numeric', year: 'numeric',
-              hour: 'numeric', minute: 'numeric', hour12: true 
+              month: 'short', 
+              day: 'numeric', 
+              year: 'numeric',
+              hour: 'numeric', 
+              minute: 'numeric',
+              hour12: true 
             });
           }
+          
+          // Add duration
+          if (formatted.loginTime) {
+            const loginTime = new Date(formatted.loginTime);
+            const now = new Date();
+            const durationMs = now - loginTime;
+            const durationMinutes = Math.floor(durationMs / 60000);
+            const hours = Math.floor(durationMinutes / 60);
+            const minutes = durationMinutes % 60;
+            formatted.formattedDuration = `${hours}h ${minutes}m`;
+          }
+          
           return formatted;
         });
         
@@ -495,23 +607,27 @@ export const getActiveSessions = async (req, res) => {
       });
     }
 
-    // Get all sessions marked as active in the database
-    // Consider sessions without logoutTime as active OR sessions explicitly marked as active
+    console.log('Fetching active sessions...');
+
+    // Get all sessions that are potentially active
+    // Use a more inclusive query to find active sessions
     const dbActiveSessions = await UserSession.find({
       $or: [
-        { logoutTime: { $exists: false } },  // Sessions without a logout time
-        { isActive: true }                   // Sessions explicitly marked as active
+        // Sessions explicitly marked as active
+        { isActive: true },
+        // Sessions without a logout time
+        { logoutTime: { $exists: false } }
       ]
     })
       .populate('userId', 'name email role')
       .sort({ loginTime: -1 });
 
-    console.log(`Found ${dbActiveSessions.length} active sessions in database`);
+    console.log(`Found ${dbActiveSessions.length} potentially active sessions in database`);
     
     // For debugging purposes, log the active sessions
     dbActiveSessions.forEach(session => {
       if (session.userId) {
-        console.log(`Active session: ${session.userId.email}, Device: ${session.deviceInfo?.device}, IP: ${session.deviceInfo?.ipAddress}`);
+        console.log(`Session: ${session.sessionId}, User: ${session.userId.email}, Device: ${session.deviceInfo?.device}, IP: ${session.deviceInfo?.ipAddress}, Active: ${session.isActive}, Logout Time: ${session.logoutTime ? 'Yes' : 'No'}`);
       }
     });
     
@@ -550,19 +666,15 @@ export const getActiveSessions = async (req, res) => {
       if (uniqueSessionsMap.has(key) && 
           session._id.toString() !== uniqueSessionsMap.get(key)._id.toString() &&
           new Date(session.loginTime) < new Date(uniqueSessionsMap.get(key).loginTime)) {
-        // This is an older session for the same user-device-IP combo, schedule it for cleanup
-        // We'll do this in a background process to avoid slowing down the response
-        setTimeout(async () => {
-          try {
-            console.log(`Cleaning up older duplicate session: ${session._id}`);
-            await UserSession.updateOne(
-              { _id: session._id },
-              { isActive: false, logoutTime: new Date() }
-            );
-          } catch (err) {
-            console.error('Error cleaning up older session:', err);
-          }
-        }, 100);
+        // This is an older session for the same user-device-IP combo, mark it as inactive immediately
+        UserSession.updateOne(
+          { _id: session._id },
+          { isActive: false, logoutTime: new Date() }
+        ).then(() => {
+          console.log(`Marked older session ${session._id} as inactive`);
+        }).catch(err => {
+          console.error('Error marking older session as inactive:', err);
+        });
       }
     });
     
@@ -575,7 +687,7 @@ export const getActiveSessions = async (req, res) => {
     // Sort by login time (most recent first)
     uniqueSessions.sort((a, b) => new Date(b.loginTime) - new Date(a.loginTime));
 
-    // Format dates in AM/PM format
+    // Format dates in AM/PM format and calculate duration
     const formattedSessions = uniqueSessions.map(session => {
       // Create a new object with all the original properties
       const formattedSession = JSON.parse(JSON.stringify(session));
@@ -590,6 +702,63 @@ export const getActiveSessions = async (req, res) => {
           hour: 'numeric', 
           minute: 'numeric',
           hour12: true 
+        });
+        
+        // Calculate and add duration
+        const now = new Date();
+        const durationMs = now - loginDate;
+        const durationMinutes = Math.floor(durationMs / 60000);
+        const hours = Math.floor(durationMinutes / 60);
+        const minutes = durationMinutes % 60;
+        formattedSession.formattedDuration = `${hours}h ${minutes}m`;
+      }
+      
+      // Prioritize client-reported device information if available
+      if (formattedSession.deviceInfo && formattedSession.deviceInfo.clientReportedInfo) {
+        const clientInfo = formattedSession.deviceInfo.clientReportedInfo;
+        
+        // Override device info with client-reported values
+        if (clientInfo.deviceType === 'mobile') {
+          // For mobile devices on private networks
+          if (formattedSession.deviceInfo.ipAddress && 
+             (formattedSession.deviceInfo.ipAddress.includes('192.168.') || 
+              formattedSession.deviceInfo.ipAddress.includes('10.') ||
+              /^172\.(1[6-9]|2[0-9]|3[0-1])/.test(formattedSession.deviceInfo.ipAddress))) {
+            formattedSession.deviceInfo.device = 'Mobile (Hotspot)';
+          } else {
+            formattedSession.deviceInfo.device = 'Mobile';
+          }
+          
+          // Add OS-specific information if available
+          if (clientInfo.isAndroid) {
+            formattedSession.deviceInfo.device = 'Mobile (Android)';
+          } else if (clientInfo.isIOS) {
+            formattedSession.deviceInfo.device = 'Mobile (iOS)';
+          }
+        } else if (clientInfo.deviceType === 'tablet') {
+          formattedSession.deviceInfo.device = 'Tablet';
+        } else if (clientInfo.deviceType === 'desktop') {
+          formattedSession.deviceInfo.device = 'Desktop';
+        }
+        
+        // Update browser and OS information if available
+        if (clientInfo.browser) {
+          formattedSession.deviceInfo.browser = clientInfo.browser;
+        }
+        
+        if (clientInfo.os) {
+          formattedSession.deviceInfo.os = clientInfo.os;
+        }
+        
+        // Add model information if available
+        if (clientInfo.model) {
+          formattedSession.deviceInfo.model = clientInfo.model;
+        }
+        
+        console.log(`Session ${formattedSession.sessionId} - Updated device info from client:`, {
+          originalDevice: session.deviceInfo.device,
+          updatedDevice: formattedSession.deviceInfo.device,
+          clientReportedType: clientInfo.deviceType
         });
       }
       
@@ -610,9 +779,6 @@ export const getActiveSessions = async (req, res) => {
     });
   }
 };
-
-// Import io and userSockets from server.js
-import { io, userSockets } from '../server.js';
 
 // Admin: Force logout a user session
 export const forceLogout = async (req, res) => {
@@ -695,6 +861,52 @@ export const forceLogout = async (req, res) => {
     session.forcedLogout = true; // Mark as forced logout for tracking
     await session.save();
     
+    // Get all potentially active sessions after this force logout
+    // Use the same query pattern as getActiveSessions
+    const activeSessions = await UserSession.find({
+      $or: [
+        // Sessions explicitly marked as active
+        { isActive: true },
+        // Sessions without a logout time
+        { logoutTime: { $exists: false } }
+      ]
+    }).populate('userId', 'name email role').sort({ loginTime: -1 });
+    
+    // Format all sessions
+    const formattedSessions = activeSessions.map(session => {
+      const formatted = session.toObject();
+      if (formatted.loginTime) {
+        const loginDate = new Date(formatted.loginTime);
+        formatted.formattedLoginTime = loginDate.toLocaleString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          year: 'numeric',
+          hour: 'numeric', 
+          minute: 'numeric',
+          hour12: true 
+        });
+        
+        // Calculate and add duration
+        const now = new Date();
+        const durationMs = now - loginDate;
+        const durationMinutes = Math.floor(durationMs / 60000);
+        const hours = Math.floor(durationMinutes / 60);
+        const minutes = durationMinutes % 60;
+        formatted.formattedDuration = `${hours}h ${minutes}m`;
+      }
+      
+      return formatted;
+    });
+    
+    // Emit active sessions update
+    io.to('admin-session-updates').emit('active_sessions_updated', {
+      success: true,
+      count: formattedSessions.length,
+      sessions: formattedSessions,
+      message: `User force logged out: ${user?.email || 'Unknown user'}`,
+      timestamp: new Date()
+    });
+    
     // Emit event for real-time session updates
     io.to('admin-session-updates').emit('user_logged_out', {
       userId: session.userId.toString(),
@@ -727,33 +939,9 @@ export const forceLogout = async (req, res) => {
         message: 'Your session has been terminated by an administrator'
       });
       
-      console.log(`Global force logout broadcast sent for user ${session.userId}`);
-    } catch (socketError) {
-      console.error(`Error broadcasting global force logout:`, socketError);
-    }
-    
-    // Also invalidate all other active sessions for this user to prevent multiple logins
-    try {
-      const otherActiveSessions = await UserSession.find({
-        userId: session.userId,
-        _id: { $ne: session._id },
-        isActive: true
-      });
-      
-      if (otherActiveSessions.length > 0) {
-        console.log(`Found ${otherActiveSessions.length} other active sessions to invalidate`);
-        
-        for (const otherSession of otherActiveSessions) {
-          otherSession.isActive = false;
-          otherSession.logoutTime = new Date();
-          otherSession.forcedLogout = true;
-          await otherSession.save();
-          
-          console.log(`Invalidated additional session ${otherSession._id}`);
-        }
-      }
-    } catch (err) {
-      console.error('Error invalidating other sessions:', err);
+      console.log(`Global force logout broadcast sent`);
+    } catch (broadcastError) {
+      console.error(`Error broadcasting global force logout:`, broadcastError);
     }
 
     res.status(200).json({ 
@@ -848,13 +1036,16 @@ export const getSessionHistory = async (req, res) => {
     
     // Device type filter
     if (deviceType) {
-      query['deviceInfo.device'] = deviceType;
+      query['deviceInfo.device'] = { $regex: deviceType, $options: 'i' };
     }
     
     // Session status filter
     if (status) {
       if (status === 'active') {
-        query.logoutTime = { $exists: false };
+        query.$and = [
+          { isActive: true },
+          { logoutTime: { $exists: false } }
+        ];
       } else if (status === 'ended') {
         query.logoutTime = { $exists: true };
       } else if (status === 'forced') {
@@ -867,7 +1058,7 @@ export const getSessionHistory = async (req, res) => {
       .populate('userId', 'name email role')
       .sort({ loginTime: -1 });
 
-    // Format dates in AM/PM format
+    // Format dates in AM/PM format and enhance device information
     const formattedSessions = sessions.map(session => {
       // Create a new object with all the original properties
       const formattedSession = JSON.parse(JSON.stringify(session));
@@ -896,6 +1087,68 @@ export const getSessionHistory = async (req, res) => {
           minute: 'numeric',
           hour12: true 
         });
+        
+        // Calculate session duration
+        if (formattedSession.loginTime) {
+          const loginDate = new Date(formattedSession.loginTime);
+          const durationMs = logoutDate - loginDate;
+          const durationMinutes = Math.floor(durationMs / 60000);
+          const hours = Math.floor(durationMinutes / 60);
+          const minutes = durationMinutes % 60;
+          formattedSession.formattedDuration = `${hours}h ${minutes}m`;
+        }
+      } else if (formattedSession.loginTime) {
+        // For active sessions, calculate duration from login time to now
+        const loginDate = new Date(formattedSession.loginTime);
+        const now = new Date();
+        const durationMs = now - loginDate;
+        const durationMinutes = Math.floor(durationMs / 60000);
+        const hours = Math.floor(durationMinutes / 60);
+        const minutes = durationMinutes % 60;
+        formattedSession.formattedDuration = `${hours}h ${minutes}m`;
+      }
+      
+      // Enhance device information with client-reported data if available
+      if (formattedSession.deviceInfo && formattedSession.deviceInfo.clientReportedInfo) {
+        const clientInfo = formattedSession.deviceInfo.clientReportedInfo;
+        
+        // Override device info with client-reported values
+        if (clientInfo.deviceType === 'mobile') {
+          // For mobile devices on private networks
+          if (formattedSession.deviceInfo.ipAddress && 
+             (formattedSession.deviceInfo.ipAddress.includes('192.168.') || 
+              formattedSession.deviceInfo.ipAddress.includes('10.') ||
+              /^172\.(1[6-9]|2[0-9]|3[0-1])/.test(formattedSession.deviceInfo.ipAddress))) {
+            formattedSession.deviceInfo.device = 'Mobile (Hotspot)';
+          } else {
+            formattedSession.deviceInfo.device = 'Mobile';
+          }
+          
+          // Add OS-specific information if available
+          if (clientInfo.isAndroid) {
+            formattedSession.deviceInfo.device = 'Mobile (Android)';
+          } else if (clientInfo.isIOS) {
+            formattedSession.deviceInfo.device = 'Mobile (iOS)';
+          }
+        } else if (clientInfo.deviceType === 'tablet') {
+          formattedSession.deviceInfo.device = 'Tablet';
+        } else if (clientInfo.deviceType === 'desktop') {
+          formattedSession.deviceInfo.device = 'Desktop';
+        }
+        
+        // Update browser and OS information if available
+        if (clientInfo.browser) {
+          formattedSession.deviceInfo.browser = clientInfo.browser;
+        }
+        
+        if (clientInfo.os) {
+          formattedSession.deviceInfo.os = clientInfo.os;
+        }
+        
+        // Add model information if available
+        if (clientInfo.model) {
+          formattedSession.deviceInfo.model = clientInfo.model;
+        }
       }
       
       return formattedSession;

@@ -468,15 +468,52 @@ const UserActivityPage = () => {
                         {session.formattedDuration || calculateDuration(session.loginTime, null)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {session.deviceInfo?.ipAddress || 'N/A'}
-                        {session.deviceInfo?.ipAddress && session.deviceInfo.ipAddress.startsWith('192.168.') && 
-                          <span className="ml-1 text-xs text-blue-600">(Network Device)</span>}
+                        {session.deviceInfo?.ipAddress ? (
+                          <div>
+                            {/* Display base IP without the Network Device tag */}
+                            {session.deviceInfo.ipAddress.replace(/\(Network Device\)/g, '')}
+                            
+                            {/* Add a properly styled Network Device tag if IP is a private network */}
+                            {(session.deviceInfo.ipAddress.includes('192.168.') || 
+                              session.deviceInfo.ipAddress.includes('10.') || 
+                              /^172\.(1[6-9]|2[0-9]|3[0-1])/.test(session.deviceInfo.ipAddress)) && 
+                              <span className="ml-1 text-blue-600 font-medium">(Network Device)</span>
+                            }
+                          </div>
+                        ) : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {session.deviceInfo?.device || 'N/A'}
-                        {session.deviceInfo?.userAgent && session.deviceInfo.userAgent.includes('Mobile') && 
-                          session.deviceInfo.device === 'Desktop' && 
-                          <span className="ml-1 text-xs text-orange-600">(Mobile)</span>}
+                        <div>
+                          {/* Show device type with colored badge */}
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                            session.deviceInfo?.device?.includes('Mobile') 
+                              ? 'bg-blue-100 text-blue-800' 
+                              : session.deviceInfo?.device?.includes('Tablet')
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-purple-100 text-purple-800'
+                          }`}>
+                            {session.deviceInfo?.device || 'Unknown'}
+                          </span>
+                          
+                          {/* Show OS details if available */}
+                          {session.deviceInfo?.os && (
+                            <div className="mt-1 text-xs text-gray-600">
+                              {session.deviceInfo.os}
+                              {session.deviceInfo.clientReportedInfo?.model && (
+                                <span className="ml-1 font-medium">
+                                  ({session.deviceInfo.clientReportedInfo.model})
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* Show browser details if available */}
+                          {session.deviceInfo?.browser && (
+                            <div className="mt-0.5 text-xs text-gray-500">
+                              {session.deviceInfo.browser}
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <button
@@ -584,10 +621,52 @@ const UserActivityPage = () => {
                         {calculateDuration(session.loginTime, session.logoutTime)}
                       </td>
                       <td className="px-4 py-3 text-sm overflow-hidden text-ellipsis">
-                        {session.deviceInfo?.ipAddress || 'N/A'}
+                        {session.deviceInfo?.ipAddress ? (
+                          <div>
+                            {/* Display base IP without the Network Device tag */}
+                            {session.deviceInfo.ipAddress.replace(/\(Network Device\)/g, '')}
+                            
+                            {/* Add a properly styled Network Device tag if IP is a private network */}
+                            {(session.deviceInfo.ipAddress.includes('192.168.') || 
+                              session.deviceInfo.ipAddress.includes('10.') || 
+                              /^172\.(1[6-9]|2[0-9]|3[0-1])/.test(session.deviceInfo.ipAddress)) && 
+                              <span className="ml-1 text-blue-600 font-medium">(Network Device)</span>
+                            }
+                          </div>
+                        ) : 'N/A'}
                       </td>
                       <td className="px-4 py-3 text-sm overflow-hidden text-ellipsis">
-                        {session.deviceInfo?.device || 'N/A'} / {session.deviceInfo?.browser || 'Unknown'}
+                        <div>
+                          {/* Show device type with colored badge */}
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                            session.deviceInfo?.device?.includes('Mobile') 
+                              ? 'bg-blue-100 text-blue-800' 
+                              : session.deviceInfo?.device?.includes('Tablet')
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-purple-100 text-purple-800'
+                          }`}>
+                            {session.deviceInfo?.device || 'Unknown'}
+                          </span>
+                          
+                          {/* Show OS details if available */}
+                          {session.deviceInfo?.os && (
+                            <div className="mt-1 text-xs text-gray-600">
+                              {session.deviceInfo.os}
+                              {session.deviceInfo.model && (
+                                <span className="ml-1 font-medium">
+                                  ({session.deviceInfo.model})
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* Show browser details if available */}
+                          {session.deviceInfo?.browser && (
+                            <div className="mt-0.5 text-xs text-gray-500">
+                              {session.deviceInfo.browser}
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-sm">
                           <button
