@@ -4,7 +4,8 @@ import {
   getUserById,
   createUser,
   updateUser,
-  deleteUser
+  deleteUser,
+  resetUserCredentials
 } from '../controllers/userController.js';
 import { authMiddleware, adminMiddleware } from '../middleware/authMiddleware.js';
 
@@ -16,5 +17,6 @@ router.get('/:id', authMiddleware, getUserById);
 router.post('/', authMiddleware, createUser);
 router.put('/:id', authMiddleware, updateUser);
 router.delete('/:id', authMiddleware, deleteUser);
+router.post('/:id/reset-credentials', authMiddleware, resetUserCredentials);
 
 export default router;

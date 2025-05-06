@@ -15,13 +15,15 @@ const UserManagementPage = () => {
     name: '',
     email: '',
     role: 'user',
-    password: ''
+    password: '',
+    secretKey: ''
   });
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [filter, setFilter] = useState('');
   const [sortBy, setSortBy] = useState({ field: 'name', direction: 'asc' });
   const [resetPasswordModal, setResetPasswordModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
+  const [newSecretKey, setNewSecretKey] = useState('');
 
   // Fetch all users
   const fetchUsers = async () => {
@@ -65,7 +67,8 @@ const UserManagementPage = () => {
       name: '',
       email: '',
       role: 'user',
-      password: ''
+      password: '',
+      secretKey: ''
     });
     setModalOpen(true);
   };
@@ -77,7 +80,8 @@ const UserManagementPage = () => {
       name: user.name,
       email: user.email,
       role: user.role,
-      password: '' // Don't populate password for security
+      password: '', // Don't populate password for security
+      secretKey: '' // Don't populate secret key for security
     });
     setModalOpen(true);
   };
@@ -117,14 +121,27 @@ const UserManagementPage = () => {
     }
   };
 
-  // Reset user password
+  // Reset user password and/or secret key
   const handleResetPassword = async () => {
     try {
-      await axios.post(`/api/users/${currentUser._id}/reset-password`, { newPassword });
+      // Prepare data to send
+      const resetData = {};
+      if (newPassword) resetData.newPassword = newPassword;
+      if (newSecretKey && currentUser.role === 'admin') resetData.newSecretKey = newSecretKey;
+      
+      // Only proceed if at least one field is provided
+      if (Object.keys(resetData).length === 0) {
+        toast.error('Please provide a new password or secret key');
+        return;
+      }
+      
+      await axios.post(`/api/users/${currentUser._id}/reset-credentials`, resetData);
       setResetPasswordModal(false);
-      toast.success('Password reset successfully');
+      setNewPassword('');
+      setNewSecretKey('');
+      toast.success('Credentials updated successfully');
     } catch (err) {
-      toast.error('Error resetting password: ' + (err.response?.data?.message || err.message));
+      toast.error('Error updating credentials: ' + (err.response?.data?.message || err.message));
     }
   };
 
@@ -369,7 +386,7 @@ const UserManagementPage = () => {
                   <option value="admin">Admin</option>
                 </select>
               </div>
-              <div className="mb-6">
+              <div className="mb-4">
                 <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">
                   {currentUser ? 'Password (leave blank to keep current)' : 'Password'}
                 </label>
@@ -383,6 +400,22 @@ const UserManagementPage = () => {
                   required={!currentUser}
                 />
               </div>
+              {formData.role === 'admin' && (
+                <div className="mb-6">
+                  <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="secretKey">
+                    {currentUser ? 'Secret Key (leave blank to keep current)' : 'Secret Key'}
+                  </label>
+                  <input
+                    id="secretKey"
+                    type="password"
+                    name="secretKey"
+                    value={formData.secretKey}
+                    onChange={handleChange}
+                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    required={!currentUser && formData.role === 'admin'}
+                  />
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <button
                   type="button"
@@ -403,11 +436,11 @@ const UserManagementPage = () => {
         </div>
       )}
 
-      {/* Reset Password Modal */}
+      {/* Reset Credentials Modal */}
       {resetPasswordModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">Reset Password for {currentUser?.name}</h2>
+            <h2 className="text-xl font-semibold mb-4">Reset Credentials for {currentUser?.name}</h2>
             <div className="mb-4">
               <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="newPassword">
                 New Password
@@ -418,13 +451,30 @@ const UserManagementPage = () => {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                required
               />
             </div>
+            {currentUser?.role === 'admin' && (
+              <div className="mb-4">
+                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="newSecretKey">
+                  New Secret Key
+                </label>
+                <input
+                  id="newSecretKey"
+                  type="password"
+                  value={newSecretKey}
+                  onChange={(e) => setNewSecretKey(e.target.value)}
+                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                />
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => setResetPasswordModal(false)}
+                onClick={() => {
+                  setResetPasswordModal(false);
+                  setNewPassword('');
+                  setNewSecretKey('');
+                }}
                 className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
               >
                 Cancel
@@ -433,7 +483,7 @@ const UserManagementPage = () => {
                 onClick={handleResetPassword}
                 className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
               >
-                Reset Password
+                Update Credentials
               </button>
             </div>
           </div>

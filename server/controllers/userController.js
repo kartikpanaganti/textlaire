@@ -114,7 +114,7 @@ export const createUser = async (req, res) => {
       });
     }
 
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, secretKey } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -125,12 +125,21 @@ export const createUser = async (req, res) => {
       });
     }
 
+    // Check if secretKey is provided for admin role
+    if (role === 'admin' && !secretKey) {
+      return res.status(400).json({
+        success: false,
+        message: 'Secret key is required for admin users'
+      });
+    }
+
     // Create new user
     const newUser = new User({
       name,
       email,
       password, // Will be hashed by pre-save hook
-      role: role || 'employee' // Default to employee if not specified
+      role: role || 'employee', // Default to employee if not specified
+      secretKey: role === 'admin' ? secretKey : undefined // Only set secretKey for admin users
     });
 
     await newUser.save();
@@ -158,7 +167,7 @@ export const createUser = async (req, res) => {
 export const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, secretKey } = req.body;
 
     // Check if user is admin or the user is updating their own data
     if (req.user.role !== 'admin' && req.user.userId !== id) {
@@ -185,11 +194,40 @@ export const updateUser = async (req, res) => {
       });
     }
 
+    // Check if changing role to admin and secretKey is not provided
+    if (role === 'admin' && user.role !== 'admin' && !secretKey) {
+      return res.status(400).json({
+        success: false,
+        message: 'Secret key is required when changing role to admin'
+      });
+    }
+
     // Update fields
     if (name) user.name = name;
     if (email) user.email = email;
     if (password) user.password = password; // Will be hashed by pre-save hook
-    if (role && req.user.role === 'admin') user.role = role;
+    
+    // Handle role and secretKey updates
+    if (role && req.user.role === 'admin') {
+      // If changing to admin role, require secretKey
+      if (role === 'admin') {
+        if (secretKey) {
+          user.secretKey = secretKey;
+        } else if (!user.secretKey) {
+          // Only require secretKey if user doesn't already have one
+          return res.status(400).json({
+            success: false,
+            message: 'Secret key is required for admin users'
+          });
+        }
+      }
+      user.role = role;
+    }
+
+    // Update secretKey if provided (admin only)
+    if (secretKey && req.user.role === 'admin' && user.role === 'admin') {
+      user.secretKey = secretKey;
+    }
 
     await user.save();
 
@@ -242,13 +280,8 @@ export const deleteUser = async (req, res) => {
       });
     }
 
-    // Prevent deleting admin users (only super admin should be able to delete other admins)
-    if (user.role === 'admin') {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Cannot delete admin users' 
-      });
-    }
+    // Allow admins to delete other admins, but not themselves
+    // This check is already handled above with the 'Cannot delete your own account' check
 
     // Delete user's sessions
     await UserSession.deleteMany({ userId: id });
@@ -262,6 +295,62 @@ export const deleteUser = async (req, res) => {
     });
   } catch (error) {
     console.error('Delete user error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error', 
+      error: error.message 
+    });
+  }
+};
+
+// Reset user credentials (password and/or secret key)
+export const resetUserCredentials = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newPassword, newSecretKey } = req.body;
+
+    // Check if user is admin or the user is resetting their own credentials
+    if (req.user.role !== 'admin' && req.user.userId !== id) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Access denied' 
+      });
+    }
+
+    // Find user
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found' 
+      });
+    }
+
+    // Update password if provided
+    if (newPassword) {
+      user.password = newPassword; // Will be hashed by pre-save hook
+    }
+
+    // Update secret key if provided and user is admin
+    if (newSecretKey && user.role === 'admin') {
+      // Only admins can update secret keys
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'Only administrators can update secret keys'
+        });
+      }
+      user.secretKey = newSecretKey;
+    }
+
+    await user.save();
+
+    res.status(200).json({ 
+      success: true,
+      message: 'User credentials updated successfully'
+    });
+  } catch (error) {
+    console.error('Reset credentials error:', error);
     res.status(500).json({ 
       success: false,
       message: 'Server error', 

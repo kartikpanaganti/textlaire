@@ -293,21 +293,24 @@ export const login = async (req, res) => {
 
     // Check secret key for admin logins
     if (user.role === 'admin') {
-      // For now, let's bypass the secret key check to restore admin access
-      // We'll use the reset script to set a known secret key
       console.log('Admin login attempt with secret key:', secretKey);
       console.log('Admin user secret key in DB:', user.secretKey);
       
-      // Temporarily comment out the strict validation to restore access
-      // If no secret key provided
-      // if (!secretKey) {
-      //   return res.status(401).json({ message: "Secret key required for admin login" });
-      // }
+      // Validate secret key for admin login
+      if (!secretKey) {
+        return res.status(401).json({ 
+          success: false,
+          message: "Secret key required for admin login" 
+        });
+      }
       
-      // // Verify the secret key matches
-      // if (secretKey !== user.secretKey) {
-      //   return res.status(401).json({ message: "Invalid secret key" });
-      // }
+      // Verify the secret key matches
+      if (secretKey !== user.secretKey) {
+        return res.status(401).json({ 
+          success: false,
+          message: "Invalid secret key" 
+        });
+      }
     }
 
     // Generate session ID
