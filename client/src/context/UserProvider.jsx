@@ -77,25 +77,38 @@ export const UserProvider = ({ children }) => {
                 token: userData.token // Keep the token
               };
               
+              // Store the token separately for easier access by other components
+              if (userData.token) {
+                localStorage.setItem("token", userData.token);
+                sessionStorage.setItem("token", userData.token);
+              }
+              
               setUser(updatedUserData);
               setIsAuthenticated(true);
               localStorage.setItem("user", JSON.stringify(updatedUserData));
             } catch (error) {
               console.error("Token verification failed:", error);
-              // Token invalid, clear user data
+              // Token invalid, clear user data and tokens
               localStorage.removeItem("user");
+              localStorage.removeItem("token");
+              sessionStorage.removeItem("token");
               setUser(null);
               setIsAuthenticated(false);
             }
           } else {
-            // No token, clear user data
+            // No token, clear user data and any stale tokens
             localStorage.removeItem("user");
+            localStorage.removeItem("token");
+            sessionStorage.removeItem("token");
             setUser(null);
             setIsAuthenticated(false);
           }
         } catch (error) {
           console.error("Error parsing user data:", error);
+          // Clear all user data and tokens
           localStorage.removeItem("user");
+          localStorage.removeItem("token");
+          sessionStorage.removeItem("token");
           setUser(null);
           setIsAuthenticated(false);
         }
@@ -132,6 +145,14 @@ export const UserProvider = ({ children }) => {
     
     setUser(userWithDefaults);
     setIsAuthenticated(true);
+    
+    // Store the token separately for easier access by other components
+    if (userData.token) {
+      localStorage.setItem("token", userData.token);
+      // Also store in sessionStorage for redundancy
+      sessionStorage.setItem("token", userData.token);
+    }
+    
     localStorage.setItem("user", JSON.stringify(userWithDefaults));
   };
 
@@ -152,7 +173,13 @@ export const UserProvider = ({ children }) => {
       // Clear user data regardless of API success
       setUser(null);
       setIsAuthenticated(false);
+      
+      // Clear user data from localStorage
       localStorage.removeItem("user");
+      
+      // Clear token from both localStorage and sessionStorage
+      localStorage.removeItem("token");
+      sessionStorage.removeItem("token");
     }
   };
 

@@ -43,6 +43,23 @@ export const SocketProvider = ({ children }) => {
       const userId = user.id || user._id;
       console.log('Initializing socket connection for user:', userId);
       
+      // Check if we have a token - try multiple sources
+      let token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      
+      // If no separate token found, try to extract from user object
+      if (!token && user && user.token) {
+        token = user.token;
+        // Store the token separately for future use
+        localStorage.setItem('token', token);
+        sessionStorage.setItem('token', token);
+        console.log('Extracted token from user object and stored separately');
+      }
+      
+      if (!token) {
+        console.warn('No authentication token found. Cannot connect to socket.');
+        return;
+      }
+      
       // CRITICAL FIX: Use the same hostname/protocol for Socket.io as for API requests
       // This ensures consistent behavior regardless of how the app is accessed (localhost vs IP)
       const currentHostname = window.location.hostname;
@@ -61,84 +78,75 @@ export const SocketProvider = ({ children }) => {
       console.log('Connecting socket from:', window.location.href);
       console.log('DEV MODE: Connecting socket directly to backend server:', serverUrl);
       
-      console.log('Connecting socket to server at:', serverUrl);
-      
-      // Create socket connection with enhanced configuration for working with Vite proxy
-      // Use a more robust socket connection with better error handling and reconnection
-      const socketOptions = {
+      // Create socket connection with auth token and enhanced configuration
+      const newSocket = io(serverUrl, {
         withCredentials: true,
+        auth: {
+          token: token // Include the auth token
+        },
+        query: {
+          userId: userId // Include userId in the query
+        },
         reconnection: true,
         reconnectionAttempts: Infinity, // Never give up trying to reconnect
         reconnectionDelay: 500,
         reconnectionDelayMax: 5000,
         timeout: 20000,
         // Important: Try both transports to ensure connectivity
-        transports: ['websocket', 'polling'],
-        // Using default Socket.io path
-        path: '/socket.io',
-        // Don't force new connection - reuse existing if possible
-        forceNew: false,
-        // Connect immediately
-        autoConnect: true,
-        // Retry if connection fails
-        retries: 3,
-        query: {
-          userId: user.id,
-          userAgent: navigator.userAgent,
-          networkType: navigator.connection ? navigator.connection.type : 'unknown'
-        }
-      };
-
-      // Create the socket instance with our options
-      const socketInstance = io(serverUrl, socketOptions);
+        transports: ['websocket', 'polling']
+      });
+      
+      console.log('Connecting socket to server at:', serverUrl, 'with userId:', userId);
       
       // Set up event listeners
-      socketInstance.on('connect', () => {
-        console.log('Socket connected successfully:', socketInstance.id);
+      newSocket.on('connect', () => {
+        console.log('Socket connected successfully:', newSocket.id);
         setIsConnected(true);
         
         // CRITICAL: Register with server using user ID
-        if (user) {
-          // Support both user.id and user._id formats
+        if (user && (user.id || user._id)) {
           const userId = user.id || user._id;
+          console.log('Sending user_connected event with userId:', userId);
           
-          if (userId) {
-            console.log('Explicitly registering user with socket server:', userId);
-            socketInstance.emit('user_connected', userId);
-            
-            // Request latest chat list to maintain UI consistency
-            console.log('Requesting latest chat list after connection');
-            setTimeout(() => {
-              socketInstance.emit('request_chat_list');
-            }, 500);
-          } else {
-            console.warn('User object exists but no ID found:', user);
-          }
+          // Send the user_connected event to register with server
+          // Send both as an object and as a direct property to ensure compatibility
+          newSocket.emit('user_connected', { 
+            userId: userId,
+            token: token // Include the token for additional verification
+          });
+          
+          // Request latest chat list to maintain UI consistency
+          console.log('Requesting latest chat list after connection');
+          setTimeout(() => {
+            newSocket.emit('request_chat_list');
+          }, 500);
+        } else {
+          console.warn('User object exists but no ID found:', user);
         }
       });
       
       // Handle test messages from server to verify connection
-      socketInstance.on('socket_test', (data) => {
+      newSocket.on('socket_test', (data) => {
         console.log('Socket test received:', data);
         // Use this as an opportunity to refresh our data
         if (user && user.id) {
           console.log('Connection verified, requesting fresh chat data');
-          socketInstance.emit('request_chat_list');
+          newSocket.emit('request_chat_list');
         }
       });
 
-      socketInstance.on('disconnect', () => {
+      newSocket.on('disconnect', () => {
         console.log('Socket disconnected');
         setIsConnected(false);
       });
 
-      socketInstance.on('connect_error', (error) => {
+      newSocket.on('connect_error', (error) => {
         console.error('Socket connection error:', error);
         setIsConnected(false);
       });
       
       // CRITICAL FIX: Enhanced handling of new_message for guaranteed real-time delivery
-      socketInstance.on('new_message', (message) => {
+      newSocket.on('new_message', (message) => {
         console.log('SOCKET: New message received in SocketProvider:', message._id);
         
         // Implement multiple delivery mechanisms for maximum reliability
@@ -151,7 +159,7 @@ export const SocketProvider = ({ children }) => {
           // 2. Also re-emit the message on the socket after a brief delay
           // This helps in some edge cases where the initial event might be missed
           setTimeout(() => {
-            socketInstance.emit('message_received_confirmation', {
+            newSocket.emit('message_received_confirmation', {
               messageId: message._id,
               receivedAt: new Date().toISOString()
             });
@@ -176,7 +184,7 @@ export const SocketProvider = ({ children }) => {
       });
 
       // Handle force logout event (specific to this socket)
-      socketInstance.on('force_logout', (data) => {
+      newSocket.on('force_logout', (data) => {
         console.log('Received force logout event:', data);
         
         try {
@@ -198,7 +206,7 @@ export const SocketProvider = ({ children }) => {
       });
       
       // Handle global force logout events (broadcasts to all connected clients)
-      socketInstance.on('global_force_logout', (data) => {
+      newSocket.on('global_force_logout', (data) => {
         console.log('Received global force logout event:', data);
         
         try {
@@ -232,17 +240,17 @@ export const SocketProvider = ({ children }) => {
       });
 
       // Setup network change listeners
-      networkCleanup = setupNetworkListeners(socketInstance);
+      networkCleanup = setupNetworkListeners(newSocket);
 
       // Save socket instance
-      setSocket(socketInstance);
+      setSocket(newSocket);
 
       // Clean up on unmount
       return () => {
         console.log('Cleaning up socket connection');
         if (networkCleanup) networkCleanup();
-        if (socketInstance) {
-          socketInstance.disconnect();
+        if (newSocket) {
+          newSocket.disconnect();
         }
       };
     } else {

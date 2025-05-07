@@ -4,7 +4,7 @@ import axiosInstance from './axiosInstance';
 export const loginUser = async (credentials) => {
   try {
     console.log('Logging in with credentials:', { ...credentials, password: '****' });
-    const response = await axiosInstance.post('/auth/login', credentials);
+    const response = await axiosInstance.post('/api/auth/login', credentials);
     console.log('Login successful, response:', response.data);
     return response.data;
   } catch (error) {
@@ -20,7 +20,7 @@ export const loginAdmin = loginUser;
 // User logout
 export const logoutUser = async () => {
   try {
-    const response = await axiosInstance.post('/auth/logout');
+    const response = await axiosInstance.post('/api/auth/logout');
     return response.data;
   } catch (error) {
     console.error('Logout error:', error);
@@ -31,7 +31,7 @@ export const logoutUser = async () => {
 // Get current user info
 export const getCurrentUser = async () => {
   try {
-    const response = await axiosInstance.get('/auth/me');
+    const response = await axiosInstance.get('/api/auth/me');
     return response.data;
   } catch (error) {
     console.error('Get current user error:', error);

@@ -63,8 +63,24 @@ export const ChatProvider = ({ children }) => {
       if (data && Array.isArray(data)) {
         console.log(`Received ${data.length} chats from server`);
         
+        // Deduplicate chats by ID to prevent React key warnings
+        const uniqueChats = [];
+        const chatIds = new Set();
+        
+        data.forEach(chat => {
+          // Only add if we haven't seen this ID before
+          if (chat._id && !chatIds.has(chat._id)) {
+            chatIds.add(chat._id);
+            uniqueChats.push(chat);
+          } else if (chat._id) {
+            console.warn(`Skipping duplicate chat with ID: ${chat._id}`);
+          } else {
+            console.warn('Skipping chat without ID:', chat);
+          }
+        });
+        
         // Sort chats by latest message time
-        const sortedChats = data.sort((a, b) => {
+        const sortedChats = uniqueChats.sort((a, b) => {
           const timeA = new Date(a.latestMessage?.createdAt || a.updatedAt || a.createdAt);
           const timeB = new Date(b.latestMessage?.createdAt || b.updatedAt || b.createdAt);
           return timeB - timeA;
@@ -93,9 +109,16 @@ export const ChatProvider = ({ children }) => {
   };
 
   // Fetch messages for a specific chat
-  const fetchMessages = async (chatId) => {
+  const fetchMessages = async (chatId, isSocketInitiated = false) => {
     if (!chatId) {
       console.warn('Attempted to fetch messages without a chat ID');
+      return [];
+    }
+    
+    // Check if we have a token before making the request
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!token) {
+      console.warn('No authentication token found. Cannot fetch messages.');
       return [];
     }
     
@@ -109,12 +132,23 @@ export const ChatProvider = ({ children }) => {
       }
       
       console.log(`Fetching messages for chat: ${chatId}`);
-      const response = await api.get(`/api/messages/${chatId}`, {
+      // CRITICAL FIX: Use singular 'message' to match the server route
+      const response = await api.get(`/api/message/${chatId}`, {
         // Add timeout to prevent hanging requests
         timeout: 5000,
         // Add retry logic for failed requests
         validateStatus: (status) => status < 500 // Only treat 500+ errors as actual errors
       });
+      
+      // If this is a socket-initiated request, store that information in a global variable
+      // that the axios interceptor can check without needing custom headers
+      if (isSocketInitiated) {
+        window.__isBackgroundRequest = true;
+        // Reset after a short delay
+        setTimeout(() => {
+          window.__isBackgroundRequest = false;
+        }, 1000);
+      }
       
       if (response.status === 404) {
         console.warn(`No messages found for chat ID: ${chatId}`);
@@ -177,10 +211,26 @@ export const ChatProvider = ({ children }) => {
         setMessages([]);
       }
       
-      // Always fetch fresh messages
+      // Check if we have a token before fetching messages
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (!token) {
+        console.warn('No authentication token found. Cannot fetch fresh messages.');
+        // Try to get user from storage
+        const userData = localStorage.getItem('user') || sessionStorage.getItem('user');
+        if (userData) {
+          // If we have user data but no token, the token may have expired
+          console.warn('User data exists but no token found. User may need to re-login.');
+          toast.error('Your session has expired. Please log in again.');
+        }
+        return;
+      }
+      
+      // Always fetch fresh messages if we have a token
       const getMessages = async () => {
         const freshMessages = await fetchMessages(selectedChat._id);
-        setMessages(freshMessages);
+        if (freshMessages && freshMessages.length > 0) {
+          setMessages(freshMessages);
+        }
       };
       
       getMessages();
@@ -221,24 +271,41 @@ export const ChatProvider = ({ children }) => {
     
     // Update messages if this is for the currently selected chat
     if (messageForSelectedChat) {
-      setMessages(prev => {
-        // Check for duplicates by ID
-        if (prev.some(msg => msg._id === newMessage._id)) {
-          console.log(`Message ${newMessage._id} already in state, skipping`);
-          return prev;
+      setMessages(prevMessages => {
+        // Check if message already exists in the list to avoid duplicates
+        const messageExists = prevMessages.some(m => m._id === newMessage._id);
+        if (messageExists) {
+          console.log(`Message ${newMessage._id} already exists in messages list, skipping`);
+          return prevMessages;
         }
-        
         console.log(`Adding message ${newMessage._id} to messages list`);
-        const updatedMessages = [...prev, newMessage];
+        
+        // Create a new array with unique messages only
+        const uniqueMessages = [];
+        const messageIds = new Set();
+        
+        // Add existing messages, ensuring no duplicates
+        prevMessages.forEach(msg => {
+          if (msg._id && !messageIds.has(msg._id)) {
+            messageIds.add(msg._id);
+            uniqueMessages.push(msg);
+          }
+        });
+        
+        // Add the new message
+        if (newMessage._id && !messageIds.has(newMessage._id)) {
+          messageIds.add(newMessage._id);
+          uniqueMessages.push(newMessage);
+        }
         
         // Cache in session storage
         try {
-          sessionStorage.setItem(`messages-${chatId}`, JSON.stringify(updatedMessages));
+          sessionStorage.setItem(`messages-${chatId}`, JSON.stringify(uniqueMessages));
         } catch (error) {
           console.error('Error caching messages:', error);
         }
         
-        return updatedMessages;
+        return uniqueMessages;
       });
       
       // Force a refresh of the messages after a short delay
@@ -292,47 +359,75 @@ export const ChatProvider = ({ children }) => {
     
     // Show notification if message is not for the selected chat
     if (!messageForSelectedChat) {
-      // Add to notifications
+      // Track shown notifications to prevent duplicates
+      const notificationKey = `${newMessage._id}_${Date.now()}`;
+      
+      // Check if we've already shown a toast for this message
+      const recentNotifications = JSON.parse(sessionStorage.getItem('textlaire_recent_notifications') || '[]');
+      const alreadyShown = recentNotifications.includes(newMessage._id);
+      
+      // Add to notifications state
       setNotifications(prev => {
-        // Avoid duplicates
+        // Avoid duplicates in the notifications list
         if (prev.some(n => n._id === newMessage._id)) {
           return prev;
         }
         return [newMessage, ...prev];
       });
       
-      // Show toast notification
-      const sender = newMessage.sender?.name || 'Someone';
-      const content = newMessage.content || 
-                     (newMessage.attachments?.length ? 'Sent an attachment' : 'New message');
-      
-      toast.info(`${sender}: ${content.substring(0, 30)}${content.length > 30 ? '...' : ''}`, {
-        position: "top-right",
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        onClick: () => {
-          // When user clicks the notification, open that chat
-          setSelectedChat(prevChat => {
-            // Only change if it's a different chat
-            if (prevChat?._id !== chatId) {
-              // Find the full chat object from our chats list
-              const fullChat = chats.find(c => c._id.toString() === chatId.toString());
-              return fullChat || prevChat;
-            }
-            return prevChat;
-          });
+      // Only show toast if we haven't shown it recently
+      if (!alreadyShown) {
+        // Track this notification to prevent duplicates
+        recentNotifications.push(newMessage._id);
+        // Keep only the most recent 20 notifications
+        if (recentNotifications.length > 20) {
+          recentNotifications.shift();
         }
-      });
-      
-      // Play notification sound
-      try {
-        const audio = new Audio('/notification.mp3');
-        audio.play().catch(e => console.log('Audio play error:', e.message));
-      } catch (error) {
-        console.log('Notification sound not available');
+        sessionStorage.setItem('textlaire_recent_notifications', JSON.stringify(recentNotifications));
+        
+        // Show toast notification
+        const sender = newMessage.sender?.name || 'Someone';
+        const content = newMessage.content || 
+                       (newMessage.attachments?.length ? 'Sent an attachment' : 'New message');
+        
+        toast.info(`${sender}: ${content.substring(0, 30)}${content.length > 30 ? '...' : ''}`, {
+          position: "top-right",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          toastId: newMessage._id, // Use message ID as toast ID to prevent duplicates
+          onClick: () => {
+            // When user clicks the notification, open that chat
+            setSelectedChat(prevChat => {
+              // Only change if it's a different chat
+              if (prevChat?._id !== chatId) {
+                // Find the full chat object from our chats list
+                const fullChat = chats.find(c => c._id.toString() === chatId.toString());
+                return fullChat || prevChat;
+              }
+              return prevChat;
+            });
+          }
+        });
+        
+        // Play notification sound
+        try {
+          // Create audio element only if needed
+          const audio = new Audio();
+          audio.src = '/notification.mp3';
+          // Preload the audio
+          audio.preload = 'auto';
+          // Add error handling
+          audio.onerror = (e) => console.log('Audio load error:', e.message);
+          // Only play after loaded
+          audio.oncanplaythrough = () => {
+            audio.play().catch(e => console.log('Audio play error:', e.message));
+          };
+        } catch (error) {
+          console.log('Notification sound not available:', error.message);
+        }
       }
     }
   }, [selectedChat, chats]);
@@ -351,9 +446,37 @@ export const ChatProvider = ({ children }) => {
     
     console.log('Setting up socket event listeners in ChatContext');
     
+    // CRITICAL FIX: First, remove any existing listeners to prevent duplicates
+    // This ensures we don't have multiple listeners for the same events
+    socket.off('new_message');
+    socket.off('typing_indicator');
+    socket.off('typing_indicator_stop');
+    socket.off('chat_list_update');
+    socket.off('refresh_messages');
+    socket.off('refresh_chat_data');
+    
     // Handler for new messages via socket
     const handleNewMessage = (newMessage) => {
+      // Prevent duplicate message handling by checking if we've already seen this message
+      if (!newMessage || !newMessage._id) return;
+      
+      // Track message IDs to prevent duplicate processing
+      const processedMessageIds = JSON.parse(sessionStorage.getItem('textlaire_processed_messages') || '[]');
+      if (processedMessageIds.includes(newMessage._id)) {
+        console.log('SOCKET: Ignoring duplicate message:', newMessage._id);
+        return;
+      }
+      
       console.log('SOCKET: New message received:', newMessage._id);
+      
+      // Add to processed messages
+      processedMessageIds.push(newMessage._id);
+      // Keep only the most recent 50 messages to prevent memory issues
+      if (processedMessageIds.length > 50) {
+        processedMessageIds.shift();
+      }
+      sessionStorage.setItem('textlaire_processed_messages', JSON.stringify(processedMessageIds));
+      
       if (messageProcessorRef.current) {
         messageProcessorRef.current(newMessage);
       }
@@ -383,11 +506,23 @@ export const ChatProvider = ({ children }) => {
     const handleChatListUpdate = (updatedChats) => {
       console.log(`SOCKET: Received updated chat list with ${updatedChats?.length || 0} chats`);
       if (updatedChats && Array.isArray(updatedChats) && updatedChats.length > 0) {
-        setChats(updatedChats);
+        // Deduplicate chats by ID to prevent React key warnings
+        const uniqueChats = [];
+        const chatIds = new Set();
+        
+        updatedChats.forEach(chat => {
+          // Only add if we haven't seen this ID before
+          if (chat._id && !chatIds.has(chat._id)) {
+            chatIds.add(chat._id);
+            uniqueChats.push(chat);
+          }
+        });
+        
+        setChats(uniqueChats);
         
         // Cache the updated chat list
         try {
-          const chatData = JSON.stringify(updatedChats);
+          const chatData = JSON.stringify(uniqueChats);
           sessionStorage.setItem('textlaire_chats', chatData);
           localStorage.setItem('textlaire_chats', chatData);
         } catch (error) {
@@ -399,8 +534,10 @@ export const ChatProvider = ({ children }) => {
     // Handler for refresh messages requests
     const handleRefreshMessages = ({ chatId }) => {
       console.log('SOCKET: Received refresh_messages for chat:', chatId);
-      if (selectedChat && selectedChat._id.toString() === chatId.toString()) {
-        fetchMessages(chatId).then(freshMessages => {
+      if (selectedChat && selectedChat._id && chatId && 
+          selectedChat._id.toString() === chatId.toString()) {
+        // Pass isSocketInitiated=true to prevent 401 redirects
+        fetchMessages(chatId, true).then(freshMessages => {
           if (freshMessages && freshMessages.length > 0) {
             setMessages(freshMessages);
             console.log(`Updated messages for chat ${chatId} with ${freshMessages.length} messages`);
@@ -430,6 +567,9 @@ export const ChatProvider = ({ children }) => {
     socket.on('chat_list_update', handleChatListUpdate);
     socket.on('refresh_messages', handleRefreshMessages);
     socket.on('refresh_chat_data', handleRefreshChatData);
+    
+    // Remove any existing custom event listeners before adding new ones
+    window.removeEventListener('textlaire_new_message', handleDirectMessage);
     window.addEventListener('textlaire_new_message', handleDirectMessage);
     
     // If we have a selected chat, join that room
@@ -438,9 +578,12 @@ export const ChatProvider = ({ children }) => {
       socket.emit('join_chat', { chatId: selectedChat._id });
       
       // Also request a refresh of messages to ensure we have the latest
+      // Use a longer timeout to avoid race conditions
       setTimeout(() => {
-        socket.emit('request_message_refresh', { chatId: selectedChat._id });
-      }, 500);
+        if (socket.connected) {
+          socket.emit('request_message_refresh', { chatId: selectedChat._id });
+        }
+      }, 1000);
     }
     
     // Periodically check socket connection and reconnect if needed

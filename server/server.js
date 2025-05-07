@@ -53,7 +53,7 @@ app.use(cors({
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-fal-target-url', 'Accept', 'Origin', 'x-requested-with'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-fal-target-url', 'Accept', 'Origin', 'x-requested-with', 'X-Background-Request'],
   credentials: true,
   optionsSuccessStatus: 200, // For legacy browser support
   maxAge: 86400 // Cache preflight requests for 24 hours
@@ -65,10 +65,16 @@ app.use((req, res, next) => {
   // Set the specific origin instead of wildcard '*' when using credentials
   res.header('Access-Control-Allow-Origin', origin || 'http://localhost:5173');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Background-Request');
   res.header('Access-Control-Allow-Credentials', true);
   next();
 });
+
+// Parse JSON request bodies
+app.use(express.json());
+
+// Parse URL-encoded request bodies
+app.use(express.urlencoded({ extended: true }));
 
 // Activity tracking middleware - track API requests
 app.use(trackApiActivity);
@@ -186,34 +192,81 @@ const io = new Server(server, {
 // Store active socket connections by user ID
 const userSockets = new Map();
 
+// Import jwt for token verification
+import jwt from 'jsonwebtoken';
+
+// Socket.IO connection handling with authentication
+io.use((socket, next) => {
+  try {
+    // Check for auth token in handshake
+    const token = socket.handshake.auth?.token || 
+                 socket.handshake.headers?.authorization?.split(' ')[1];
+    
+    if (token) {
+      // Verify the token
+      jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+        if (err) {
+          console.log('Socket authentication failed:', err.message);
+          return next(new Error('Authentication error'));
+        }
+        
+        // Store the decoded user info on the socket
+        socket.user = decoded;
+        socket.userId = decoded.id || decoded._id;
+        console.log(`Socket authenticated for user: ${socket.userId}`);
+        return next();
+      });
+    } else {
+      // Allow connection without authentication for now, but mark as unauthenticated
+      console.log('Socket connecting without authentication token');
+      socket.authenticated = false;
+      return next();
+    }
+  } catch (error) {
+    console.error('Socket auth error:', error);
+    return next(new Error('Authentication error'));
+  }
+});
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id, 'from address:', socket.handshake.address);
   console.log('Socket handshake details:', {
     query: socket.handshake.query,
-    headers: socket.handshake.headers,
-    url: socket.handshake.url
+    headers: socket.handshake.headers?.authorization ? 'Auth header present' : 'No auth header',
+    url: socket.handshake.url,
+    authenticated: socket.authenticated !== false
   });
   
-  // Immediately check for userId in query parameters for consistency
-  const queryUserId = socket.handshake.query.userId;
-  if (queryUserId) {
-    // Associate this socket with the user immediately
-    console.log('User ID found in connection query:', queryUserId);
+  // Get user ID from either the socket auth or query params
+  // Ensure we're getting a valid user ID by checking multiple sources
+  const userId = socket.userId || socket.handshake.query.userId || socket.handshake.auth?.userId;
+  
+  console.log('Socket connection details:', {
+    socketId: socket.id,
+    userId: userId,
+    queryUserId: socket.handshake.query.userId,
+    authUserId: socket.handshake.auth?.userId,
+    socketUserId: socket.userId
+  });
+  
+  if (userId) {
+    // Associate this socket with the user
+    console.log('User ID found:', userId);
     // Store the userId on the socket object for future reference
-    socket.userId = queryUserId;
+    socket.userId = userId;
     
     // Add this socket to the user's active connections
-    if (!userSockets.has(queryUserId)) {
-      userSockets.set(queryUserId, new Set());
+    if (!userSockets.has(userId)) {
+      userSockets.set(userId, new Set());
     }
-    userSockets.get(queryUserId).add(socket.id);
+    userSockets.get(userId).add(socket.id);
     
     // Tell the client they've been successfully identified
-    socket.emit('connected_with_user_id', { userId: queryUserId });
+    socket.emit('connected_with_user_id', { userId: userId });
     
     // Join the user's personal room for direct messages
-    const userRoom = `user-${queryUserId}`;
+    const userRoom = `user-${userId}`;
     socket.join(userRoom);
     console.log(`Socket ${socket.id} joined personal room: ${userRoom}`);
     
@@ -221,7 +274,7 @@ io.on('connection', (socket) => {
     // This helps debug real-time messaging issues
     setTimeout(() => {
       socket.emit('socket_test', { message: 'Socket connection verified', timestamp: new Date().toISOString() });
-      console.log(`Sent socket_test to user ${queryUserId}`);
+      console.log(`Sent socket_test to socket ${socket.id}`);
     }, 2000);
     
     // Set up periodic ping to keep connection alive

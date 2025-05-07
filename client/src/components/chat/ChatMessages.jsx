@@ -178,22 +178,33 @@ const ChatMessages = () => {
   const groupMessagesByDate = () => {
     if (!messages.length) return [];
     
+    // First, deduplicate messages to prevent React key warnings
+    const uniqueMessages = [];
+    const messageIds = new Set();
+    
+    messages.forEach(message => {
+      if (message._id && !messageIds.has(message._id)) {
+        messageIds.add(message._id);
+        uniqueMessages.push(message);
+      }
+    });
+    
     const groups = [];
     let currentGroup = {
-      date: formatMessageDate(messages[0].createdAt),
-      messages: [messages[0]]
+      date: formatMessageDate(uniqueMessages[0].createdAt),
+      messages: [uniqueMessages[0]]
     };
     
-    for (let i = 1; i < messages.length; i++) {
-      const currentDate = formatMessageDate(messages[i].createdAt);
+    for (let i = 1; i < uniqueMessages.length; i++) {
+      const currentDate = formatMessageDate(uniqueMessages[i].createdAt);
       
       if (currentDate === currentGroup.date) {
-        currentGroup.messages.push(messages[i]);
+        currentGroup.messages.push(uniqueMessages[i]);
       } else {
         groups.push(currentGroup);
         currentGroup = {
           date: currentDate,
-          messages: [messages[i]]
+          messages: [uniqueMessages[i]]
         };
       }
     }
