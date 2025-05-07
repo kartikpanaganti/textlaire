@@ -268,7 +268,8 @@ export const login = async (req, res) => {
     console.log('Login attempt:', req.body);
     const { email, password, secretKey } = req.body;
 
-    // Find user
+    // Find user - log the actual query for debugging
+    console.log('Finding user with email:', email);
     const user = await User.findOne({ email });
     console.log('User found:', user ? { email: user.email, role: user.role } : 'No user found');
     

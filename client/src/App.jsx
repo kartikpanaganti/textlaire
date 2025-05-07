@@ -17,6 +17,7 @@ import ProductsPage from "./pages/ProductsPage";
 import UserManagementPage from "./pages/UserManagementPage";
 import UserActivityPage from "./pages/UserActivityPage";
 import PayrollManagementPage from "./pages/PayrollManagementPage";
+import CommunicationPage from "./pages/CommunicationPage"; // Import Communication Page
 import DeviceDetector from "./components/common/DeviceDetector";
 import PageViewTracker from "./components/common/PageViewTracker";
 import { ToastContainer } from 'react-toastify';
@@ -57,6 +58,7 @@ function App() {
         <Route path="/user-management" element={<ProtectedRoute component={<UserManagementPage />} />} />
         <Route path="/user-activity" element={<ProtectedRoute component={<UserActivityPage />} />} />
         <Route path="/payroll" element={<ProtectedRoute component={<PayrollManagementPage />} />} />
+        <Route path="/messages" element={<ProtectedRoute component={<CommunicationPage />} noContainer={true} />} />
 
         {/* profile and settings pages */}
         <Route path="/profile" element={<ProtectedRoute component={<ProfilePage />} />} />

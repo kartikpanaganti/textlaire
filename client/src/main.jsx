@@ -3,8 +3,11 @@ import { createRoot } from 'react-dom/client'
 import { ThemeProvider } from "./context/ThemeProvider"; // Import ThemeProvider
 import { UserProvider } from "./context/UserProvider"; // Import UserProvider
 import { SocketProvider } from "./context/SocketProvider"; // Import SocketProvider
+import { ChatProvider } from "./context/ChatContext"; // Import ChatProvider
 import { NotificationProvider } from "./context/NotificationProvider"; // Import NotificationProvider
 import axios from 'axios'; // Import axios for configuration
+import { ToastContainer } from 'react-toastify'; // Import ToastContainer
+import 'react-toastify/dist/ReactToastify.css'; // Import ToastContainer CSS
 
 import './index.css'
 import App from './App.jsx'
@@ -48,7 +51,9 @@ createRoot(document.getElementById('root')).render(
       <UserProvider>
         <NotificationProvider>
           <SocketProvider>
-            <App />
+            <ChatProvider>
+              <App />
+            </ChatProvider>
           </SocketProvider>
         </NotificationProvider>
       </UserProvider>

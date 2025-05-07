@@ -1,6 +1,40 @@
 import User from '../models/User.js';
 import UserSession from '../models/UserSession.js';
 
+// Search users by name or email for chat functionality
+export const searchUsers = async (req, res) => {
+  try {
+    const searchTerm = req.query.search || '';
+    
+    if (!searchTerm.trim()) {
+      return res.status(200).json([]);
+    }
+
+    // Create a regex search pattern (case insensitive)
+    const searchPattern = new RegExp(searchTerm, 'i');
+    
+    // Find users that match the search term (excluding the requesting user)
+    const users = await User.find({
+      $and: [
+        { _id: { $ne: req.user.userId } },  // Exclude the current user
+        { $or: [
+          { name: searchPattern },
+          { email: searchPattern }
+        ]}
+      ]
+    }).select('-password -secretKey -loginHistory -currentSession');
+    
+    res.status(200).json(users);
+  } catch (error) {
+    console.error('Search users error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error', 
+      error: error.message 
+    });
+  }
+};
+
 // Get all users
 export const getAllUsers = async (req, res) => {
   try {

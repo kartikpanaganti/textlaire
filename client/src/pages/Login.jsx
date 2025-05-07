@@ -2,7 +2,7 @@ import { useState, useContext, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ThemeContext } from "../context/ThemeProvider";
 import { UserContext } from "../context/UserProvider";
-import axios from "axios";
+import { loginUser } from '../api/authApi';
 
 function Login() {
   const navigate = useNavigate();
@@ -11,7 +11,7 @@ function Login() {
   const [credentials, setCredentials] = useState({ email: "", password: "", secretKey: "" });
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [loginType, setLoginType] = useState("employee"); // employee or admin
+  const [loginType, setLoginType] = useState("employee"); // employee, user, or admin
   
   const handleChange = (e) => {
     setCredentials({ ...credentials, [e.target.name]: e.target.value });
@@ -47,12 +47,31 @@ function Login() {
         loginData.secretKey = credentials.secretKey;
       }
       
-      // Call the API to login using the proxy configured in vite.config.js
-      const response = await axios.post(`/api/auth/login`, loginData);
+      console.log('Attempting login with data:', { ...loginData, password: '****' });
       
-      // Check if the user role matches the selected login type
-      if ((loginType === "admin" && response.data.user.role !== "admin") ||
-          (loginType === "employee" && response.data.user.role !== "employee")) {
+      // Use the generic login function for all user types
+      const response = await loginUser(loginData);
+      
+      if (!response || !response.user) {
+        throw new Error('Invalid server response');
+      }
+      
+      // Check if the user role is valid for the selected login type
+      const isValidRole = 
+        (loginType === "admin" && response.user.role === "admin") || 
+        (loginType === "employee" && response.user.role === "employee") ||
+        (loginType === "user" && response.user.role === "user");
+      
+      console.log('Role validation:', { 
+        loginType, 
+        userRole: response.user.role,
+        isValidRole 
+      });
+      
+      // For backwards compatibility - allow employee logins to work with user role as well
+      if (!isValidRole && loginType === "employee" && response.user.role === "user") {
+        console.log('Allowing user role to login as employee for backward compatibility');
+      } else if (!isValidRole) {
         setError(`Invalid credentials for ${loginType} login.`);
         setIsLoading(false);
         return;
@@ -60,11 +79,11 @@ function Login() {
       
       // Format user data for context
       const userData = {
-        id: response.data.user.id,
-        name: response.data.user.name,
-        email: response.data.user.email,
-        role: response.data.user.role,
-        token: response.data.token,
+        id: response.user._id,
+        name: response.user.name,
+        email: response.user.email,
+        role: response.user.role,
+        token: response.token,
         avatar: null,
         preferences: {
           fontSize: "medium",
@@ -76,12 +95,8 @@ function Login() {
       // Use the login function from UserContext
       login(userData);
       
-      // Redirect based on role
-      if (response.data.user.role === "admin") {
-        navigate("/dashboard");
-      } else {
-        navigate("/dashboard");
-      }
+      // Redirect based on role - same route for all roles in this case
+      navigate("/dashboard");
     } catch (err) {
       console.error("Login error:", err);
       setError(err.response?.data?.message || "Login failed. Please try again.");

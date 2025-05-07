@@ -39,36 +39,92 @@ export const SocketProvider = ({ children }) => {
   useEffect(() => {
     let networkCleanup = null;
 
-    if (user && user.id) {
-      console.log('Initializing socket connection for user:', user.id);
+    if (user && (user.id || user._id)) {
+      const userId = user.id || user._id;
+      console.log('Initializing socket connection for user:', userId);
       
-      // Create socket connection with robust error handling for different networks
-      const socketInstance = io(import.meta.env.VITE_API_URL || 
-        (window.location.hostname === 'localhost' ? 
-          'http://localhost:5000' : 
-          'https://textlaire.onrender.com'), {
+      // CRITICAL FIX: Use the same hostname/protocol for Socket.io as for API requests
+      // This ensures consistent behavior regardless of how the app is accessed (localhost vs IP)
+      const currentHostname = window.location.hostname;
+      const currentProtocol = window.location.protocol;
+      const currentPort = window.location.port;
+      
+      // Always use a direct connection to the backend server in development
+      // This avoids any proxy issues with WebSockets
+      let serverUrl = 'http://localhost:5000';
+      
+      if (!import.meta.env.DEV) {
+        // In production, connect directly to the server
+        serverUrl = import.meta.env.VITE_API_URL || 'https://textlaire.onrender.com';
+      }
+      
+      console.log('Connecting socket from:', window.location.href);
+      console.log('DEV MODE: Connecting socket directly to backend server:', serverUrl);
+      
+      console.log('Connecting socket to server at:', serverUrl);
+      
+      // Create socket connection with enhanced configuration for working with Vite proxy
+      // Use a more robust socket connection with better error handling and reconnection
+      const socketOptions = {
         withCredentials: true,
         reconnection: true,
-        reconnectionAttempts: 10, // Increased attempts for network switches
-        reconnectionDelay: 1000,
+        reconnectionAttempts: Infinity, // Never give up trying to reconnect
+        reconnectionDelay: 500,
         reconnectionDelayMax: 5000,
         timeout: 20000,
-        transports: ['websocket', 'polling'], // Support both connection types
+        // Important: Try both transports to ensure connectivity
+        transports: ['websocket', 'polling'],
+        // Using default Socket.io path
+        path: '/socket.io',
+        // Don't force new connection - reuse existing if possible
+        forceNew: false,
+        // Connect immediately
+        autoConnect: true,
+        // Retry if connection fails
+        retries: 3,
         query: {
           userId: user.id,
           userAgent: navigator.userAgent,
           networkType: navigator.connection ? navigator.connection.type : 'unknown'
         }
-      });
+      };
 
+      // Create the socket instance with our options
+      const socketInstance = io(serverUrl, socketOptions);
+      
       // Set up event listeners
       socketInstance.on('connect', () => {
-        console.log('Socket connected:', socketInstance.id);
+        console.log('Socket connected successfully:', socketInstance.id);
         setIsConnected(true);
         
-        // Register user with socket - simplify to just send the user ID as a string
-        // This matches what the server expects in most cases
-        socketInstance.emit('user_connected', user.id);
+        // CRITICAL: Register with server using user ID
+        if (user) {
+          // Support both user.id and user._id formats
+          const userId = user.id || user._id;
+          
+          if (userId) {
+            console.log('Explicitly registering user with socket server:', userId);
+            socketInstance.emit('user_connected', userId);
+            
+            // Request latest chat list to maintain UI consistency
+            console.log('Requesting latest chat list after connection');
+            setTimeout(() => {
+              socketInstance.emit('request_chat_list');
+            }, 500);
+          } else {
+            console.warn('User object exists but no ID found:', user);
+          }
+        }
+      });
+      
+      // Handle test messages from server to verify connection
+      socketInstance.on('socket_test', (data) => {
+        console.log('Socket test received:', data);
+        // Use this as an opportunity to refresh our data
+        if (user && user.id) {
+          console.log('Connection verified, requesting fresh chat data');
+          socketInstance.emit('request_chat_list');
+        }
       });
 
       socketInstance.on('disconnect', () => {
@@ -79,6 +135,44 @@ export const SocketProvider = ({ children }) => {
       socketInstance.on('connect_error', (error) => {
         console.error('Socket connection error:', error);
         setIsConnected(false);
+      });
+      
+      // CRITICAL FIX: Enhanced handling of new_message for guaranteed real-time delivery
+      socketInstance.on('new_message', (message) => {
+        console.log('SOCKET: New message received in SocketProvider:', message._id);
+        
+        // Implement multiple delivery mechanisms for maximum reliability
+        try {
+          // 1. Direct custom event dispatch for immediate UI update
+          const event = new CustomEvent('textlaire_new_message', { detail: message });
+          window.dispatchEvent(event);
+          console.log('SOCKET: Dispatched message via custom event');
+          
+          // 2. Also re-emit the message on the socket after a brief delay
+          // This helps in some edge cases where the initial event might be missed
+          setTimeout(() => {
+            socketInstance.emit('message_received_confirmation', {
+              messageId: message._id,
+              receivedAt: new Date().toISOString()
+            });
+          }, 300);
+          
+          // 3. Store a backup in local storage for potential recovery
+          const pendingMessages = JSON.parse(localStorage.getItem('textlaire_pending_messages') || '[]');
+          if (!pendingMessages.some(m => m._id === message._id)) {
+            pendingMessages.push({
+              ...message,
+              _receivedAt: new Date().toISOString()
+            });
+            // Keep only the latest 20 messages to prevent storage issues
+            if (pendingMessages.length > 20) {
+              pendingMessages.shift();
+            }
+            localStorage.setItem('textlaire_pending_messages', JSON.stringify(pendingMessages));
+          }
+        } catch (error) {
+          console.error('SOCKET: Error handling new message:', error);
+        }
       });
 
       // Handle force logout event (specific to this socket)

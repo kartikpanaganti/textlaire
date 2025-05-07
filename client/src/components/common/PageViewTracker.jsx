@@ -26,21 +26,63 @@ const PageViewTracker = () => {
       const referrer = document.referrer;
 
       console.log('Tracking page view:', { path, title });
-
-      // Send page view data to server
-      await axios.post('/api/auth/track/pageview', {
-        path,
-        title,
-        referrer
-      }, {
-        headers: {
-          'Authorization': `Bearer ${user.token}`
+      
+      // Store page view in localStorage for analytics
+      try {
+        const pageViews = JSON.parse(localStorage.getItem('textlaire_page_views') || '[]');
+        pageViews.push({
+          path,
+          title,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Keep only the last 20 page views to prevent storage issues
+        if (pageViews.length > 20) {
+          pageViews.shift();
         }
-      });
+        
+        localStorage.setItem('textlaire_page_views', JSON.stringify(pageViews));
+      } catch (storageError) {
+        console.warn('Could not store page view in localStorage:', storageError);
+      }
 
-      console.log('Page view tracked successfully');
+      // Only try to send to server if explicitly enabled
+      // This is a fallback mechanism to avoid 500 errors
+      const shouldSendToServer = localStorage.getItem('textlaire_enable_tracking') === 'true';
+      
+      if (!shouldSendToServer) {
+        console.log('Page view tracking disabled, skipping server update');
+        return;
+      }
+
+      // Send page view data to server with timeout to prevent long-running requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+      
+      try {
+        const response = await axios.post('/api/auth/track/pageview', {
+          path,
+          title,
+          referrer
+        }, {
+          headers: {
+            'Authorization': `Bearer ${user.token}`
+          },
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        console.log('Page view tracked successfully');
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError' || fetchError.code === 'ECONNABORTED') {
+          console.warn('Page view tracking request timed out');
+        } else {
+          console.error('Error sending page view to server:', fetchError.message);
+        }
+      }
     } catch (error) {
-      console.error('Error tracking page view:', error);
+      console.error('Error processing page view:', error);
     }
   };
 

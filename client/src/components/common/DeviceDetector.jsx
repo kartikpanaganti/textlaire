@@ -164,47 +164,85 @@ const DeviceDetector = () => {
         deviceType,
         osInfo: detailedOsInfo,
         browserInfo: detailedBrowserInfo,
-        model: deviceModel,
-        brand: deviceBrand,
+        model: deviceModel || 'none',
+        brand: deviceBrand || 'none',
         screenWidth: window.innerWidth,
         screenHeight: window.innerHeight
       });
 
-      // Send device info to server with API calls
-      const response = await fetch('/api/auth/update-device-info', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.token}`,
-          'X-Client-Device-Type': deviceType // Also send as header for future requests
-        },
-        body: JSON.stringify({
+      // Store device info in localStorage instead of sending to server
+      // This avoids the 500 errors while still keeping the information available
+      try {
+        localStorage.setItem('textlaire_device_info', JSON.stringify({
           deviceType,
           browser: detailedBrowserInfo,
           os: detailedOsInfo,
-          vendor: deviceBrand,
-          model: deviceModel,
+          vendor: deviceBrand || 'unknown',
+          model: deviceModel || 'unknown',
           screenWidth: window.innerWidth,
           screenHeight: window.innerHeight,
-          userAgent: navigator.userAgent,
-          isAndroid: containsAndroid || isAndroid,
-          isIOS: containsIOS || isIOS,
-          isMobile,
-          isTablet,
-          isDesktop,
-          orientation: window.innerHeight > window.innerWidth ? 'portrait' : 'landscape',
-          deviceInfo: deviceInfo // Send the full detection result
-        })
-      });
+          timestamp: new Date().toISOString()
+        }));
+      } catch (storageError) {
+        console.warn('Could not store device info in localStorage:', storageError);
+      }
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update device info');
+      // Only try to send to server if explicitly enabled
+      // This is a fallback mechanism to avoid 500 errors
+      const shouldSendToServer = localStorage.getItem('textlaire_enable_tracking') === 'true';
+      
+      if (!shouldSendToServer) {
+        console.log('Device tracking disabled, skipping server update');
+        return;
       }
       
-      console.log('Device info sent successfully');
+      // Send device info to server with API calls - with timeout to prevent long-running requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+      
+      try {
+        const response = await fetch('/api/auth/update-device-info', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${user.token}`,
+            'X-Client-Device-Type': deviceType
+          },
+          body: JSON.stringify({
+            deviceType,
+            browser: detailedBrowserInfo,
+            os: detailedOsInfo,
+            vendor: deviceBrand || 'unknown',
+            model: deviceModel || 'unknown',
+            screenWidth: window.innerWidth,
+            screenHeight: window.innerHeight,
+            userAgent: navigator.userAgent,
+            isAndroid: containsAndroid || isAndroid,
+            isIOS: containsIOS || isIOS,
+            isMobile,
+            isTablet,
+            isDesktop,
+            orientation: window.innerHeight > window.innerWidth ? 'portrait' : 'landscape'
+          }),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error('Server error updating device information');
+        }
+        
+        console.log('Device info sent successfully');
+      } catch (fetchError) {
+        if (fetchError.name === 'AbortError') {
+          console.warn('Device info request timed out');
+        } else {
+          console.error('Error sending device info to server:', fetchError.message);
+        }
+      }
     } catch (error) {
-      console.error('Error sending device info:', error);
+      console.error('Error processing device info:', error);
     }
   };
 

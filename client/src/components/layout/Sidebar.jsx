@@ -4,7 +4,8 @@ import {
   FaUserCog, FaBox, FaChartPie, FaSignOutAlt, 
   FaBars, FaTachometerAlt, FaIndustry, FaClipboardList, 
   FaTruck, FaCogs, FaBoxOpen, FaMoneyBillWave,
-  FaShoppingCart, FaUsers, FaUserShield, FaDesktop
+  FaShoppingCart, FaUsers, FaUserShield, FaDesktop, 
+  FaComments
 } from "react-icons/fa";
 import { IoPersonCircleOutline } from "react-icons/io5";
 import { IoImagesOutline, IoImageOutline } from "react-icons/io5";
@@ -187,6 +188,18 @@ function Sidebar() {
               isActive={location.pathname === "/payroll"}
               onClick={() => {
                 navigate("/payroll");
+                if (isMobileView) toggleMobileMenu();
+              }}
+              colors={colors}
+            />
+            
+            <SidebarItem 
+              icon={<FaComments className={colors.icon} />} 
+              label="Messages" 
+              isCollapsed={isCollapsed && !isMobileMenuOpen} 
+              isActive={location.pathname === "/messages"}
+              onClick={() => {
+                navigate("/messages");
                 if (isMobileView) toggleMobileMenu();
               }}
               colors={colors}
