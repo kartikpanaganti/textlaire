@@ -6,7 +6,8 @@ import {
   updateUser,
   deleteUser,
   resetUserCredentials,
-  searchUsers
+  searchUsers,
+  updateUserPermissions
 } from '../controllers/userController.js';
 import { authMiddleware, adminMiddleware } from '../middleware/authMiddleware.js';
 
@@ -23,5 +24,8 @@ router.post('/', authMiddleware, createUser);
 router.put('/:id', authMiddleware, updateUser);
 router.delete('/:id', authMiddleware, deleteUser);
 router.post('/:id/reset-credentials', authMiddleware, resetUserCredentials);
+
+// New route for updating user page permissions (admin only)
+router.put('/:id/permissions', authMiddleware, updateUserPermissions);
 
 export default router;

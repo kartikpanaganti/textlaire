@@ -140,7 +140,8 @@ export const UserProvider = ({ children }) => {
         fontSize: "medium",
         language: "en",
         twoFactorEnabled: false
-      }
+      },
+      pagePermissions: userData.pagePermissions || []
     };
     
     setUser(userWithDefaults);

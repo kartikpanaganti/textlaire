@@ -11,7 +11,7 @@ function Login() {
   const [credentials, setCredentials] = useState({ email: "", password: "", secretKey: "" });
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [loginType, setLoginType] = useState("employee"); // employee, user, or admin
+  const [loginType, setLoginType] = useState("user"); // user or admin
   
   const handleChange = (e) => {
     setCredentials({ ...credentials, [e.target.name]: e.target.value });
@@ -57,34 +57,38 @@ function Login() {
       }
       
       // Check if the user role is valid for the selected login type
-      const isValidRole = 
-        (loginType === "admin" && response.user.role === "admin") || 
-        (loginType === "employee" && response.user.role === "employee") ||
-        (loginType === "user" && response.user.role === "user");
+      const isAdminLogin = loginType === "admin" && response.user.role === "admin";
+      const isUserLogin = loginType === "user" && response.user.role !== "admin"; 
+      // User login accepts any non-admin role (user, employee, manager, etc.)
       
       console.log('Role validation:', { 
         loginType, 
         userRole: response.user.role,
-        isValidRole 
+        isAdminLogin,
+        isUserLogin
       });
       
-      // For backwards compatibility - allow employee logins to work with user role as well
-      if (!isValidRole && loginType === "employee" && response.user.role === "user") {
-        console.log('Allowing user role to login as employee for backward compatibility');
-      } else if (!isValidRole) {
-        setError(`Invalid credentials for ${loginType} login.`);
+      if (!isAdminLogin && !isUserLogin) {
+        // If role doesn't match login type
+        if (loginType === "admin") {
+          setError("Invalid credentials for admin login");
+        } else {
+          setError("Invalid credentials for user login");
+        }
         setIsLoading(false);
         return;
       }
       
       // Format user data for context
       const userData = {
-        id: response.user._id,
+        id: response.user.id,
         name: response.user.name,
         email: response.user.email,
         role: response.user.role,
         token: response.token,
         avatar: null,
+        // Include page permissions from the server response
+        pagePermissions: response.user.pagePermissions || [],
         preferences: {
           fontSize: "medium",
           language: "en",
@@ -96,7 +100,7 @@ function Login() {
       login(userData);
       
       // Redirect based on role - same route for all roles in this case
-      navigate("/dashboard");
+      navigate("/welcome");
     } catch (err) {
       console.error("Login error:", err);
       setError(err.response?.data?.message || "Login failed. Please try again.");
@@ -126,10 +130,10 @@ function Login() {
           <div className="flex mb-6 bg-gray-800/50 rounded-lg p-1">
             <button
               type="button"
-              onClick={() => handleLoginTypeChange("employee")}
-              className={`flex-1 py-2 rounded-md text-center transition-all ${loginType === "employee" ? "bg-cyan-600 text-white" : "text-gray-300 hover:bg-gray-700/50"}`}
+              onClick={() => handleLoginTypeChange("user")}
+              className={`flex-1 py-2 rounded-md text-center transition-all ${loginType === "user" ? "bg-cyan-600 text-white" : "text-gray-300 hover:bg-gray-700/50"}`}
             >
-              Employee
+              User
             </button>
             <button
               type="button"
@@ -158,7 +162,7 @@ function Login() {
                 className="w-full p-3 border border-gray-600 bg-gray-900/80 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-400 transition-all duration-300"
                 required
                 autoComplete="email"
-                placeholder={loginType === "admin" ? "admin@example.com" : "employee@example.com"}
+                placeholder={loginType === "admin" ? "admin@example.com" : "user@example.com"}
               />
             </div>
 
@@ -210,7 +214,7 @@ function Login() {
                   Signing in...
                 </>
               ) : (
-                `Sign in as ${loginType === "admin" ? "Administrator" : "Employee"}`
+                `Sign in as ${loginType === "admin" ? "Administrator" : "User"}`
               )}
             </button>
           </form>

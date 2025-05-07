@@ -7,7 +7,8 @@ import {
   getActiveSessions, 
   forceLogout, 
   getSessionHistory,
-  getUserActivityStats
+  getUserActivityStats,
+  getAnalyticsData
 } from "../controllers/authController.js";
 import deviceInfoController from '../controllers/deviceInfoController.js';
 import sessionActivityController from '../controllers/sessionActivityController.js';
@@ -29,6 +30,7 @@ router.get("/sessions/active", authMiddleware, adminMiddleware, getActiveSession
 router.get("/sessions/history", authMiddleware, adminMiddleware, getSessionHistory);
 router.post("/sessions/:sessionId/logout", authMiddleware, adminMiddleware, forceLogout);
 router.get("/stats/activity", authMiddleware, adminMiddleware, getUserActivityStats);
+router.get("/stats/analytics", authMiddleware, adminMiddleware, getAnalyticsData);
 
 // Session activity route
 router.get("/sessions/:sessionId/activity", authMiddleware, adminMiddleware, sessionActivityController.getSessionActivity);

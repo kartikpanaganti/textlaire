@@ -45,11 +45,29 @@ const UserActivityPage = () => {
     }
   };
 
+  // Fetch activity analytics data specifically for the dashboard
+  const fetchAnalyticsData = async () => {
+    try {
+      const response = await axios.get("/api/auth/stats/analytics");
+      if (response.data.success) {
+        setActivityStats(prevStats => ({
+          ...prevStats,
+          ...response.data.analytics
+        }));
+      }
+    } catch (err) {
+      console.error("Error fetching analytics data:", err);
+    }
+  };
+
   // Fetch activity stats
   const fetchActivityStats = async () => {
     try {
       const response = await axios.get("/api/auth/stats/activity");
       setActivityStats(response.data.stats);
+      
+      // Also fetch analytics data for more detailed dashboard
+      fetchAnalyticsData();
     } catch (err) {
       console.error("Error fetching activity stats:", err);
     }
@@ -136,6 +154,12 @@ const UserActivityPage = () => {
     fetchSessionHistory();
   };
   
+  // Refresh dashboard data
+  const refreshDashboard = () => {
+    fetchActivityStats();
+    fetchSessionHistory();
+  };
+  
   // View session details
   const viewSessionDetails = (session) => {
     setSelectedSession(session);
@@ -147,6 +171,7 @@ const UserActivityPage = () => {
     if (user?.role === 'admin') {
       fetchActiveSessions();
       fetchActivityStats();
+      fetchSessionHistory(); // Also fetch session history on initial load
       
       // Set up real-time socket updates instead of polling
       if (socket && isConnected) {
@@ -161,6 +186,9 @@ const UserActivityPage = () => {
         const intervalId = setInterval(() => {
           fetchActiveSessions();
           fetchActivityStats();
+          if (selectedTab === "history") {
+            fetchSessionHistory();
+          }
         }, 30000);
         
         return () => clearInterval(intervalId);
@@ -319,47 +347,79 @@ const UserActivityPage = () => {
       
       {/* Stats Cards */}
       {activityStats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-            <h3 className="text-gray-500 dark:text-gray-400 text-sm font-medium mb-2">Total Users</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-5 lg:p-6 transform transition-all duration-300 hover:scale-105">
+            <h3 className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm font-medium mb-1 sm:mb-2">Total Users</h3>
             <div className="flex items-center">
-              <div className="text-2xl font-bold">{activityStats.totalUsers}</div>
+              <div className="text-xl sm:text-2xl lg:text-3xl font-bold">{activityStats.totalUsers}</div>
             </div>
           </div>
           
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-            <h3 className="text-gray-500 dark:text-gray-400 text-sm font-medium mb-2">Active Users</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-5 lg:p-6 transform transition-all duration-300 hover:scale-105">
+            <h3 className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm font-medium mb-1 sm:mb-2">Active Users</h3>
             <div className="flex items-center">
-              <div className="text-2xl font-bold text-green-600">{activityStats.activeUsers}</div>
-              <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
+              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-600">{activityStats.activeUsers}</div>
+              <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 ml-2">
                 ({Math.round((activityStats.activeUsers / activityStats.totalUsers) * 100)}%)
               </span>
             </div>
           </div>
           
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-            <h3 className="text-gray-500 dark:text-gray-400 text-sm font-medium mb-2">Active Sessions</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-5 lg:p-6 transform transition-all duration-300 hover:scale-105">
+            <h3 className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm font-medium mb-1 sm:mb-2">Active Sessions</h3>
             <div className="flex items-center">
-              <div className="text-2xl font-bold text-blue-600">{activityStats.activeSessions}</div>
+              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-blue-600">{activityStats.activeSessions}</div>
             </div>
           </div>
           
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-            <h3 className="text-gray-500 dark:text-gray-400 text-sm font-medium mb-2">Sessions (24h)</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-5 lg:p-6 transform transition-all duration-300 hover:scale-105">
+            <h3 className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm font-medium mb-1 sm:mb-2">Sessions (24h)</h3>
             <div className="flex items-center">
-              <div className="text-2xl font-bold text-purple-600">{activityStats.sessionsLast24Hours}</div>
+              <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-purple-600">{activityStats.sessionsLast24Hours}</div>
             </div>
           </div>
         </div>
       )}
       
       {/* Activity Analytics Dashboard */}
-      {activityStats && (
-        <div className="mb-6 w-full">
-          <ActivityDashboard 
-            activityStats={activityStats} 
-            sessionHistory={sessionHistory} 
-          />
+      {activityStats && sessionHistory && sessionHistory.length > 0 ? (
+        <div className="mb-8 w-full bg-white dark:bg-gray-800 shadow-lg rounded-lg p-4 md:p-6 overflow-hidden">
+          <div className="flex justify-between items-center mb-4 md:mb-6 border-b pb-2 border-gray-200 dark:border-gray-700">
+            <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white">Login Activity Analytics</h2>
+            <button 
+              onClick={refreshDashboard}
+              className="flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              <FaSync className="mr-1.5" size={14} />
+              <span>Refresh</span>
+            </button>
+          </div>
+          <div className="w-full min-h-[400px] md:h-[420px] overflow-x-auto"> {/* Adjusted height for two charts */}
+            <ActivityDashboard 
+              activityStats={activityStats} 
+              sessionHistory={sessionHistory} 
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="mb-8 w-full bg-white dark:bg-gray-800 shadow-lg rounded-lg p-4 md:p-6 overflow-hidden">
+          <div className="flex justify-between items-center mb-4 md:mb-6 border-b pb-2 border-gray-200 dark:border-gray-700">
+            <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white">Login Activity Analytics</h2>
+            <button 
+              onClick={refreshDashboard}
+              className="flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              <FaSync className="mr-1.5" size={14} />
+              <span>Refresh</span>
+            </button>
+          </div>
+          <div className="flex justify-center items-center h-[400px]"> {/* Adjusted height for the loading/error state */}
+            {isLoading ? (
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+            ) : (
+              <p className="text-gray-600 dark:text-gray-400">No activity data available. Try refreshing or changing your filters.</p>
+            )}
+          </div>
         </div>
       )}
       

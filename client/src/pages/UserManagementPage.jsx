@@ -1,8 +1,20 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { UserContext } from '../context/UserProvider';
-import { FaEdit, FaTrash, FaUserPlus, FaSync, FaFilter, FaEye, FaKey } from 'react-icons/fa';
+import { FaEdit, FaTrash, FaUserPlus, FaSync, FaFilter, FaEye, FaKey, FaLock, FaCheckSquare } from 'react-icons/fa';
 import { toast } from 'react-toastify';
+
+// Define available pages for permissions
+const AVAILABLE_PAGES = [
+  { id: 'dashboard', name: 'Dashboard', path: '/dashboard' },
+  { id: 'employees', name: 'Workforce', path: '/employees' },
+  { id: 'raw-materials', name: 'Raw Materials', path: '/raw-materials' },
+  { id: 'attendance', name: 'Attendance', path: '/attendance' },
+  { id: 'image-generation', name: 'Image Generation', path: '/image-generation' },
+  { id: 'products', name: 'Products', path: '/products' },
+  { id: 'payroll', name: 'Payroll', path: '/payroll' },
+  { id: 'messages', name: 'Messages', path: '/messages' },
+];
 
 const UserManagementPage = () => {
   const { user } = useContext(UserContext);
@@ -16,7 +28,8 @@ const UserManagementPage = () => {
     email: '',
     role: 'user',
     password: '',
-    secretKey: ''
+    secretKey: '',
+    pagePermissions: [] // Array of permitted page IDs
   });
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [filter, setFilter] = useState('');
@@ -24,6 +37,9 @@ const UserManagementPage = () => {
   const [resetPasswordModal, setResetPasswordModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [newSecretKey, setNewSecretKey] = useState('');
+  const [permissionsModalOpen, setPermissionsModalOpen] = useState(false);
+  const [permissionsUser, setPermissionsUser] = useState(null);
+  const [selectedPermissions, setSelectedPermissions] = useState([]);
 
   // Fetch all users
   const fetchUsers = async () => {
@@ -60,6 +76,15 @@ const UserManagementPage = () => {
     });
   };
 
+  // Handler for permissions checkbox changes
+  const handlePermissionChange = (pageId) => {
+    if (selectedPermissions.includes(pageId)) {
+      setSelectedPermissions(selectedPermissions.filter(id => id !== pageId));
+    } else {
+      setSelectedPermissions([...selectedPermissions, pageId]);
+    }
+  };
+
   // Open modal for adding a new user
   const handleAddUser = () => {
     setCurrentUser(null);
@@ -68,7 +93,8 @@ const UserManagementPage = () => {
       email: '',
       role: 'user',
       password: '',
-      secretKey: ''
+      secretKey: '',
+      pagePermissions: []
     });
     setModalOpen(true);
   };
@@ -81,9 +107,31 @@ const UserManagementPage = () => {
       email: user.email,
       role: user.role,
       password: '', // Don't populate password for security
-      secretKey: '' // Don't populate secret key for security
+      secretKey: '', // Don't populate secret key for security
+      pagePermissions: user.pagePermissions || []
     });
     setModalOpen(true);
+  };
+
+  // Open modal for managing user permissions
+  const handleManagePermissions = (user) => {
+    setPermissionsUser(user);
+    setSelectedPermissions(user.pagePermissions || []);
+    setPermissionsModalOpen(true);
+  };
+
+  // Save permissions for a user
+  const handleSavePermissions = async () => {
+    try {
+      await axios.put(`/api/users/${permissionsUser._id}/permissions`, {
+        pagePermissions: selectedPermissions
+      });
+      toast.success('User permissions updated successfully');
+      setPermissionsModalOpen(false);
+      fetchUsers(); // Refresh user list
+    } catch (err) {
+      toast.error('Error updating permissions: ' + (err.response?.data?.message || err.message));
+    }
   };
 
   // Submit handler for create/edit user form
@@ -258,6 +306,13 @@ const UserManagementPage = () => {
                   </div>
                 </th>
                 <th 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  <div className="flex items-center">
+                    Permissions
+                  </div>
+                </th>
+                <th 
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                   onClick={() => handleSort('lastLogin')}
                 >
@@ -276,15 +331,15 @@ const UserManagementPage = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-4 text-center text-gray-500">Loading users...</td>
+                  <td colSpan="6" className="px-6 py-4 text-center text-gray-500">Loading users...</td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-4 text-center text-red-500">{error}</td>
+                  <td colSpan="6" className="px-6 py-4 text-center text-red-500">{error}</td>
                 </tr>
               ) : sortedUsers.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-4 text-center text-gray-500">No users found</td>
+                  <td colSpan="6" className="px-6 py-4 text-center text-gray-500">No users found</td>
                 </tr>
               ) : (
                 sortedUsers.map(user => (
@@ -299,6 +354,28 @@ const UserManagementPage = () => {
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' : user.role === 'manager' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
                         {user.role}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-500">
+                        {user.role === 'admin' ? (
+                          <span className="text-purple-600">Full Access</span>
+                        ) : (
+                          <div className="flex items-center">
+                            <span className="mr-2">
+                              {user.pagePermissions && user.pagePermissions.length 
+                                ? `${user.pagePermissions.length} pages` 
+                                : "No access"}
+                            </span>
+                            <button 
+                              onClick={() => handleManagePermissions(user)}
+                              className="text-blue-600 hover:text-blue-800"
+                              title="Manage page permissions"
+                            >
+                              <FaLock size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {user.formattedLastLogin || 'Never'}
@@ -432,6 +509,67 @@ const UserManagementPage = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Permissions Modal */}
+      {permissionsModalOpen && permissionsUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto">
+            <h2 className="text-xl font-semibold mb-4">Manage Page Access for {permissionsUser.name}</h2>
+            <div className="mb-4 text-sm text-gray-600">
+              Select which pages this user can access. Admins automatically have access to all pages.
+            </div>
+            
+            <div className="space-y-3 mb-6">
+              {AVAILABLE_PAGES.map(page => (
+                <div key={page.id} className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id={`page-${page.id}`}
+                    checked={selectedPermissions.includes(page.id)}
+                    onChange={() => handlePermissionChange(page.id)}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mr-3"
+                  />
+                  <label htmlFor={`page-${page.id}`} className="text-gray-700">{page.name}</label>
+                </div>
+              ))}
+            </div>
+            
+            <div className="flex items-center justify-between border-t pt-4">
+              <div className="text-sm">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPermissions(AVAILABLE_PAGES.map(p => p.id))}
+                  className="text-blue-600 hover:text-blue-800 mr-4"
+                >
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPermissions([])}
+                  className="text-blue-600 hover:text-blue-800"
+                >
+                  Clear All
+                </button>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPermissionsModalOpen(false)}
+                  className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSavePermissions}
+                  className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline flex items-center"
+                >
+                  <FaCheckSquare className="mr-2" /> Save Permissions
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

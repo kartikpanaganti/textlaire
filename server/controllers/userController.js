@@ -148,7 +148,7 @@ export const createUser = async (req, res) => {
       });
     }
 
-    const { name, email, password, role, secretKey } = req.body;
+    const { name, email, password, role, secretKey, pagePermissions } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -173,7 +173,8 @@ export const createUser = async (req, res) => {
       email,
       password, // Will be hashed by pre-save hook
       role: role || 'employee', // Default to employee if not specified
-      secretKey: role === 'admin' ? secretKey : undefined // Only set secretKey for admin users
+      secretKey: role === 'admin' ? secretKey : undefined, // Only set secretKey for admin users
+      pagePermissions: role === 'admin' ? [] : (pagePermissions || []) // Admins have access to all pages
     });
 
     await newUser.save();
@@ -201,7 +202,7 @@ export const createUser = async (req, res) => {
 export const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, password, role, secretKey } = req.body;
+    const { name, email, password, role, secretKey, pagePermissions } = req.body;
 
     // Check if user is admin or the user is updating their own data
     if (req.user.role !== 'admin' && req.user.userId !== id) {
@@ -243,6 +244,8 @@ export const updateUser = async (req, res) => {
     
     // Handle role and secretKey updates
     if (role && req.user.role === 'admin') {
+      const previousRole = user.role;
+      
       // If changing to admin role, require secretKey
       if (role === 'admin') {
         if (secretKey) {
@@ -254,13 +257,25 @@ export const updateUser = async (req, res) => {
             message: 'Secret key is required for admin users'
           });
         }
+        
+        // If changing to admin, clear page permissions as admins have access to all pages
+        user.pagePermissions = [];
+      } else if (previousRole === 'admin' && role !== 'admin') {
+        // If downgrading from admin, set default page permissions
+        user.pagePermissions = pagePermissions || [];
       }
+      
       user.role = role;
     }
 
     // Update secretKey if provided (admin only)
     if (secretKey && req.user.role === 'admin' && user.role === 'admin') {
       user.secretKey = secretKey;
+    }
+    
+    // Update page permissions if provided (admin only)
+    if (Array.isArray(pagePermissions) && req.user.role === 'admin' && user.role !== 'admin') {
+      user.pagePermissions = pagePermissions;
     }
 
     await user.save();
@@ -385,6 +400,65 @@ export const resetUserCredentials = async (req, res) => {
     });
   } catch (error) {
     console.error('Reset credentials error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error', 
+      error: error.message 
+    });
+  }
+};
+
+// Update user page permissions (admin only)
+export const updateUserPermissions = async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Access denied: Admin privileges required' 
+      });
+    }
+
+    const userId = req.params.id;
+    const { pagePermissions } = req.body;
+
+    // Validate pagePermissions is an array
+    if (!Array.isArray(pagePermissions)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Page permissions must be an array of page IDs'
+      });
+    }
+
+    // Find the user to update
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Don't allow changing permissions for admin users
+    if (user.role === 'admin') {
+      return res.status(400).json({
+        success: false,
+        message: 'Admin users already have access to all pages'
+      });
+    }
+
+    // Update the user's page permissions
+    user.pagePermissions = pagePermissions;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'User page permissions updated successfully',
+      pagePermissions: user.pagePermissions
+    });
+  } catch (error) {
+    console.error('Update user permissions error:', error);
     res.status(500).json({ 
       success: false,
       message: 'Server error', 

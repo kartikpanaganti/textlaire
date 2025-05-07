@@ -92,6 +92,15 @@ function Sidebar() {
     navigate('/messages');
   };
 
+  // Check if user has permission to access a page
+  const hasPermission = (pageId) => {
+    // Admins have access to all pages
+    if (user?.role === 'admin') return true;
+    
+    // Check if user has the specific page permission
+    return user?.pagePermissions && user.pagePermissions.includes(pageId);
+  };
+
   // Define theme-based colors
   const isDarkMode = theme === 'dark';
   
@@ -163,97 +172,126 @@ function Sidebar() {
         {/* Navigation Links */}
         <nav className="flex-1">
           <ul className="space-y-2">
-            <SidebarItem 
-              icon={<FaTachometerAlt className={colors.icon} />} 
-              label="Dashboard" 
-              isCollapsed={isCollapsed && !isMobileMenuOpen} 
-              isActive={location.pathname === "/dashboard"}
-              onClick={() => {
-                navigate("/dashboard");
-                if (isMobileView) toggleMobileMenu();
-              }}
-              colors={colors}
-            />
-            <SidebarItem 
-              icon={<FaUserCog className={colors.icon} />} 
-              label="Workforce" 
-              isCollapsed={isCollapsed && !isMobileMenuOpen} 
-              isActive={location.pathname === "/employees"}
-              onClick={() => {
-                navigate("/employees");
-                if (isMobileView) toggleMobileMenu();
-              }}
-              colors={colors}
-            />
-            <SidebarItem 
-              icon={<FaBoxOpen className={colors.icon} />} 
-              label="Raw Materials" 
-              isCollapsed={isCollapsed && !isMobileMenuOpen} 
-              isActive={location.pathname === "/raw-materials"}
-              onClick={() => {
-                navigate("/raw-materials");
-                if (isMobileView) toggleMobileMenu();
-              }}
-              colors={colors}
-            />
-            <SidebarItem 
-              icon={<IoPersonCircleOutline className={colors.icon} />} 
-              label="Attendance" 
-              isCollapsed={isCollapsed && !isMobileMenuOpen} 
-              isActive={location.pathname === "/attendance"}
-              onClick={() => {
-                navigate("/attendance");
-                if (isMobileView) toggleMobileMenu();
-              }}
-              colors={colors}
-            />
-            <SidebarItem 
-              icon={<IoImagesOutline className={colors.icon} />} 
-              label="Image Generation" 
-              isCollapsed={isCollapsed && !isMobileMenuOpen} 
-              isActive={location.pathname === "/image-generation"}
-              onClick={() => {
-                navigate("/image-generation");
-                if (isMobileView) toggleMobileMenu();
-              }}
-              colors={colors}
-            />
-           
-            <SidebarItem 
-              icon={<FaShoppingCart className={colors.icon} />} 
-              label="Products" 
-              isCollapsed={isCollapsed && !isMobileMenuOpen} 
-              isActive={location.pathname === "/products"}
-              onClick={() => {
-                navigate("/products");
-                if (isMobileView) toggleMobileMenu();
-              }}
-              colors={colors}
-            />
-            <SidebarItem 
-              icon={<FaMoneyBillWave className={colors.icon} />} 
-              label="Payroll" 
-              isCollapsed={isCollapsed && !isMobileMenuOpen} 
-              isActive={location.pathname === "/payroll"}
-              onClick={() => {
-                navigate("/payroll");
-                if (isMobileView) toggleMobileMenu();
-              }}
-              colors={colors}
-            />
+            {/* Dashboard */}
+            {hasPermission('dashboard') && (
+              <SidebarItem 
+                icon={<FaTachometerAlt className={colors.icon} />} 
+                label="Dashboard" 
+                isCollapsed={isCollapsed && !isMobileMenuOpen} 
+                isActive={location.pathname === "/dashboard"}
+                onClick={() => {
+                  navigate("/dashboard");
+                  if (isMobileView) toggleMobileMenu();
+                }}
+                colors={colors}
+              />
+            )}
             
-            <SidebarItem 
-              icon={<FaComments className={colors.icon} />} 
-              label="Messages" 
-              isCollapsed={isCollapsed && !isMobileMenuOpen} 
-              isActive={location.pathname === "/messages"}
-              onClick={() => {
-                navigateToMessages();
-                if (isMobileView) toggleMobileMenu();
-              }}
-              colors={colors}
-              badge={unreadCount}
-            />
+            {/* Workforce */}
+            {hasPermission('employees') && (
+              <SidebarItem 
+                icon={<FaUserCog className={colors.icon} />} 
+                label="Workforce" 
+                isCollapsed={isCollapsed && !isMobileMenuOpen} 
+                isActive={location.pathname === "/employees"}
+                onClick={() => {
+                  navigate("/employees");
+                  if (isMobileView) toggleMobileMenu();
+                }}
+                colors={colors}
+              />
+            )}
+            
+            {/* Raw Materials */}
+            {hasPermission('raw-materials') && (
+              <SidebarItem 
+                icon={<FaBoxOpen className={colors.icon} />} 
+                label="Raw Materials" 
+                isCollapsed={isCollapsed && !isMobileMenuOpen} 
+                isActive={location.pathname === "/raw-materials"}
+                onClick={() => {
+                  navigate("/raw-materials");
+                  if (isMobileView) toggleMobileMenu();
+                }}
+                colors={colors}
+              />
+            )}
+            
+            {/* Attendance */}
+            {hasPermission('attendance') && (
+              <SidebarItem 
+                icon={<IoPersonCircleOutline className={colors.icon} />} 
+                label="Attendance" 
+                isCollapsed={isCollapsed && !isMobileMenuOpen} 
+                isActive={location.pathname === "/attendance"}
+                onClick={() => {
+                  navigate("/attendance");
+                  if (isMobileView) toggleMobileMenu();
+                }}
+                colors={colors}
+              />
+            )}
+            
+            {/* Image Generation */}
+            {hasPermission('image-generation') && (
+              <SidebarItem 
+                icon={<IoImagesOutline className={colors.icon} />} 
+                label="Image Generation" 
+                isCollapsed={isCollapsed && !isMobileMenuOpen} 
+                isActive={location.pathname === "/image-generation"}
+                onClick={() => {
+                  navigate("/image-generation");
+                  if (isMobileView) toggleMobileMenu();
+                }}
+                colors={colors}
+              />
+            )}
+           
+            {/* Products */}
+            {hasPermission('products') && (
+              <SidebarItem 
+                icon={<FaShoppingCart className={colors.icon} />} 
+                label="Products" 
+                isCollapsed={isCollapsed && !isMobileMenuOpen} 
+                isActive={location.pathname === "/products"}
+                onClick={() => {
+                  navigate("/products");
+                  if (isMobileView) toggleMobileMenu();
+                }}
+                colors={colors}
+              />
+            )}
+            
+            {/* Payroll */}
+            {hasPermission('payroll') && (
+              <SidebarItem 
+                icon={<FaMoneyBillWave className={colors.icon} />} 
+                label="Payroll" 
+                isCollapsed={isCollapsed && !isMobileMenuOpen} 
+                isActive={location.pathname === "/payroll"}
+                onClick={() => {
+                  navigate("/payroll");
+                  if (isMobileView) toggleMobileMenu();
+                }}
+                colors={colors}
+              />
+            )}
+            
+            {/* Messages */}
+            {hasPermission('messages') && (
+              <SidebarItem 
+                icon={<FaComments className={colors.icon} />} 
+                label="Messages" 
+                isCollapsed={isCollapsed && !isMobileMenuOpen} 
+                isActive={location.pathname === "/messages"}
+                onClick={() => {
+                  navigateToMessages();
+                  if (isMobileView) toggleMobileMenu();
+                }}
+                colors={colors}
+                badge={unreadCount}
+              />
+            )}
             
             {/* Admin-only menu items */}
             {user?.role === 'admin' && (

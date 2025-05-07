@@ -31,6 +31,11 @@ const userSchema = new mongoose.Schema({
     //   message: 'Secret key is required for admin users'
     // }
   },
+  pagePermissions: {
+    type: [String],
+    default: [],
+    description: "Array of page IDs that the user has permission to access"
+  },
   isLoggedIn: {
     type: Boolean,
     default: false

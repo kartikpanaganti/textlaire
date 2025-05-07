@@ -333,6 +333,7 @@ export const login = async (req, res) => {
         userId: user._id,
         email: user.email,
         role: user.role,
+        pagePermissions: user.pagePermissions || [],
         sessionId
       }, 
       process.env.JWT_SECRET, 
@@ -450,7 +451,8 @@ export const login = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
+        role: user.role,
+        pagePermissions: user.pagePermissions || [] // Include page permissions
       }
     });
   } catch (error) {
@@ -1229,6 +1231,124 @@ export const getUserActivityStats = async (req, res) => {
     });
   } catch (error) {
     console.error('Get user activity stats error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error', 
+      error: error.message 
+    });
+  }
+};
+
+// Get detailed analytics data for the dashboard
+export const getAnalyticsData = async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Access denied: Admin privileges required' 
+      });
+    }
+
+    // Get today's date at midnight
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Get dates for the last 7 days
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      last7Days.push(date);
+    }
+    
+    // Get login counts for each of the last 7 days
+    const dailyLogins = [];
+    for (let i = 0; i < 7; i++) {
+      const startDate = new Date(last7Days[i]);
+      const endDate = new Date(last7Days[i]);
+      endDate.setHours(23, 59, 59, 999);
+      
+      const count = await UserSession.countDocuments({
+        loginTime: { $gte: startDate, $lte: endDate }
+      });
+      
+      dailyLogins.push({
+        date: startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        count
+      });
+    }
+    
+    // Get device distribution data
+    const deviceCounts = {
+      Desktop: 0,
+      Mobile: 0, 
+      Tablet: 0,
+      Other: 0
+    };
+    
+    // Get all active sessions
+    const sessions = await UserSession.find({}).lean();
+    
+    sessions.forEach(session => {
+      if (session.deviceInfo && session.deviceInfo.device) {
+        const device = session.deviceInfo.device;
+        if (device.includes('Mobile')) {
+          deviceCounts.Mobile++;
+        } else if (device.includes('Tablet')) {
+          deviceCounts.Tablet++;
+        } else if (device.includes('Desktop')) {
+          deviceCounts.Desktop++;
+        } else {
+          deviceCounts.Other++;
+        }
+      } else {
+        deviceCounts.Other++;
+      }
+    });
+    
+    // Get login time distribution by hour
+    const hourCounts = Array(24).fill(0);
+    
+    sessions.forEach(session => {
+      if (session.loginTime) {
+        const hour = new Date(session.loginTime).getHours();
+        hourCounts[hour]++;
+      }
+    });
+    
+    // Get browser distribution
+    const browserCounts = {};
+    
+    sessions.forEach(session => {
+      if (session.deviceInfo && session.deviceInfo.browser) {
+        const browser = session.deviceInfo.browser.split(' ')[0]; // Just get the browser name
+        browserCounts[browser] = (browserCounts[browser] || 0) + 1;
+      }
+    });
+    
+    // Get OS distribution
+    const osCounts = {};
+    
+    sessions.forEach(session => {
+      if (session.deviceInfo && session.deviceInfo.os) {
+        const os = session.deviceInfo.os.split(' ')[0]; // Just get the OS name
+        osCounts[os] = (osCounts[os] || 0) + 1;
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      analytics: {
+        dailyLogins,
+        deviceCounts,
+        hourCounts,
+        browserCounts,
+        osCounts
+      }
+    });
+  } catch (error) {
+    console.error('Get analytics data error:', error);
     res.status(500).json({ 
       success: false,
       message: 'Server error', 
