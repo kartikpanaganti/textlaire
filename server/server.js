@@ -40,12 +40,22 @@ app.use(cors({
     // List of allowed origins
     const allowedOrigins = [
       'http://localhost:5173',
-      'http://127.0.0.1:5173'
+      'http://127.0.0.1:5173',
       // Add any IP addresses your app might be accessed from
+      'http://192.168.239.127:5173', // Explicitly add your network IP
+      'http://192.168.239.127' // Also add without port
     ];
     
-    // Check if the origin is allowed
-    if (allowedOrigins.includes(origin) || origin.match(/^http:\/\/192\.168\./)) {
+    // Check if the origin is allowed - log all attempts for debugging
+    console.log('CORS request from origin:', origin);
+    
+    // Allow all local network IPs (192.168.*, 10.*, 172.16-31.*)
+    if (allowedOrigins.includes(origin) || 
+        origin?.match(/^https?:\/\/192\.168\./) || 
+        origin?.match(/^https?:\/\/10\./) ||
+        origin?.match(/^https?:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\./) ||
+        !origin) { // Also allow requests with no origin (like from mobile apps)
+      console.log('CORS: Origin accepted:', origin);
       return callback(null, true);
     } else {
       console.log('Express CORS: Origin not allowed:', origin);

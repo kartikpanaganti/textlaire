@@ -142,25 +142,56 @@ const ChatMessages = () => {
     fetchChatMessages();
   }, [selectedChat, setMessages]);
   
+  // Improved scroll handling function that ensures latest messages are visible
+  const scrollToBottom = (behavior = 'smooth') => {
+    // First try the reference approach
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior });
+    }
+    
+    // Backup approach - force container scroll position
+    const msgContainer = document.querySelector('.messages-container');
+    if (msgContainer) {
+      // For standard column layout, we need to scroll to the very bottom
+      msgContainer.scrollTop = msgContainer.scrollHeight;
+    }
+  };
+  
   // Scroll to bottom when messages change or when a chat is first loaded
   useEffect(() => {
-    // Force scroll to bottom when messages load
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+    // Don't scroll if there are no messages
+    if (!messages.length) return;
+    
+    // Check if we're near the bottom before scrolling
+    const msgContainer = document.querySelector('.messages-container');
+    let shouldAutoScroll = true;
+    
+    if (msgContainer) {
+      const { scrollTop, scrollHeight, clientHeight } = msgContainer;
+      // If we're already near the bottom (within 150px) or if it's a new message from the current user, scroll down
+      shouldAutoScroll = scrollHeight - scrollTop - clientHeight < 150 || 
+                         (messages.length > 0 && messages[messages.length - 1].sender._id === user?._id);
     }
-  }, [messages]);
+    
+    if (shouldAutoScroll) {
+      // Use setTimeout to ensure this happens after render
+      setTimeout(() => scrollToBottom('smooth'), 100);
+    }
+  }, [messages, user?._id]);
   
-  // Also scroll when selected chat changes
+  // Scroll to bottom after messages have loaded for a chat
   useEffect(() => {
-    if (selectedChat) {
-      // Use a small timeout to ensure the DOM has updated
-      setTimeout(() => {
-        if (messagesEndRef.current) {
-          messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
-        }
+    if (selectedChat && !loading) {
+      // Once loading is complete, scroll to bottom with a delay
+      const timer = setTimeout(() => {
+        scrollToBottom('auto');
       }, 100);
+      
+      return () => clearTimeout(timer);
     }
-  }, [selectedChat]);
+  }, [selectedChat?._id, loading]);
+  
+  // This useEffect was removed as it was replaced by the one above
   
   // Format date for message groups
   const formatMessageDate = (timestamp) => {
@@ -332,12 +363,13 @@ const ChatMessages = () => {
       
       {/* Messages area */}
       <Box
+        className="messages-container"
         sx={{
           flexGrow: 1,
           overflow: 'auto',
           p: 2,
           display: 'flex',
-          flexDirection: 'column-reverse', /* This reverses the order to show latest at bottom */
+          flexDirection: 'column', /* Changed from column-reverse to normal flow */
           gap: 1,
           bgcolor: 'grey.50'
         }}
@@ -347,8 +379,8 @@ const ChatMessages = () => {
             <CircularProgress />
           </Box>
         ) : messageGroups.length > 0 ? (
-          // Reverse the message groups to show latest at the bottom
-          [...messageGroups].reverse().map((group, index) => (
+          // Show message groups in chronological order (oldest to newest)
+          messageGroups.map((group, index) => (
             <Box key={index} sx={{ mb: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
                 <Typography

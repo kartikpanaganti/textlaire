@@ -59,6 +59,7 @@ function App() {
         <Route path="/user-activity" element={<ProtectedRoute component={<UserActivityPage />} />} />
         <Route path="/payroll" element={<ProtectedRoute component={<PayrollManagementPage />} />} />
         <Route path="/messages" element={<ProtectedRoute component={<CommunicationPage />} noContainer={true} />} />
+        <Route path="/communication" element={<Navigate to="/messages" replace />} />
 
         {/* profile and settings pages */}
         <Route path="/profile" element={<ProtectedRoute component={<ProfilePage />} />} />

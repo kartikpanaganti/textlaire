@@ -17,6 +17,8 @@ export const ChatProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [typingUsers, setTypingUsers] = useState({});
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState({}); // Track unread messages per chat
   const messageProcessorRef = useRef(null);
   
   // Initialize user data from localStorage
@@ -195,90 +197,32 @@ export const ChatProvider = ({ children }) => {
     }
   };
 
-  // Update messages when selected chat changes
-  useEffect(() => {
-    if (selectedChat) {
-      // First try to load from cache for immediate display
-      const cachedMessages = sessionStorage.getItem(`messages-${selectedChat._id}`);
-      if (cachedMessages) {
-        try {
-          setMessages(JSON.parse(cachedMessages));
-        } catch (error) {
-          console.error('Error parsing cached messages:', error);
-        }
-      } else {
-        // Reset messages if no cache exists
-        setMessages([]);
-      }
-      
-      // Check if we have a token before fetching messages
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      if (!token) {
-        console.warn('No authentication token found. Cannot fetch fresh messages.');
-        // Try to get user from storage
-        const userData = localStorage.getItem('user') || sessionStorage.getItem('user');
-        if (userData) {
-          // If we have user data but no token, the token may have expired
-          console.warn('User data exists but no token found. User may need to re-login.');
-          toast.error('Your session has expired. Please log in again.');
-        }
-        return;
-      }
-      
-      // Always fetch fresh messages if we have a token
-      const getMessages = async () => {
-        const freshMessages = await fetchMessages(selectedChat._id);
-        if (freshMessages && freshMessages.length > 0) {
-          setMessages(freshMessages);
-        }
-      };
-      
-      getMessages();
-      
-      // Join the chat room via socket.io
-      if (socket) {
-        socket.emit('join_chat', { chatId: selectedChat._id });
-      }
-    } else {
-      // Clear messages when no chat is selected
-      setMessages([]);
-    }
-  }, [selectedChat, socket]);
-
-  // Process a new message - unified handler for all message sources
+  // Process a new message (either from socket or message history)
   const processNewMessage = useCallback((newMessage) => {
-    console.log(`PROCESSING MESSAGE: ${newMessage._id || 'unknown'}`);
+    if (!newMessage || !newMessage._id) return;
     
-    if (!newMessage || !newMessage._id) {
-      console.warn('Received invalid message:', newMessage);
-      return;
-    }
-    
-    // Get chat ID in a robust way
-    const chatId = newMessage.chat?._id || 
-                 (typeof newMessage.chat === 'string' ? newMessage.chat : null);
-    
+    // Extract chat ID from the message
+    const chatId = newMessage.chat?._id || newMessage.chat;
     if (!chatId) {
-      console.warn('Message has no chat ID:', newMessage);
+      console.warn('Message missing chat ID:', newMessage);
       return;
     }
     
-    // Check if message belongs to selected chat
-    const selectedChatId = selectedChat?._id?.toString();
-    const messageForSelectedChat = selectedChatId === chatId.toString();
+    // Check if message is from current user - don't count as unread
+    const isFromCurrentUser = newMessage.sender?._id === user?._id;
     
-    console.log(`Message for chat ${chatId}, selected: ${selectedChatId}, matches: ${messageForSelectedChat}`);
+    // Check if this message is for the currently selected chat
+    const messageForSelectedChat = selectedChat && 
+                                 selectedChat._id && 
+                                 selectedChat._id.toString() === chatId.toString();
     
-    // Update messages if this is for the currently selected chat
+    // Always update messages if it's for the selected chat
     if (messageForSelectedChat) {
       setMessages(prevMessages => {
-        // Check if message already exists in the list to avoid duplicates
-        const messageExists = prevMessages.some(m => m._id === newMessage._id);
-        if (messageExists) {
-          console.log(`Message ${newMessage._id} already exists in messages list, skipping`);
-          return prevMessages;
+        // If no previous messages, just return an array with the new message
+        if (!prevMessages || !Array.isArray(prevMessages)) {
+          return [newMessage];
         }
-        console.log(`Adding message ${newMessage._id} to messages list`);
         
         // Create a new array with unique messages only
         const uniqueMessages = [];
@@ -357,8 +301,30 @@ export const ChatProvider = ({ children }) => {
       return updatedChats;
     });
     
-    // Show notification if message is not for the selected chat
-    if (!messageForSelectedChat) {
+    // Add to unread messages if not from current user and not for current chat
+    if (!isFromCurrentUser && !messageForSelectedChat) {
+      // Update unread messages for this chat in state
+      setUnreadMessages(prev => {
+        // Check if this message is already in the unread list for this chat
+        const chatUnreadMessages = prev[chatId] || [];
+        if (chatUnreadMessages.some(m => m._id === newMessage._id)) {
+          return prev; // Already tracked
+        }
+        
+        // Add message to unread list for this chat
+        const newChatMessages = [...chatUnreadMessages, newMessage];
+        const newState = { ...prev, [chatId]: newChatMessages };
+        
+        // Update total unread count
+        const totalCount = Object.values(newState).reduce((sum, arr) => sum + arr.length, 0);
+        setUnreadCount(totalCount);
+        
+        return newState;
+      });
+    }
+    
+    // Show notification if message is not from current user and not for the selected chat
+    if (!isFromCurrentUser && !messageForSelectedChat) {
       // Track shown notifications to prevent duplicates
       const notificationKey = `${newMessage._id}_${Date.now()}`;
       
@@ -430,7 +396,7 @@ export const ChatProvider = ({ children }) => {
         }
       }
     }
-  }, [selectedChat, chats]);
+  }, [selectedChat, chats, user]);
 
   // Store the message processor in a ref to avoid recreation on every render
   useEffect(() => {
@@ -632,26 +598,132 @@ export const ChatProvider = ({ children }) => {
     return typingUsers[chatId] || [];
   };
   
+  // Get unread messages count for a specific chat
+  const getUnreadCountForChat = (chatId) => {
+    return unreadMessages[chatId]?.length || 0;
+  };
+
+  // Mark messages as read when selecting a chat
+  const markChatAsRead = useCallback(async (chatId) => {
+    if (!chatId) return;
+    
+    try {
+      // Call the API to mark messages as read
+      const { markMessagesAsRead } = await import('../api/messageApi');
+      await markMessagesAsRead(chatId);
+      
+      // Clear unread messages for this chat
+      setUnreadMessages(prev => {
+        const newState = { ...prev };
+        delete newState[chatId];
+        
+        // Update total unread count
+        const totalCount = Object.values(newState).reduce((sum, arr) => sum + arr.length, 0);
+        setUnreadCount(totalCount);
+        
+        return newState;
+      });
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  }, []);
+
+  // Update messages when selected chat changes and mark messages as read
+  useEffect(() => {
+    if (selectedChat) {
+      // First try to load from cache for immediate display
+      const cachedMessages = sessionStorage.getItem(`messages-${selectedChat._id}`);
+      if (cachedMessages) {
+        try {
+          setMessages(JSON.parse(cachedMessages));
+        } catch (error) {
+          console.error('Error parsing cached messages:', error);
+        }
+      } else {
+        // Reset messages if no cache exists
+        setMessages([]);
+      }
+      
+      // Check if we have a token before fetching messages
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (!token) {
+        console.warn('No authentication token found. Cannot fetch fresh messages.');
+        // Try to get user from storage
+        const userData = localStorage.getItem('user') || sessionStorage.getItem('user');
+        if (userData) {
+          // If we have user data but no token, the token may have expired
+          console.warn('User data exists but no token found. User may need to re-login.');
+          toast.error('Your session has expired. Please log in again.');
+        }
+        return;
+      }
+      
+      // Always fetch fresh messages if we have a token
+      const getMessages = async () => {
+        const freshMessages = await fetchMessages(selectedChat._id);
+        if (freshMessages && freshMessages.length > 0) {
+          setMessages(freshMessages);
+        }
+      };
+      
+      getMessages();
+      
+      // Join the chat room via socket.io
+      if (socket) {
+        socket.emit('join_chat', { chatId: selectedChat._id });
+      }
+      
+      // Clear notifications for this chat when it's selected
+      setNotifications(prev => {
+        const filteredNotifications = prev.filter(n => {
+          // Keep notifications not related to this chat
+          return n.chat?._id !== selectedChat._id && 
+                 (typeof n.chat === 'string' ? n.chat !== selectedChat._id : true);
+        });
+        
+        // Update unread count when notifications are cleared
+        const removedCount = prev.length - filteredNotifications.length;
+        if (removedCount > 0) {
+          setUnreadCount(prevCount => Math.max(0, prevCount - removedCount));
+        }
+        
+        return filteredNotifications;
+      });
+      
+      // Clear unread messages for this chat and mark as read
+      markChatAsRead(selectedChat._id);
+      
+    } else {
+      // Clear messages when no chat is selected
+      setMessages([]);
+    }
+  }, [selectedChat, socket, markChatAsRead]);
+
   return (
-    <ChatContext.Provider value={{
-      user, 
-      chats, 
-      selectedChat, 
-      setSelectedChat, 
-      setChats, 
-      messages, 
-      setMessages, 
-      notifications, 
-      setNotifications, 
-      isLoading, 
-      socket,
-      fetchFreshChats,
-      sendTypingIndicator,
-      sendStopTypingIndicator,
-      isUserTypingInChat,
-      getTypingUsersForChat,
-      typingUsers
-    }}>
+    <ChatContext.Provider
+      value={{
+        user,
+        selectedChat,
+        setSelectedChat,
+        chats,
+        setChats,
+        messages,
+        setMessages,
+        fetchChats: fetchFreshChats,
+        isLoading,
+        notifications,
+        setNotifications,
+        unreadCount,
+        setUnreadCount,
+        getTypingUsersForChat,
+        isUserTypingInChat,
+        sendTypingIndicator,
+        sendStopTypingIndicator,
+        typingUsers,
+        getUnreadCountForChat,
+        markChatAsRead
+      }}
+    >
       {children}
     </ChatContext.Provider>
   );

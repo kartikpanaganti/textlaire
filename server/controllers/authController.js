@@ -349,15 +349,18 @@ export const login = async (req, res) => {
     };
     await user.save();
 
-    // Check for existing active sessions for this user from the same device
-    // Auto-close existing sessions from the same device/IP
+    // Check for existing active sessions for this user FROM THE EXACT SAME DEVICE
+    // Only auto-close existing sessions if it's the exact same device (IP + browser + device signature)
+    // This allows multiple different devices on the same network to remain logged in simultaneously
     await UserSession.updateMany(
       { 
         userId: user._id, 
         logoutTime: { $exists: false },
         'deviceInfo.ipAddress': deviceInfo.ipAddress,
         'deviceInfo.browser': deviceInfo.browser,
-        'deviceInfo.device': deviceInfo.device
+        'deviceInfo.device': deviceInfo.device,
+        'deviceInfo.deviceType': deviceInfo.deviceType, // Include device type for more accurate matching
+        'deviceInfo.os': deviceInfo.os // Include OS for more accurate matching
       },
       { 
         $set: { 

@@ -6,11 +6,18 @@ import axios from 'axios';
  */
 // Get the base API URL dynamically based on current window location
 const getApiUrl = () => {
-  // In development, always use the direct backend URL to avoid proxy issues
-  // This is critical for consistent behavior across all types of requests
   if (import.meta.env.DEV) {
-    // Always connect directly to the backend in development
-    // This ensures consistent behavior regardless of how the app is accessed
+    // In development, use the server IP that matches how the client is being accessed
+    const hostname = window.location.hostname;
+    
+    // If accessing via IP address, use that same IP to connect to the server
+    // This is crucial for mobile devices on the same network
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      console.log(`Detected access via IP: ${hostname}, connecting to server at same IP`);
+      return `http://${hostname}:5000`; // Use the same IP but correct server port
+    }
+    
+    // Default for localhost access
     return 'http://localhost:5000';
   }
   

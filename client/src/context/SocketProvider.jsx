@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { UserContext } from './UserProvider';
+import notificationService from '../services/MessageNotificationService';
+import { toast } from 'react-toastify';
 
 // Create Socket Context
 export const SocketContext = createContext();
@@ -64,13 +66,21 @@ export const SocketProvider = ({ children }) => {
       // This ensures consistent behavior regardless of how the app is accessed (localhost vs IP)
       const currentHostname = window.location.hostname;
       const currentProtocol = window.location.protocol;
-      const currentPort = window.location.port;
       
-      // Always use a direct connection to the backend server in development
-      // This avoids any proxy issues with WebSockets
-      let serverUrl = 'http://localhost:5000';
+      // In development, dynamically configure the socket server URL based on how the client is accessed
+      let serverUrl;
       
-      if (!import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
+        // If accessing via IP address (not localhost), use that same IP for socket connection
+        // This is crucial for mobile devices on the same network
+        if (currentHostname !== 'localhost' && currentHostname !== '127.0.0.1') {
+          serverUrl = `http://${currentHostname}:5000`;
+          console.log(`Mobile device detected! Using IP-based socket URL: ${serverUrl}`);
+        } else {
+          // Default localhost connection
+          serverUrl = 'http://localhost:5000';
+        }
+      } else {
         // In production, connect directly to the server
         serverUrl = import.meta.env.VITE_API_URL || 'https://textlaire.onrender.com';
       }
@@ -97,6 +107,9 @@ export const SocketProvider = ({ children }) => {
       });
       
       console.log('Connecting socket to server at:', serverUrl, 'with userId:', userId);
+      
+      // Initialize the notification service
+      notificationService.init(newSocket, userId);
       
       // Set up event listeners
       newSocket.on('connect', () => {
@@ -151,10 +164,29 @@ export const SocketProvider = ({ children }) => {
         
         // Implement multiple delivery mechanisms for maximum reliability
         try {
-          // 1. Direct custom event dispatch for immediate UI update
+          // 1. Direct custom event dispatch for immediate UI update and notification service
           const event = new CustomEvent('textlaire_new_message', { detail: message });
           window.dispatchEvent(event);
-          console.log('SOCKET: Dispatched message via custom event');
+          console.log('SOCKET: Dispatched message via custom event for notification service');
+          
+          // Ensure notification service is initialized
+          if (notificationService && (!notificationService.initialized || !notificationService.socket)) {
+            console.log('SOCKET: Re-initializing notification service due to missing initialization');
+            if (user && (user.id || user._id)) {
+              const userId = user.id || user._id;
+              notificationService.init(newSocket, userId);
+            }
+          }
+          
+          // Manually trigger notification handling for extra reliability
+          if (message.sender?._id !== (user?.id || user?._id)) {
+            console.log('SOCKET: Direct notification handling for reliability');
+            // Only show notifications for messages not from the current user
+            const chatId = message.chat?._id || message.chat;
+            notificationService.addUnreadMessage(chatId, message);
+            notificationService.showToastNotification(message);
+            notificationService.notifyObservers();
+          }
           
           // 2. Also re-emit the message on the socket after a brief delay
           // This helps in some edge cases where the initial event might be missed
@@ -178,136 +210,28 @@ export const SocketProvider = ({ children }) => {
             }
             localStorage.setItem('textlaire_pending_messages', JSON.stringify(pendingMessages));
           }
-          
-          // 4. Show toast notification regardless of current page
-          // Track shown notifications to prevent duplicates
-          const recentNotifications = JSON.parse(sessionStorage.getItem('textlaire_recent_notifications') || '[]');
-          const alreadyShown = recentNotifications.includes(message._id);
-          
-          // Only show toast if we haven't shown it recently
-          if (!alreadyShown) {
-            // Import toast dynamically to avoid circular dependencies
-            import('react-toastify').then(({ toast }) => {
-              // Track this notification to prevent duplicates
-              recentNotifications.push(message._id);
-              // Keep only the most recent 20 notifications
-              if (recentNotifications.length > 20) {
-                recentNotifications.shift();
-              }
-              sessionStorage.setItem('textlaire_recent_notifications', JSON.stringify(recentNotifications));
-              
-              // Show toast notification
-              const sender = message.sender?.name || 'Someone';
-              const content = message.content || 
-                            (message.attachments?.length ? 'Sent an attachment' : 'New message');
-              
-              toast.info(`${sender}: ${content.substring(0, 30)}${content.length > 30 ? '...' : ''}`, {
-                position: "top-right",
-                autoClose: 5000,
-                hideProgressBar: false,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-                toastId: message._id, // Use message ID as toast ID to prevent duplicates
-                onClick: () => {
-                  // When user clicks the notification, navigate to messages page
-                  window.location.href = '/messages';
-                }
-              });
-              
-              // Play notification sound
-              try {
-                // Create audio element only if needed
-                const audio = new Audio();
-                audio.src = '/notification.mp3';
-                // Preload the audio
-                audio.preload = 'auto';
-                // Add error handling
-                audio.onerror = (e) => console.log('Audio load error:', e.message);
-                // Only play after loaded
-                audio.oncanplaythrough = () => {
-                  audio.play().catch(e => console.log('Audio play error:', e.message));
-                };
-              } catch (error) {
-                console.log('Notification sound not available:', error.message);
-              }
-            }).catch(err => {
-              console.error('Failed to load toast library:', err);
-            });
-          }
         } catch (error) {
           console.error('SOCKET: Error handling new message:', error);
         }
       });
-
-      // Handle force logout event (specific to this socket)
-      newSocket.on('force_logout', (data) => {
-        console.log('Received force logout event:', data);
-        
-        try {
-          // Show notification to user
-          alert(data.message || 'Your session has been terminated by an administrator');
-          
-          // Perform logout
-          logout();
-          
-          // Wait a moment then redirect
-          setTimeout(() => {
-            window.location.href = '/';
-          }, 500);
-        } catch (error) {
-          console.error('Error handling force logout:', error);
-          // Attempt to do a basic redirect if the logout fails
-          window.location.href = '/';
-        }
-      });
       
-      // Handle global force logout events (broadcasts to all connected clients)
-      newSocket.on('global_force_logout', (data) => {
-        console.log('Received global force logout event:', data);
-        
-        try {
-          // Check if this event is for the current user - compare IDs as strings to be safe
-          const currentUserId = user.id?.toString() || user._id?.toString();
-          const logoutUserId = data.userId?.toString();
-          
-          console.log(`Comparing IDs: current=${currentUserId}, logout=${logoutUserId}`);
-          
-          if (currentUserId && logoutUserId && currentUserId === logoutUserId) {
-            console.log('This global force logout applies to current user');
-            
-            // Show notification to user
-            alert(data.message || 'Your session has been terminated by an administrator');
-            
-            // Perform logout
-            logout();
-            
-            // Wait a moment then redirect
-            setTimeout(() => {
-              window.location.href = '/';
-            }, 500);
-          } else {
-            console.log('Global force logout does not apply to current user');
-          }
-        } catch (error) {
-          console.error('Error handling global force logout:', error);
-          // Attempt to do a basic redirect if the logout fails
-          window.location.href = '/';
-        }
-      });
-
-      // Setup network change listeners
-      networkCleanup = setupNetworkListeners(newSocket);
-
-      // Save socket instance
+      // Set up other message event handlers
+      setupMessageEventHandlers(newSocket);
+      
+      // Update socket state
       setSocket(newSocket);
-
-      // Clean up on unmount
+      
+      // Set up network change listeners
+      networkCleanup = setupNetworkListeners(newSocket);
+      
+      // Return cleanup function for socket
       return () => {
         console.log('Cleaning up socket connection');
-        if (networkCleanup) networkCleanup();
         if (newSocket) {
           newSocket.disconnect();
+        }
+        if (networkCleanup) {
+          networkCleanup();
         }
       };
     } else {
@@ -323,6 +247,53 @@ export const SocketProvider = ({ children }) => {
       if (networkCleanup) networkCleanup();
     }
   }, [user, logout]);
+
+  // Set up message event handlers
+  const setupMessageEventHandlers = (newSocket) => {
+    // Process incoming chat messages
+    newSocket.on('new_message', (message) => {
+      console.log('New message received:', message);
+      
+      // Dispatch custom event for message notification handling
+      if (message) {
+        const event = new CustomEvent('textlaire_new_message', { detail: message });
+        window.dispatchEvent(event);
+      }
+    });
+    
+    // Handle chat updates
+    newSocket.on('chat_updated', (updatedChat) => {
+      console.log('Chat updated:', updatedChat);
+      // Dispatch event for chat context to handle
+      if (updatedChat) {
+        const event = new CustomEvent('textlaire_chat_updated', { detail: updatedChat });
+        window.dispatchEvent(event);
+      }
+    });
+
+    // Handle user online status updates
+    newSocket.on('user_status_update', (update) => {
+      console.log('User status update:', update);
+      if (update) {
+        const event = new CustomEvent('textlaire_user_status_update', { detail: update });
+        window.dispatchEvent(event);
+      }
+    });
+    
+    // Automatic reconnection handling
+    newSocket.on('reconnect', (attempt) => {
+      console.log(`Socket reconnected after ${attempt} attempts`);
+      
+      // Re-register user with server after reconnect
+      if (user && (user.id || user._id)) {
+        const userId = user.id || user._id;
+        newSocket.emit('user_connected', { userId });
+      }
+      
+      // Re-initialize notification service
+      notificationService.init(newSocket, user?.id || user?._id);
+    });
+  };
 
   return (
     <SocketContext.Provider value={{ socket, isConnected }}>

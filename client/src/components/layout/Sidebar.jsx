@@ -13,6 +13,8 @@ import { MdAutoFixHigh } from "react-icons/md";
 import { ThemeContext } from "../../context/ThemeProvider";
 import { UserContext } from "../../context/UserProvider";
 import { SocketContext } from "../../context/SocketProvider";
+import { ChatContext } from "../../context/ChatContext";
+import notificationService from "../../services/MessageNotificationService";
 
 function Sidebar() {
   const navigate = useNavigate();
@@ -20,10 +22,49 @@ function Sidebar() {
   const { theme } = useContext(ThemeContext);
   const { user } = useContext(UserContext);
   const { socket } = useContext(SocketContext);
+  const { unreadCount: contextUnreadCount } = useContext(ChatContext);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileView, setIsMobileView] = useState(window.innerWidth < 768);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Subscribe to notification service for unread count updates
+  useEffect(() => {
+    console.log('Sidebar subscribing to notification service');
+    
+    // Subscribe to notification service
+    const unsubscribe = notificationService.subscribe(update => {
+      console.log('Sidebar received notification update:', update);
+      setUnreadCount(update.total);
+    });
+    
+    // Get initial count from context or notification service
+    const initialCount = contextUnreadCount || notificationService.getTotalUnreadCount();
+    console.log('Setting initial unread count:', initialCount);
+    setUnreadCount(initialCount);
+    
+    // Listen for notification service ready event
+    const handleServiceReady = () => {
+      console.log('Notification service ready event received');
+      setUnreadCount(notificationService.getTotalUnreadCount());
+    };
+    
+    window.addEventListener('textlaire_notification_service_ready', handleServiceReady);
+    
+    // Force re-fetch from notification service after 1 second
+    setTimeout(() => {
+      const count = notificationService.getTotalUnreadCount();
+      console.log('Force update unread count from service:', count);
+      setUnreadCount(count);
+    }, 1000);
+    
+    return () => {
+      // Unsubscribe when component unmounts
+      if (unsubscribe) unsubscribe();
+      window.removeEventListener('textlaire_notification_service_ready', handleServiceReady);
+      console.log('Sidebar unsubscribed from notification service');
+    };
+  }, [contextUnreadCount]);
 
   // Handle window resize for responsive behavior
   useEffect(() => {
@@ -49,69 +90,7 @@ function Sidebar() {
   // Function to navigate to messages page
   const navigateToMessages = () => {
     navigate('/messages');
-    // Only reset the count, don't clear storage
-    // This allows notifications for new messages to appear
-    setUnreadCount(0);
   };
-
-  // Listen for new messages to update unread count
-  useEffect(() => {
-    // Load initial unread count from storage
-    const storedUnreadMessages = JSON.parse(localStorage.getItem('textlaire_unread_messages') || '[]');
-    setUnreadCount(storedUnreadMessages.length);
-    
-    // Listen for new messages via custom event
-    const handleNewMessage = (event) => {
-      const message = event.detail;
-      if (!message || !message._id) return;
-      
-      // Update unread count regardless of current page
-      setUnreadCount(prev => {
-        // Get current unread messages
-        const unreadMessages = JSON.parse(localStorage.getItem('textlaire_unread_messages') || '[]');
-        
-        // Check if this message is already in the unread list
-        if (!unreadMessages.some(m => m._id === message._id)) {
-          // Add to unread messages
-          unreadMessages.push({
-            _id: message._id,
-            chatId: message.chat,
-            timestamp: new Date().toISOString()
-          });
-          
-          // Store updated list
-          localStorage.setItem('textlaire_unread_messages', JSON.stringify(unreadMessages));
-          
-          // Return new count
-          return unreadMessages.length;
-        }
-        
-        return prev;
-      });
-    };
-    
-    // Register event listener
-    window.addEventListener('textlaire_new_message', handleNewMessage);
-    
-    // Cleanup
-    return () => {
-      window.removeEventListener('textlaire_new_message', handleNewMessage);
-    };
-  }, []);
-  
-  // Reset unread count when navigating to messages page, but don't clear storage
-  // This allows us to still track new messages that arrive while on the messages page
-  useEffect(() => {
-    if (location.pathname === '/messages') {
-      // We don't clear the storage here anymore, just reset the count
-      // This way new messages will still trigger the badge
-      setUnreadCount(0);
-    } else {
-      // When leaving the messages page, reload the count from storage
-      const storedUnreadMessages = JSON.parse(localStorage.getItem('textlaire_unread_messages') || '[]');
-      setUnreadCount(storedUnreadMessages.length);
-    }
-  }, [location.pathname]);
 
   // Define theme-based colors
   const isDarkMode = theme === 'dark';

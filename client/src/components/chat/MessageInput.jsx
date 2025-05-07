@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react';
-import { Box, IconButton, InputBase, Paper, Tooltip, Badge, CircularProgress, Chip, Popover } from '@mui/material';
+import React, { useState, useRef } from 'react';
+import { Box, IconButton, InputAdornment, TextField, useTheme, useMediaQuery, Paper, InputBase, Tooltip, Popover, Badge, CircularProgress, Chip } from '@mui/material';
 import { Send as SendIcon, AttachFile as AttachFileIcon, InsertEmoticon as EmojiIcon, Close as CloseIcon } from '@mui/icons-material';
 import { sendMessage } from '../../api/messageApi';
 import { useChat } from '../../context/ChatContext';
@@ -12,6 +12,10 @@ const MessageInput = () => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [emojiAnchorEl, setEmojiAnchorEl] = useState(null);
   const fileInputRef = useRef(null);
+  
+  // Add theme and mobile detection
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   // Emoji picker handlers
   const handleEmojiClick = (emojiData) => {
@@ -199,21 +203,29 @@ const MessageInput = () => {
           />
         </Popover>
         
-        {/* Text input */}
+        {/* Text input - Enhanced for mobile */}
         <InputBase
-          sx={{ ml: 1, flex: 1 }}
-          placeholder="Type a message"
+          sx={{ 
+            ml: isMobile ? 0.5 : 1, 
+            flex: 1,
+            fontSize: isMobile ? '0.9rem' : '1rem',
+            padding: isMobile ? '4px 0' : '6px 0'
+          }}
+          placeholder={isMobile ? "Message" : "Type a message"}
           multiline
-          maxRows={4}
+          maxRows={isMobile ? 3 : 4}
           value={messageText}
           onChange={(e) => setMessageText(e.target.value)}
           onKeyPress={handleKeyPress}
         />
         
-        {/* Send button */}
+        {/* Send button - Enhanced for mobile */}
         <IconButton 
           color="primary" 
-          sx={{ p: '10px' }} 
+          sx={{ 
+            p: isMobile ? '6px' : '10px',
+            minWidth: isMobile ? 36 : 40 
+          }} 
           onClick={handleSend}
           disabled={isLoading || (!messageText.trim() && selectedFiles.length === 0)}
         >

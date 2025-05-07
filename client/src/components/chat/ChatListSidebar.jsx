@@ -6,13 +6,67 @@ import { Search as SearchIcon, Add as AddIcon, Group as GroupIcon, MoreVert as M
 import { format } from 'date-fns';
 import NewGroupChatModal from './NewGroupChatModal';
 import UserSearchDrawer from './UserSearchDrawer';
+import notificationService from '../../services/MessageNotificationService';
 
 const ChatListSidebar = () => {
-  const { user, chats, setChats, selectedChat, setSelectedChat, notifications, setNotifications, isLoading, setIsLoading } = useChat();
+  const { 
+    user, 
+    chats, 
+    setChats, 
+    selectedChat, 
+    setSelectedChat, 
+    notifications, 
+    setNotifications, 
+    isLoading, 
+    setIsLoading,
+    getUnreadCountForChat: contextGetUnreadCountForChat 
+  } = useChat();
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredChats, setFilteredChats] = useState([]);
   const [openGroupModal, setOpenGroupModal] = useState(false);
   const [openUserSearch, setOpenUserSearch] = useState(false);
+  const [unreadMessagesByChatId, setUnreadMessagesByChatId] = useState({});
+
+  // Subscribe to notification service for unread counts
+  useEffect(() => {
+    console.log('ChatListSidebar subscribing to notification service');
+    
+    // Subscribe to notification service 
+    const unsubscribe = notificationService.subscribe(update => {
+      console.log('ChatListSidebar received update:', update);
+      setUnreadMessagesByChatId(update.byChatId);
+    });
+    
+    // Listen for notification service ready events
+    const handleServiceReady = () => {
+      console.log('ChatListSidebar: Notification service ready');
+      const notifState = {
+        byChatId: notificationService.unreadMessages,
+        total: notificationService.totalUnreadCount
+      };
+      console.log('ChatListSidebar: Current notification state:', notifState);
+      setUnreadMessagesByChatId(notifState.byChatId);
+    };
+    
+    window.addEventListener('textlaire_notification_service_ready', handleServiceReady);
+    
+    // Force re-fetch initial state after a brief delay
+    setTimeout(() => {
+      const initialState = {
+        byChatId: notificationService.unreadMessages,
+        total: notificationService.totalUnreadCount
+      };
+      console.log('ChatListSidebar: Force fetching initial state:', initialState);
+      setUnreadMessagesByChatId(initialState.byChatId);
+    }, 500);
+    
+    return () => {
+      if (unsubscribe) unsubscribe();
+      window.removeEventListener('textlaire_notification_service_ready', handleServiceReady);
+      console.log('ChatListSidebar unsubscribed from notification service');
+    };
+  }, []);
 
   // Filter chats based on search term
   useEffect(() => {
@@ -47,10 +101,18 @@ const ChatListSidebar = () => {
 
   // Handle chat selection
   const handleSelectChat = (chat) => {
+    console.log('ChatListSidebar: Selecting chat:', chat._id);
+    
+    // Set the selected chat in the context
     setSelectedChat(chat);
     
-    // Remove notifications for this chat
-    setNotifications(notifications.filter((n) => n.chat._id !== chat._id));
+    // Save selected chat ID to localStorage for notification handling
+    localStorage.setItem('textlaire_selected_chat_id', chat._id);
+    
+    // Dispatch event to notify notification service
+    const event = new CustomEvent('textlaire_chat_selected', { detail: chat._id });
+    window.dispatchEvent(event);
+    console.log('ChatListSidebar: Dispatched chat_selected event');
   };
 
   // Format timestamp for last message
@@ -105,9 +167,23 @@ const ChatListSidebar = () => {
     return latest.content || '';
   };
 
-  // Check if there are notifications for this chat
-  const getNotificationCount = (chatId) => {
-    return notifications.filter((n) => n.chat._id === chatId).length;
+  // Get unread count for a chat
+  const getUnreadCountForChat = (chatId) => {
+    console.log(`Getting unread count for chat ${chatId}`, unreadMessagesByChatId[chatId]?.length || 0);
+    
+    // First try from notification service state
+    const unreadMessages = unreadMessagesByChatId[chatId];
+    if (unreadMessages) {
+      return unreadMessages.length;
+    }
+    
+    // Fall back to context if available
+    if (contextGetUnreadCountForChat) {
+      return contextGetUnreadCountForChat(chatId);
+    }
+    
+    // Default to global notification service
+    return notificationService.getUnreadCountForChat(chatId);
   };
 
   // Handle user selection from search
@@ -167,7 +243,7 @@ const ChatListSidebar = () => {
       {/* Chat List */}
       <List sx={{ flexGrow: 1, overflow: 'auto' }}>
         {filteredChats.map((chat) => {
-          const notificationCount = getNotificationCount(chat._id);
+          const unreadCount = getUnreadCountForChat(chat._id);
           const isSelected = selectedChat && selectedChat._id === chat._id;
           
           return (
@@ -179,8 +255,12 @@ const ChatListSidebar = () => {
                   <Typography variant="caption" color="text.secondary">
                     {chat.latestMessage && formatTimestamp(chat.latestMessage.createdAt)}
                   </Typography>
-                  {notificationCount > 0 && (
-                    <Badge badgeContent={notificationCount} color="primary" sx={{ mt: 1 }} />
+                  {unreadCount > 0 && (
+                    <Badge 
+                      badgeContent={unreadCount} 
+                      color="error" 
+                      sx={{ mt: 1 }}
+                    />
                   )}
                 </Box>
               }
@@ -193,7 +273,21 @@ const ChatListSidebar = () => {
                   m: 0.5,
                   '&.Mui-selected': {
                     backgroundColor: 'primary.light',
-                  } 
+                  },
+                  position: 'relative',
+                  ...(unreadCount > 0 && {
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      left: 0,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      width: '4px',
+                      height: '70%',
+                      backgroundColor: 'error.main',
+                      borderRadius: '0 2px 2px 0'
+                    }
+                  })
                 }}
               >
                 <ListItemAvatar>
@@ -205,14 +299,14 @@ const ChatListSidebar = () => {
                   primary={getChatName(chat)}
                   secondary={getLatestMessagePreview(chat)}
                   primaryTypographyProps={{
-                    fontWeight: notificationCount > 0 ? 'bold' : 'normal',
+                    fontWeight: unreadCount > 0 ? 700 : 400,
                     variant: 'body1',
                     noWrap: true
                   }}
                   secondaryTypographyProps={{
                     noWrap: true,
-                    color: notificationCount > 0 ? 'text.primary' : 'text.secondary',
-                    fontWeight: notificationCount > 0 ? 'medium' : 'normal',
+                    color: unreadCount > 0 ? 'text.primary' : 'text.secondary',
+                    fontWeight: unreadCount > 0 ? 500 : 400,
                   }}
                 />
               </ListItemButton>
