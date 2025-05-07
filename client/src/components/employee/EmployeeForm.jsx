@@ -196,9 +196,10 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee, onC
   useEffect(() => {
     if (editingEmployee) {
       const mergedData = { ...initialFormState, ...editingEmployee };
+      // Use the centralized image utility from imageUtils.js
       const getImageUrl = (url) => {
         if (!url) return defaultProfileImage;
-        return url.startsWith('http') ? url : `http://${window.location.hostname}:5000${url}`;
+        return url.startsWith('http') ? url : `/uploads/employees/${url.split('/').pop()}`;
       };
 
       // Convert date format for editing
@@ -511,11 +512,22 @@ const EmployeeForm = ({ fetchEmployees, editingEmployee, setEditingEmployee, onC
         joiningDate: formData.joiningDate ? parseDate(formData.joiningDate) : ''
       };
       
+      // If creating a new employee and employeeID is empty, don't send it at all
+      // This will trigger the server to auto-generate an ID
+      if (!editingEmployee && (!submissionData.employeeID || submissionData.employeeID.trim() === '')) {
+        delete submissionData.employeeID;
+      }
+      
+      // Add all form fields to the FormData object
       Object.keys(submissionData).forEach(key => {
-        formPayload.append(key, submissionData[key]);
+        // Only append non-empty values
+        if (submissionData[key] !== undefined && submissionData[key] !== null && submissionData[key] !== '') {
+          formPayload.append(key, submissionData[key]);
+        }
       });
       if (image) {
-        formPayload.append("image", image);
+        formPayload.append("employeeImage", image);
+        formPayload.append("uploadDir", "employees");
       }
 
       await apiClient[editingEmployee ? "put" : "post"](

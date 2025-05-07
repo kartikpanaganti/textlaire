@@ -2,32 +2,27 @@ import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { fileToBase64, isImageFile } from '../components/image-gen/utils';
 import axios from 'axios';
+import { toast } from 'react-toastify';
 import ProductDetails from '../components/image-gen/ProductDetails';
 
 const ImageToImagePage = () => {
-  // Initialize state from localStorage when available
-  const [sourceImage, setSourceImage] = useState(() => {
-    const saved = localStorage.getItem('textlaire_sourceImage');
-    return saved ? saved : null;
-  });
-  const [resultImage, setResultImage] = useState(() => {
-    const saved = localStorage.getItem('textlaire_resultImage');
-    return saved ? saved : null;
-  });
+  // Initialize state without using localStorage for images to avoid blob storage issues
+  const [sourceImage, setSourceImage] = useState(null);
+  const [resultImage, setResultImage] = useState(null);
+  const [imageMetadata, setImageMetadata] = useState(null); // Store metadata for saving later
   const [prompt, setPrompt] = useState(() => {
     const saved = localStorage.getItem('textlaire_prompt');
     return saved ? saved : '';
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false); // New state for saving process
   const [strength, setStrength] = useState(0.65);
   const [steps, setSteps] = useState(40);
   const [guidance, setGuidance] = useState(12);
   const [error, setError] = useState('');
+  const [saveSuccess, setSaveSuccess] = useState(false); // Track if image was saved
   const fileInputRef = useRef(null);
-  const [previewUrl, setPreviewUrl] = useState(() => {
-    const saved = localStorage.getItem('textlaire_previewUrl');
-    return saved ? saved : '';
-  });
+  const [previewUrl, setPreviewUrl] = useState('');
   const [containerHeight, setContainerHeight] = useState(window.innerHeight);
   
   // Product details state
@@ -36,6 +31,67 @@ const ImageToImagePage = () => {
   const [dimensions, setDimensions] = useState('');
   const [price, setPrice] = useState('');
   const [showProductDetails, setShowProductDetails] = useState(false);
+
+  // Handle product details toggle
+  const toggleProductDetails = () => {
+    setShowProductDetails(!showProductDetails);
+  };
+
+  // Save the generated image to the server
+  const saveGeneratedImage = async () => {
+    if (!resultImage || !imageMetadata) {
+      setError('No image to save');
+      return;
+    }
+    
+    try {
+      setIsSaving(true);
+      setError('');
+      
+      // Generate a unique product code if not provided
+      const generatedCode = productCode || `PATTERN-${Date.now().toString().substring(6)}`;
+      
+      // Create product data from the form
+      const productData = {
+        name: productName || `Generated Pattern ${new Date().toLocaleDateString()}`,
+        code: generatedCode,
+        type: 'pattern',
+        material: 'cotton',
+        color: '',
+        dimensions: dimensions || '100x100 cm',
+        price: price || '500',
+        currency: 'INR',
+        qualityGrade: 'premium',
+        weight: '400',
+        description: prompt || 'AI-generated pattern',
+        tags: 'ai-generated, pattern',
+        createdAt: new Date().toISOString()
+      };
+      
+      console.log('Saving product with data:', productData);
+      
+      // Send request to save the image
+      const response = await axios.post('/api/fal/save-generated-image', {
+        imageUrl: resultImage,
+        metadata: imageMetadata,
+        productData: productData
+      });
+      
+      if (response.data.success) {
+        // Update the image URL to the local path
+        setResultImage(response.data.localImagePath);
+        setSaveSuccess(true);
+        // toast.success('Pattern saved successfully');
+      } else {
+        throw new Error('Failed to save pattern');
+      }
+    } catch (error) {
+      console.error('Error saving pattern:', error);
+      setError('Failed to save pattern: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Update container height on window resize
   useEffect(() => {
@@ -47,16 +103,12 @@ const ImageToImagePage = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
   
-  // Save state to localStorage when resultImage changes (successful generation)
+  // Only save prompt to localStorage, not images
   useEffect(() => {
-    if (resultImage) {
-      // Only save state after successful generation
-      localStorage.setItem('textlaire_resultImage', resultImage);
-      localStorage.setItem('textlaire_sourceImage', sourceImage);
-      localStorage.setItem('textlaire_previewUrl', previewUrl);
+    if (prompt) {
       localStorage.setItem('textlaire_prompt', prompt);
     }
-  }, [resultImage, sourceImage, previewUrl, prompt]);
+  }, [prompt]);
 
   const handleFileSelect = async (event) => {
     const file = event.target.files[0];
@@ -69,16 +121,13 @@ const ImageToImagePage = () => {
 
     try {
       const base64 = await fileToBase64(file);
-      // Store only the base64 data without the prefix
-      const base64Data = base64.split(',')[1] || base64;
-      setSourceImage(base64Data);
-      
-      const newPreviewUrl = URL.createObjectURL(file);
-      setPreviewUrl(newPreviewUrl);
+      // Store the complete base64 data with the prefix
+      setSourceImage(base64);
+      setPreviewUrl(base64); // Use the base64 data directly for preview
       
       // Save to localStorage after successful upload
-      localStorage.setItem('textlaire_sourceImage', base64Data);
-      localStorage.setItem('textlaire_previewUrl', newPreviewUrl);
+      localStorage.setItem('textlaire_sourceImage', base64);
+      localStorage.setItem('textlaire_previewUrl', base64);
       
       setError('');
     } catch (error) {
@@ -101,16 +150,13 @@ const ImageToImagePage = () => {
 
     try {
       const base64 = await fileToBase64(file);
-      // Store only the base64 data without the prefix
-      const base64Data = base64.split(',')[1] || base64;
-      setSourceImage(base64Data);
-      
-      const newPreviewUrl = URL.createObjectURL(file);
-      setPreviewUrl(newPreviewUrl);
+      // Store the complete base64 data with the prefix
+      setSourceImage(base64);
+      setPreviewUrl(base64); // Use the base64 data directly for preview
       
       // Save to localStorage after successful upload
-      localStorage.setItem('textlaire_sourceImage', base64Data);
-      localStorage.setItem('textlaire_previewUrl', newPreviewUrl);
+      localStorage.setItem('textlaire_sourceImage', base64);
+      localStorage.setItem('textlaire_previewUrl', base64);
       
       setError('');
     } catch (error) {
@@ -134,31 +180,124 @@ const ImageToImagePage = () => {
       setIsLoading(true);
       setError('');
 
+      // Make sure we have valid image data
+      if (!sourceImage) {
+        setError('No source image available. Please upload an image first.');
+        return;
+      }
+      
+      // Log the image data format for debugging
+      console.log('Image data format check:', {
+        isString: typeof sourceImage === 'string',
+        startsWithData: sourceImage.startsWith('data:image/'),
+        length: sourceImage.length
+      });
+      
+      // Ensure the image data is properly formatted
+      const imageData = sourceImage.startsWith('data:image/') 
+        ? sourceImage 
+        : `data:image/jpeg;base64,${sourceImage}`;
+      
+      // Compress the image if it's too large (over 1MB)
+      let processedImageData = imageData;
+      if (imageData.length > 1000000) {
+        try {
+          // Create an image element to load the data URL
+          const img = new Image();
+          await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            img.src = imageData;
+          });
+          
+          // Create a canvas to resize and compress the image
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          // Calculate new dimensions (max 800px width/height while maintaining aspect ratio)
+          const maxSize = 800;
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > height && width > maxSize) {
+            height = Math.round((height * maxSize) / width);
+            width = maxSize;
+          } else if (height > maxSize) {
+            width = Math.round((width * maxSize) / height);
+            height = maxSize;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          // Draw and compress the image
+          ctx.drawImage(img, 0, 0, width, height);
+          processedImageData = canvas.toDataURL('image/jpeg', 0.7); // 70% quality JPEG
+          
+          console.log('Compressed image size:', processedImageData.length);
+        } catch (compressionError) {
+          console.error('Error compressing image:', compressionError);
+          // Fall back to original image data
+        }
+      }
+        
       const response = await axios.post('/api/fal/image-to-image', {
-        imageData: sourceImage,
+        imageData: processedImageData,
         prompt,
         strength: parseFloat(strength),
         num_inference_steps: parseInt(steps),
         guidance_scale: parseFloat(guidance),
         seed: -1
+      }, {
+        // Add timeout to prevent long-running requests
+        timeout: 120000 // 120 seconds
       });
 
       if (response.data.imageUrl) {
+        // Store the remote image URL for display
         setResultImage(response.data.imageUrl);
         
-        // Save prompt to localStorage after successful generation
+        // Store the metadata for later saving
+        setImageMetadata(response.data.metadata);
+        
+        // Reset save status
+        setSaveSuccess(false);
+        
+        console.log('Generated image URL:', response.data.imageUrl);
+        console.log('Image metadata stored for later saving:', response.data.metadata);
+        
+        // Keep source image for further adjustments
+        
+        // Only save prompt to localStorage
         localStorage.setItem('textlaire_prompt', prompt);
       } else {
         throw new Error('No image URL in response');
       }
     } catch (error) {
       console.error('Error generating image:', error);
-      const errorMessage = error.response?.data?.details || error.response?.data?.error || error.message;
-      setError(errorMessage);
       
-      if (error.response?.data?.validationErrors) {
-        console.error('Validation errors:', error.response.data.validationErrors);
+      // Extract the most helpful error message
+      let errorMessage = 'Failed to generate image';
+      
+      if (error.response?.data) {
+        // Handle structured error response
+        errorMessage = error.response.data.details || error.response.data.error || error.message;
+        
+        // Don't display object errors to the user
+        if (typeof errorMessage === 'object') {
+          console.error('Received object error:', errorMessage);
+          errorMessage = 'Server error occurred. Please try again.';
+        }
+        
+        if (error.response.data.validationErrors) {
+          console.error('Validation errors:', error.response.data.validationErrors);
+        }
+      } else {
+        // Handle network or other errors
+        errorMessage = error.message || 'Network error occurred';
       }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -316,12 +455,12 @@ const ImageToImagePage = () => {
             {/* Source Image */}
             <div className="w-full sm:w-1/2 pr-2 flex-1 h-full">
               <div className="bg-[#1A1D24] rounded-xl p-3 shadow-lg border border-[#2A2F38]/50 h-full flex flex-col">
-                <h3 className="text-base font-medium text-gray-300 mb-2 flex items-center justify-between flex-shrink-0">
-                  <span className="flex items-center"><span className="mr-2">📁</span>Source Image</span>
+                <h3 className="text-base font-medium text-white mb-2 flex items-center justify-between flex-shrink-0">
+                  <span className="flex items-center text-white"><span className="mr-2">📁</span>Source Image</span>
                   {(sourceImage || resultImage) && (
                     <button 
                       onClick={clearAllData}
-                      className="text-xs text-gray-400 hover:text-red-400 transition-colors"
+                      className="text-xs text-white hover:text-red-400 transition-colors"
                       title="Reset all image data"
                     >
                       Reset
@@ -345,7 +484,7 @@ const ImageToImagePage = () => {
                   ) : (
                     <div className="text-center">
                       <svg
-                        className="mx-auto h-10 w-10 text-gray-400"
+                        className="mx-auto h-10 w-10 text-white"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -357,7 +496,7 @@ const ImageToImagePage = () => {
                           d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                         />
                       </svg>
-                      <p className="mt-1 text-sm text-gray-400">
+                      <p className="mt-1 text-sm text-white">
                         Click to upload or drag and drop
                       </p>
                     </div>
@@ -376,26 +515,50 @@ const ImageToImagePage = () => {
             {/* Result Image */}
             <div className="w-full sm:w-1/2 pl-2 flex-1 h-full">
               <div className="bg-[#1A1D24] rounded-xl p-3 shadow-lg border border-[#2A2F38]/50 h-full flex flex-col">
-                <h3 className="text-base font-medium text-gray-300 mb-2 flex items-center flex-shrink-0">
-                  <span className="mr-2">✨</span>Generated Result
+                <h3 className="text-base font-medium text-white mb-2 flex items-center justify-between flex-shrink-0">
+                  <span className="flex items-center text-white"><span className="mr-2">✨</span>Generated Result</span>
+                  {resultImage && !saveSuccess && (
+                    <button 
+                      onClick={saveGeneratedImage}
+                      disabled={isSaving || !imageMetadata}
+                      className={`text-xs px-2 py-1 rounded ${isSaving 
+                        ? 'bg-gray-700 text-gray-400 cursor-not-allowed' 
+                        : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                      title="Save this pattern to the server"
+                    >
+                      {isSaving ? 'Saving...' : 'Save Pattern'}
+                    </button>
+                  )}
+                  {saveSuccess && (
+                    <span className="text-xs px-2 py-1 rounded bg-green-800 text-green-200">
+                      ✓ Saved
+                    </span>
+                  )}
                 </h3>
                 <div 
-                  className="border-2 border-dashed rounded-lg p-3 bg-[#232830] border-[#2A2F38] flex items-center justify-center overflow-hidden flex-1"
+                  className="border-2 border-dashed rounded-lg p-3 bg-[#232830] border-[#2A2F38] flex flex-col items-center justify-center overflow-hidden flex-1 relative"
                   style={{ minHeight: '270px' }}
                 >
                   {isLoading ? (
                     <div className="text-center">
                       <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto"></div>
-                      <p className="mt-3 text-gray-400">Generating image...</p>
+                      <p className="mt-3 text-white">Generating image...</p>
                     </div>
                   ) : resultImage ? (
-                    <img
-                      src={resultImage}
-                      alt="Result"
-                      className="max-w-full max-h-full object-contain rounded-lg"
-                    />
+                    <>
+                      <img
+                        src={resultImage}
+                        alt="Result"
+                        className="max-w-full max-h-full object-contain rounded-lg"
+                      />
+                      {!saveSuccess && (
+                        <div className="absolute bottom-3 left-0 right-0 text-center text-xs text-yellow-400">
+                          Not saved to server yet. Click "Save Pattern" to store permanently.
+                        </div>
+                      )}
+                    </>
                   ) : (
-                    <div className="text-center text-gray-400">
+                    <div className="text-center text-white">
                       Generated image will appear here
                     </div>
                   )}
@@ -409,7 +572,7 @@ const ImageToImagePage = () => {
             <div className="bg-[#1A1D24] rounded-xl p-3 shadow-lg border border-[#2A2F38]/50">
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-200 mb-1">
+                  <label className="block text-sm font-medium text-white mb-1">
                     Prompt
                   </label>
                   <textarea
@@ -423,7 +586,7 @@ const ImageToImagePage = () => {
 
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-200 mb-1">
+                    <label className="block text-sm font-medium text-white mb-1">
                       Strength: {strength}
                     </label>
                     <input
@@ -438,7 +601,7 @@ const ImageToImagePage = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-200 mb-1">
+                    <label className="block text-sm font-medium text-white mb-1">
                       Steps: {steps}
                     </label>
                     <input
@@ -453,7 +616,7 @@ const ImageToImagePage = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-200 mb-1">
+                    <label className="block text-sm font-medium text-white mb-1">
                       Guidance: {guidance}
                     </label>
                     <input
@@ -531,12 +694,12 @@ const ImageToImagePage = () => {
               setColor={(value) => {}} // We don't have state for this in parent component
             />
           ) : (
-            <div className="flex h-full items-center justify-center p-4 text-center text-gray-400">
+            <div className="flex h-full items-center justify-center p-4 text-center text-white">
               <div>
-                <svg className="mx-auto h-12 w-12 text-gray-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="mx-auto h-12 w-12 text-white mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                 </svg>
-                <p className="text-sm">Product details will be available<br />after generating an image</p>
+                <p className="text-sm text-white">Product details will be available<br />after generating an image</p>
                 {sourceImage && prompt ? (
                   <button 
                     onClick={generateImage}

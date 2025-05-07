@@ -7,6 +7,8 @@ import axios from 'axios';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
 import { Doughnut, Bar } from 'react-chartjs-2';
 import { format, differenceInYears, differenceInMonths } from 'date-fns';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 // Register ChartJS components
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
@@ -305,9 +307,239 @@ const WorkforceDashboard = () => {
     }));
   };
 
-  const exportToExcel = () => {
-    // In a real app, this would generate an Excel file with employee data
-    alert('This would download an Excel file with the current employee data');
+  const exportToExcel = async () => {
+    if (!employeeData) return;
+    
+    try {
+      // Create a new workbook
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Textlaire';
+      workbook.lastModifiedBy = 'Textlaire';
+      workbook.created = new Date();
+      workbook.modified = new Date();
+      
+      // Create a date string for the filename
+      const dateStr = format(new Date(), 'yyyy-MM-dd');
+      
+      // 1. Summary Sheet
+      const summarySheet = workbook.addWorksheet('Summary', {
+        properties: { tabColor: { argb: '6495ED' } }
+      });
+      
+      // Add title and date
+      summarySheet.mergeCells('A1:D1');
+      const titleCell = summarySheet.getCell('A1');
+      titleCell.value = 'Workforce Summary Report';
+      titleCell.font = { size: 16, bold: true, color: { argb: '4F81BD' } };
+      titleCell.alignment = { horizontal: 'center' };
+      
+      summarySheet.mergeCells('A2:D2');
+      const dateCell = summarySheet.getCell('A2');
+      dateCell.value = `Generated on: ${format(new Date(), 'dd MMM yyyy, HH:mm')}`;
+      dateCell.font = { size: 12, italic: true };
+      dateCell.alignment = { horizontal: 'center' };
+      
+      // Add key metrics
+      summarySheet.getCell('A4').value = 'Key Metrics';
+      summarySheet.getCell('A4').font = { size: 14, bold: true };
+      
+      const metrics = [
+        ['Total Employees:', employeeData.totalEmployees],
+        ['Total Departments:', Object.keys(employeeData.departmentCounts).length],
+        ['Average Salary:', formatCurrency(employeeData.salaryData.averageSalary)],
+        ['Median Salary:', formatCurrency(employeeData.salaryData.medianSalary)],
+        ['Recent Hires (3 months):', employeeData.recentHires.length]
+      ];
+      
+      metrics.forEach((metric, index) => {
+        summarySheet.getCell(`A${5 + index}`).value = metric[0];
+        summarySheet.getCell(`B${5 + index}`).value = metric[1];
+        summarySheet.getCell(`A${5 + index}`).font = { bold: true };
+      });
+      
+      // Set column widths
+      summarySheet.getColumn('A').width = 25;
+      summarySheet.getColumn('B').width = 15;
+      summarySheet.getColumn('C').width = 15;
+      summarySheet.getColumn('D').width = 15;
+      
+      // 2. Department Distribution Sheet
+      const deptSheet = workbook.addWorksheet('Department Distribution', {
+        properties: { tabColor: { argb: '4F81BD' } }
+      });
+      
+      // Add title
+      deptSheet.mergeCells('A1:C1');
+      const deptTitleCell = deptSheet.getCell('A1');
+      deptTitleCell.value = 'Department Distribution';
+      deptTitleCell.font = { size: 16, bold: true, color: { argb: '4F81BD' } };
+      deptTitleCell.alignment = { horizontal: 'center' };
+      
+      // Add headers
+      deptSheet.getCell('A3').value = 'Department';
+      deptSheet.getCell('B3').value = 'Count';
+      deptSheet.getCell('C3').value = 'Percentage';
+      
+      ['A3', 'B3', 'C3'].forEach(cell => {
+        deptSheet.getCell(cell).font = { bold: true };
+        deptSheet.getCell(cell).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'E0E0E0' }
+        };
+      });
+      
+      // Add department data
+      let row = 4;
+      
+      Object.entries(employeeData.departmentCounts).forEach(([dept, count]) => {
+        const percentage = (count / employeeData.totalEmployees) * 100;
+        deptSheet.getCell(`A${row}`).value = dept;
+        deptSheet.getCell(`B${row}`).value = count;
+        deptSheet.getCell(`C${row}`).value = `${percentage.toFixed(1)}%`;
+        row++;
+      });
+      
+      // Set column widths
+      deptSheet.getColumn('A').width = 25;
+      deptSheet.getColumn('B').width = 15;
+      deptSheet.getColumn('C').width = 15;
+      
+      // 3. Salary Analysis Sheet
+      const salarySheet = workbook.addWorksheet('Salary Analysis', {
+        properties: { tabColor: { argb: '70AD47' } }
+      });
+      
+      // Add title
+      salarySheet.mergeCells('A1:C1');
+      const salaryTitleCell = salarySheet.getCell('A1');
+      salaryTitleCell.value = 'Department Salary Analysis';
+      salaryTitleCell.font = { size: 16, bold: true, color: { argb: '70AD47' } };
+      salaryTitleCell.alignment = { horizontal: 'center' };
+      
+      // Add headers
+      salarySheet.getCell('A3').value = 'Department';
+      salarySheet.getCell('B3').value = 'Average Salary';
+      salarySheet.getCell('C3').value = 'Percentage of Average';
+      
+      ['A3', 'B3', 'C3'].forEach(cell => {
+        salarySheet.getCell(cell).font = { bold: true };
+        salarySheet.getCell(cell).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'E0E0E0' }
+        };
+      });
+      
+      // Calculate overall average for comparison
+      const overallAvg = employeeData.salaryData.averageSalary;
+      
+      // Add department salary data
+      row = 4;
+      Object.entries(employeeData.salaryData.departmentAvgSalaries).forEach(([dept, avg]) => {
+        const percentage = (avg / overallAvg) * 100;
+        salarySheet.getCell(`A${row}`).value = dept;
+        salarySheet.getCell(`B${row}`).value = avg;
+        salarySheet.getCell(`B${row}`).numFmt = '₹#,##0';
+        salarySheet.getCell(`C${row}`).value = `${percentage.toFixed(1)}%`;
+        row++;
+      });
+      
+      // Set column widths
+      salarySheet.getColumn('A').width = 25;
+      salarySheet.getColumn('B').width = 20;
+      salarySheet.getColumn('C').width = 25;
+      
+      // 4. Experience Levels Sheet
+      const expSheet = workbook.addWorksheet('Experience Levels', {
+        properties: { tabColor: { argb: 'ED7D31' } }
+      });
+      
+      // Add title
+      expSheet.mergeCells('A1:C1');
+      const expTitleCell = expSheet.getCell('A1');
+      expTitleCell.value = 'Experience Levels Distribution';
+      expTitleCell.font = { size: 16, bold: true, color: { argb: 'ED7D31' } };
+      expTitleCell.alignment = { horizontal: 'center' };
+      
+      // Add headers
+      expSheet.getCell('A3').value = 'Experience Level';
+      expSheet.getCell('B3').value = 'Count';
+      expSheet.getCell('C3').value = 'Percentage';
+      
+      ['A3', 'B3', 'C3'].forEach(cell => {
+        expSheet.getCell(cell).font = { bold: true };
+        expSheet.getCell(cell).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'E0E0E0' }
+        };
+      });
+      
+      // Add experience data
+      row = 4;
+      Object.entries(employeeData.experienceLevels).forEach(([level, count]) => {
+        const percentage = (count / employeeData.totalEmployees) * 100;
+        expSheet.getCell(`A${row}`).value = level;
+        expSheet.getCell(`B${row}`).value = count;
+        expSheet.getCell(`C${row}`).value = `${percentage.toFixed(1)}%`;
+        row++;
+      });
+      
+      // Set column widths
+      expSheet.getColumn('A').width = 25;
+      expSheet.getColumn('B').width = 15;
+      expSheet.getColumn('C').width = 15;
+      
+      // 5. Recent Hires Sheet
+      const hiresSheet = workbook.addWorksheet('Recent Hires', {
+        properties: { tabColor: { argb: '9B59B6' } }
+      });
+      
+      // Add title
+      hiresSheet.mergeCells('A1:E1');
+      const hiresTitleCell = hiresSheet.getCell('A1');
+      hiresTitleCell.value = 'Recent Hires (Last 3 Months)';
+      hiresTitleCell.font = { size: 16, bold: true, color: { argb: '9B59B6' } };
+      hiresTitleCell.alignment = { horizontal: 'center' };
+      
+      // Add headers
+      const hiresHeaders = ['Employee ID', 'Name', 'Department', 'Position', 'Joining Date'];
+      hiresHeaders.forEach((header, index) => {
+        const cell = hiresSheet.getCell(3, index + 1);
+        cell.value = header;
+        cell.font = { bold: true };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'E0E0E0' }
+        };
+      });
+      
+      // Add recent hires data
+      employeeData.recentHires.forEach((emp, index) => {
+        hiresSheet.getCell(index + 4, 1).value = emp.id;
+        hiresSheet.getCell(index + 4, 2).value = emp.name;
+        hiresSheet.getCell(index + 4, 3).value = emp.department;
+        hiresSheet.getCell(index + 4, 4).value = emp.position;
+        hiresSheet.getCell(index + 4, 5).value = format(new Date(emp.joiningDate), 'dd MMM yyyy');
+      });
+      
+      // Set column widths
+      hiresSheet.getColumn(1).width = 15;
+      hiresSheet.getColumn(2).width = 20;
+      hiresSheet.getColumn(3).width = 25;
+      hiresSheet.getColumn(4).width = 25;
+      hiresSheet.getColumn(5).width = 15;
+      
+      // Generate Excel file and trigger download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, `Workforce_Report_${dateStr}.xlsx`);
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Failed to export data. Please try again.');
+    }
   };
 
   if (loading) return (

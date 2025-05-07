@@ -5,7 +5,8 @@ import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
 import RawMaterialModal from '../components/rawMaterials/RawMaterialModal';
 import RawMaterialDetailModal from '../components/rawMaterials/RawMaterialDetailModal';
-import { CSVLink } from 'react-csv';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 const RawMaterialsInventory = () => {
   const [materials, setMaterials] = useState([]);
@@ -364,6 +365,250 @@ const RawMaterialsInventory = () => {
     setDetailMaterial(material);
     setShowDetailModal(true);
   };
+  
+  // Export data to Excel with formatting
+  const exportToExcel = async () => {
+    try {
+      toast.loading('Generating Excel file...');
+      
+      // Create a new workbook and worksheet
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Textlaire';
+      workbook.lastModifiedBy = 'Textlaire';
+      workbook.created = new Date();
+      workbook.modified = new Date();
+      
+      const worksheet = workbook.addWorksheet('Raw Material Data', {
+        properties: { tabColor: { argb: '4167B8' } }
+      });
+      
+      // ===== HEADER SECTION =====
+      // Create title row
+      const headerRow = worksheet.addRow(['TEXTLAIRE - RAW MATERIAL DATA']);
+      // We need to merge all cells in the first row
+      worksheet.mergeCells('A1:N1');
+      const titleCell = worksheet.getCell('A1');
+      titleCell.font = {
+        name: 'Arial',
+        size: 16,
+        bold: true,
+        color: { argb: '1A56DB' }
+      };
+      titleCell.alignment = { horizontal: 'center' };
+      headerRow.height = 30;
+      
+      // Add date row
+      const dateRow = worksheet.addRow(['']);
+      worksheet.mergeCells('A2:N2');
+      const dateCell = worksheet.getCell('A2');
+      dateCell.value = `Generated on: ${new Date().toLocaleDateString('en-IN', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })}`;
+      dateCell.font = {
+        name: 'Arial',
+        size: 10,
+        italic: true,
+        color: { argb: '6B7280' }
+      };
+      dateCell.alignment = { horizontal: 'center' };
+      
+      // Add summary stats header
+      const summaryHeaderRow = worksheet.addRow(['Inventory Summary']);
+      worksheet.mergeCells('A3:D3');
+      const summaryCell = worksheet.getCell('A3');
+      summaryCell.font = {
+        name: 'Arial',
+        size: 12,
+        bold: true
+      };
+      
+      // Add stats in a row
+      const statsRow = worksheet.addRow([
+        `Total Items: ${materials.length}`,
+        `In Stock: ${materials.filter(m => m.stock > 0).length}`,
+        `Low Stock: ${materials.filter(m => m.stock > 0 && m.stock < (m.reorderLevel || 10)).length}`,
+        `Out of Stock: ${materials.filter(m => m.stock === 0).length}`
+      ]);
+      statsRow.font = { name: 'Arial', size: 10 };
+      statsRow.height = 20;
+      
+      // Add empty row for spacing
+      worksheet.addRow([]);
+      
+      // ===== DATA TABLE SECTION =====
+      // Add column headers row
+      const columnHeaders = [
+        'ID', 'Material', 'Cat', 'Stock', 'Unit', 'Price', 'Total Value', 'Status', 'Specs',
+        'Supplier', 'Location', 'Reorder Level', 'Last Restocked', 'Expiry'
+      ];
+      const tableHeaderRow = worksheet.addRow(columnHeaders);
+      
+      // Style the table header row
+      tableHeaderRow.eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: '1A56DB' }
+        };
+        cell.font = {
+          name: 'Arial',
+          size: 11,
+          bold: true,
+          color: { argb: 'FFFFFF' }
+        };
+        cell.alignment = { horizontal: 'center' };
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      });
+      tableHeaderRow.height = 20;
+      
+      // Set column widths
+      worksheet.getColumn(1).width = 10;  // ID
+      worksheet.getColumn(2).width = 25;  // Material
+      worksheet.getColumn(3).width = 15;  // Cat
+      worksheet.getColumn(4).width = 10;  // Stock
+      worksheet.getColumn(5).width = 8;   // Unit
+      worksheet.getColumn(6).width = 12;  // Price
+      worksheet.getColumn(7).width = 12;  // Total Value
+      worksheet.getColumn(8).width = 12;  // Status
+      worksheet.getColumn(9).width = 30;  // Specs
+      worksheet.getColumn(10).width = 15; // Supplier
+      worksheet.getColumn(11).width = 15; // Location
+      worksheet.getColumn(12).width = 12; // Reorder Level
+      worksheet.getColumn(13).width = 15; // Last Restocked
+      worksheet.getColumn(14).width = 15; // Expiry
+      
+      // Add data rows
+      materials.forEach(material => {
+        const stockStatus = material.stock === 0 ? 'Out of Stock' : 
+                          (material.stock < material.reorderLevel ? 'Low Stock' : 'In Stock');
+        
+        // Combine specifications into a single formatted string
+        const specs = [];
+        if (material.specifications?.color) specs.push(`Color: ${material.specifications.color}`);
+        if (material.specifications?.quality) specs.push(`Quality: ${material.specifications.quality}`);
+        if (material.specifications?.weight) specs.push(`Weight: ${material.specifications.weight}`);
+        if (material.specifications?.dimensions) specs.push(`Dim: ${material.specifications.dimensions}`);
+        const specsText = specs.join(' | ');
+        
+        // Add the data row
+        const dataRow = worksheet.addRow([
+          material._id,
+          material.name,
+          material.category,
+          material.stock,
+          material.unit,
+          material.unitPrice,
+          material.stock * material.unitPrice,
+          stockStatus,
+          specsText,
+          material.supplier || '',
+          material.location || '',
+          material.reorderLevel,
+          material.lastRestocked ? new Date(material.lastRestocked).toLocaleDateString() : '',
+          material.expiryDate ? new Date(material.expiryDate).toLocaleDateString() : ''
+        ]);
+        
+        // Apply conditional formatting based on stock status
+        const stockCell = dataRow.getCell(4); // Stock column
+        const statusCell = dataRow.getCell(8); // Status column
+        
+        if (stockStatus === 'Out of Stock') {
+          statusCell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFCCCB' } // Light red
+          };
+          statusCell.font = { color: { argb: 'B91C1C' } }; // Dark red
+          
+          // Also highlight the stock cell for out of stock items
+          stockCell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FEE2E2' } // Lighter red
+          };
+          stockCell.font = { color: { argb: 'B91C1C' }, bold: true }; // Dark red
+        } else if (stockStatus === 'Low Stock') {
+          statusCell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FEF9C3' } // Light yellow
+          };
+          statusCell.font = { color: { argb: '854D0E' } }; // Dark yellow
+          
+          // Also highlight the stock cell for low stock items
+          stockCell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FEF9C3' } // Light yellow
+          };
+          stockCell.font = { color: { argb: '854D0E' } }; // Dark yellow
+        } else {
+          statusCell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'DCFCE7' } // Light green
+          };
+          statusCell.font = { color: { argb: '166534' } }; // Dark green
+        }
+        
+        // Format the specs cell for better readability
+        const specsCell = dataRow.getCell(9); // Specs column
+        specsCell.alignment = { wrapText: true, vertical: 'middle' };
+        
+        // Format currency cells
+        const unitPriceCell = dataRow.getCell(6);
+        const totalValueCell = dataRow.getCell(7);
+        
+        unitPriceCell.numFmt = '₹#,##0.00';
+        totalValueCell.numFmt = '₹#,##0.00';
+        
+        // Add borders to all cells in the row
+        dataRow.eachCell((cell) => {
+          cell.border = {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
+          };
+          cell.alignment = { vertical: 'middle' };
+        });
+      });
+      
+      // Add a footer
+      const lastRow = worksheet.lastRow.number + 2;
+      worksheet.mergeCells(`A${lastRow}:N${lastRow}`);
+      const footerCell = worksheet.getCell(`A${lastRow}`);
+      footerCell.value = 'Textlaire - Confidential';
+      footerCell.font = {
+        name: 'Arial',
+        size: 10,
+        italic: true,
+        color: { argb: '6B7280' }
+      };
+      footerCell.alignment = { horizontal: 'center' };
+      
+      // Generate Excel file
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, `Textlaire_Raw_Material_Data_${new Date().toISOString().split('T')[0]}.xlsx`);
+      
+      toast.dismiss();
+      toast.success('Excel file generated successfully!');
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      toast.dismiss();
+      toast.error('Failed to generate Excel file');
+    }
+  };
 
   return (
     <div className="h-screen overflow-hidden bg-gray-50 dark:bg-gray-900 transition-colors duration-200 flex flex-col">
@@ -422,14 +667,13 @@ const RawMaterialsInventory = () => {
                 <span className="hidden sm:inline">Filters</span>
               </button>
               
-              <CSVLink 
-                data={exportData} 
-                filename={"raw-materials.csv"}
+              <button
+                onClick={exportToExcel}
                 className="flex items-center gap-1 px-2 py-1 text-xs bg-green-100 hover:bg-green-200 text-green-800 dark:bg-green-700 dark:hover:bg-green-600 dark:text-green-100 rounded-lg transition-colors duration-200"
               >
                 <FaFileExport size={10} />
                 <span className="hidden sm:inline">Export</span>
-              </CSVLink>
+              </button>
               
               <button
                 onClick={() => {

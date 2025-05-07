@@ -123,8 +123,8 @@ const ProductsPage = () => {
       const formData = new FormData();
       formData.append('image', selectedFile);
       
-      // Upload the image
-      const response = await axios.post('/api/uploads/image', formData, {
+      // Upload the image to the patterns directory
+      const response = await axios.post('/api/uploads/image?type=patterns', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }

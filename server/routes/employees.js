@@ -88,7 +88,7 @@ const getNextAvailableID = async () => {
 // Multer Config for Image Upload
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const dir = "uploads/employees";
+    const dir = path.join(process.cwd(), "uploads/employees");
     // Create directory if it doesn't exist
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -181,18 +181,15 @@ router.get("/:id", async (req, res) => {
 });
 
 // POST: Create Employee
-router.post("/", upload.single("image"), validateEmployee, async (req, res) => {
+router.post("/", upload.single("employeeImage"), validateEmployee, async (req, res) => {
   try {
     let { employeeID, ...rest } = req.body;
     
     // Log incoming request data
     console.log("Incoming request data:", req.body);
     
-    // Ensure employeeID is a string and trim it
-    employeeID = employeeID ? employeeID.toString().trim() : '';
-    
-    // Auto-generate ID if empty
-    if (!employeeID) {
+    // Auto-generate ID if not provided
+    if (!employeeID || employeeID.trim() === '') {
       try {
         employeeID = await getNextAvailableID();
         console.log("Generated ID:", employeeID);
@@ -200,6 +197,9 @@ router.post("/", upload.single("image"), validateEmployee, async (req, res) => {
         return res.status(500).json({ message: error.message });
       }
     } else {
+      // Ensure employeeID is a string and trim it
+      employeeID = employeeID.toString().trim();
+      
       // Validate that employeeID is numeric
       if (!/^\d+$/.test(employeeID)) {
         console.log("Invalid employee ID format:", employeeID);
@@ -250,7 +250,7 @@ router.post("/", upload.single("image"), validateEmployee, async (req, res) => {
 });
 
 // PUT: Update Employee
-router.put("/:id", upload.single("image"), validateEmployee, async (req, res) => {
+router.put("/:id", upload.single("employeeImage"), validateEmployee, async (req, res) => {
   try {
     const { employeeID, ...rest } = req.body;
     

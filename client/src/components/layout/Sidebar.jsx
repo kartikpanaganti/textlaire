@@ -12,15 +12,18 @@ import { IoImagesOutline, IoImageOutline } from "react-icons/io5";
 import { MdAutoFixHigh } from "react-icons/md";
 import { ThemeContext } from "../../context/ThemeProvider";
 import { UserContext } from "../../context/UserProvider";
+import { SocketContext } from "../../context/SocketProvider";
 
 function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme } = useContext(ThemeContext);
   const { user } = useContext(UserContext);
+  const { socket } = useContext(SocketContext);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileView, setIsMobileView] = useState(window.innerWidth < 768);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Handle window resize for responsive behavior
   useEffect(() => {
@@ -42,6 +45,73 @@ function Sidebar() {
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
+
+  // Function to navigate to messages page
+  const navigateToMessages = () => {
+    navigate('/messages');
+    // Only reset the count, don't clear storage
+    // This allows notifications for new messages to appear
+    setUnreadCount(0);
+  };
+
+  // Listen for new messages to update unread count
+  useEffect(() => {
+    // Load initial unread count from storage
+    const storedUnreadMessages = JSON.parse(localStorage.getItem('textlaire_unread_messages') || '[]');
+    setUnreadCount(storedUnreadMessages.length);
+    
+    // Listen for new messages via custom event
+    const handleNewMessage = (event) => {
+      const message = event.detail;
+      if (!message || !message._id) return;
+      
+      // Update unread count regardless of current page
+      setUnreadCount(prev => {
+        // Get current unread messages
+        const unreadMessages = JSON.parse(localStorage.getItem('textlaire_unread_messages') || '[]');
+        
+        // Check if this message is already in the unread list
+        if (!unreadMessages.some(m => m._id === message._id)) {
+          // Add to unread messages
+          unreadMessages.push({
+            _id: message._id,
+            chatId: message.chat,
+            timestamp: new Date().toISOString()
+          });
+          
+          // Store updated list
+          localStorage.setItem('textlaire_unread_messages', JSON.stringify(unreadMessages));
+          
+          // Return new count
+          return unreadMessages.length;
+        }
+        
+        return prev;
+      });
+    };
+    
+    // Register event listener
+    window.addEventListener('textlaire_new_message', handleNewMessage);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('textlaire_new_message', handleNewMessage);
+    };
+  }, []);
+  
+  // Reset unread count when navigating to messages page, but don't clear storage
+  // This allows us to still track new messages that arrive while on the messages page
+  useEffect(() => {
+    if (location.pathname === '/messages') {
+      // We don't clear the storage here anymore, just reset the count
+      // This way new messages will still trigger the badge
+      setUnreadCount(0);
+    } else {
+      // When leaving the messages page, reload the count from storage
+      const storedUnreadMessages = JSON.parse(localStorage.getItem('textlaire_unread_messages') || '[]');
+      setUnreadCount(storedUnreadMessages.length);
+    }
+  }, [location.pathname]);
 
   // Define theme-based colors
   const isDarkMode = theme === 'dark';
@@ -199,10 +269,11 @@ function Sidebar() {
               isCollapsed={isCollapsed && !isMobileMenuOpen} 
               isActive={location.pathname === "/messages"}
               onClick={() => {
-                navigate("/messages");
+                navigateToMessages();
                 if (isMobileView) toggleMobileMenu();
               }}
               colors={colors}
+              badge={unreadCount}
             />
             
             {/* Admin-only menu items */}
@@ -261,7 +332,7 @@ function Sidebar() {
 }
 
 // Sidebar Item Component with Active State and Animation
-const SidebarItem = ({ icon, label, isCollapsed, isActive, onClick, colors }) => (
+const SidebarItem = ({ icon, label, isCollapsed, isActive, onClick, colors, badge }) => (
   <li>
     <button 
       className={`flex items-center w-full p-3 rounded-lg transition-all duration-300 text-lg font-medium tracking-wide text-white
@@ -275,7 +346,14 @@ const SidebarItem = ({ icon, label, isCollapsed, isActive, onClick, colors }) =>
       aria-label={label}
       aria-current={isActive ? "page" : undefined}
     >
-      <span className="text-2xl min-w-[40px] text-white">{icon}</span>
+      <div className="relative text-2xl min-w-[40px] text-white">
+        {icon}
+        {badge > 0 && (
+          <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+            {badge > 9 ? '9+' : badge}
+          </span>
+        )}
+      </div>
       {!isCollapsed && <span className="ml-3 text-white">{label}</span>}
     </button>
   </li>

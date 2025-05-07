@@ -178,6 +178,63 @@ export const SocketProvider = ({ children }) => {
             }
             localStorage.setItem('textlaire_pending_messages', JSON.stringify(pendingMessages));
           }
+          
+          // 4. Show toast notification regardless of current page
+          // Track shown notifications to prevent duplicates
+          const recentNotifications = JSON.parse(sessionStorage.getItem('textlaire_recent_notifications') || '[]');
+          const alreadyShown = recentNotifications.includes(message._id);
+          
+          // Only show toast if we haven't shown it recently
+          if (!alreadyShown) {
+            // Import toast dynamically to avoid circular dependencies
+            import('react-toastify').then(({ toast }) => {
+              // Track this notification to prevent duplicates
+              recentNotifications.push(message._id);
+              // Keep only the most recent 20 notifications
+              if (recentNotifications.length > 20) {
+                recentNotifications.shift();
+              }
+              sessionStorage.setItem('textlaire_recent_notifications', JSON.stringify(recentNotifications));
+              
+              // Show toast notification
+              const sender = message.sender?.name || 'Someone';
+              const content = message.content || 
+                            (message.attachments?.length ? 'Sent an attachment' : 'New message');
+              
+              toast.info(`${sender}: ${content.substring(0, 30)}${content.length > 30 ? '...' : ''}`, {
+                position: "top-right",
+                autoClose: 5000,
+                hideProgressBar: false,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+                toastId: message._id, // Use message ID as toast ID to prevent duplicates
+                onClick: () => {
+                  // When user clicks the notification, navigate to messages page
+                  window.location.href = '/messages';
+                }
+              });
+              
+              // Play notification sound
+              try {
+                // Create audio element only if needed
+                const audio = new Audio();
+                audio.src = '/notification.mp3';
+                // Preload the audio
+                audio.preload = 'auto';
+                // Add error handling
+                audio.onerror = (e) => console.log('Audio load error:', e.message);
+                // Only play after loaded
+                audio.oncanplaythrough = () => {
+                  audio.play().catch(e => console.log('Audio play error:', e.message));
+                };
+              } catch (error) {
+                console.log('Notification sound not available:', error.message);
+              }
+            }).catch(err => {
+              console.error('Failed to load toast library:', err);
+            });
+          }
         } catch (error) {
           console.error('SOCKET: Error handling new message:', error);
         }

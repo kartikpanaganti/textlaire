@@ -3,6 +3,7 @@ import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { FaTimes, FaUpload } from 'react-icons/fa';
 import { format } from 'date-fns';
+import { getImageUrl, handleImageError } from '../../utils/imageUtils';
 
 const RawMaterialModal = ({ isOpen, onClose, material, onSave }) => {
   const [formData, setFormData] = useState({
@@ -256,39 +257,30 @@ const RawMaterialModal = ({ isOpen, onClose, material, onSave }) => {
     setLoading(true);
 
     // Validate required fields
-    if (!formData.name || formData.name.trim() === '') {
-      toast.error('Material name is required');
+    if (!formData.name || !formData.materialType) {
+      toast.error('Name and Material Type are required fields');
       setLoading(false);
       return;
     }
 
     try {
-      // Create FormData instance
+      // Create FormData object for file upload
       const formDataToSend = new FormData();
       
-      // Add all form fields to FormData
-      const materialData = {
-        name: formData.name.trim(),
-        category: formData.materialType,
-        stock: Number(formData.stock) || 0,
-        supplier: formData.supplier,
-        unit: formData.unit || 'kg',
-        unitPrice: Number(formData.unitPrice) || 0,
-        reorderLevel: Number(formData.reorderLevel) || 10,
-        location: formData.location,
-        lastRestocked: formData.lastRestocked ? new Date(formData.lastRestocked).toISOString() : new Date().toISOString(),
-        expiryDate: formData.expiryDate ? new Date(formData.expiryDate).toISOString() : null,
-        notes: formData.notes
-      };
-
-      // Add basic fields
-      Object.keys(materialData).forEach(key => {
-        if (materialData[key] !== null && materialData[key] !== undefined) {
-          formDataToSend.append(key, materialData[key]);
-        }
-      });
-
-      // Ensure specifications object is properly structured
+      // Add all text fields
+      formDataToSend.append('name', formData.name);
+      formDataToSend.append('materialType', formData.materialType);
+      formDataToSend.append('stock', parseFloat(formData.stock) || 0);
+      formDataToSend.append('supplier', formData.supplier || '');
+      formDataToSend.append('unit', formData.unit || 'kg');
+      formDataToSend.append('unitPrice', parseFloat(formData.unitPrice) || 0);
+      formDataToSend.append('reorderLevel', parseFloat(formData.reorderLevel) || 0);
+      formDataToSend.append('location', formData.location || '');
+      formDataToSend.append('lastRestocked', formData.lastRestocked || '');
+      formDataToSend.append('expiryDate', formData.expiryDate || '');
+      formDataToSend.append('notes', formData.notes || '');
+      
+      // Create specifications object
       const specifications = {
         color: formData.specifications?.color || '',
         colorHex: formData.specifications?.colorHex || '',
@@ -306,16 +298,23 @@ const RawMaterialModal = ({ isOpen, onClose, material, onSave }) => {
 
       // Add image if there's a new one
       if (imageFile) {
-        formDataToSend.append('image', imageFile);
+        // Use the field name expected by the server
+        formDataToSend.append('materialImage', imageFile);
+        // Specify the upload directory
+        formDataToSend.append('uploadDir', 'materials');
       }
         
       // Determine URL and method
-      const baseURL = import.meta.env.VITE_API_URL || '';
-      const url = material
+      const baseURL = import.meta.env.VITE_API_URL || window.location.origin;
+      const url = material && material._id
         ? `${baseURL}/api/raw-materials/${material._id}`
         : `${baseURL}/api/raw-materials`;
         
-      const method = material ? 'put' : 'post';
+      const method = material && material._id ? 'put' : 'post';
+      
+      console.log('Submitting to URL:', url);
+      console.log('Using method:', method);
+      console.log('Form data keys:', [...formDataToSend.keys()]);
         
       // Make the API call
       const response = await axios[method](url, formDataToSend, {

@@ -358,57 +358,7 @@ function Dashboard() {
           )}
         </div>
 
-        {/* Side Panel with Activity and Status - Make it narrower */}
-        <div className="lg:w-64 flex flex-col gap-2 overflow-hidden min-w-0">
-          {/* Recent Activity */}
-          <div className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-md flex-1 overflow-hidden flex flex-col reduce-padding-on-small-height">
-            <h2 className="text-sm font-semibold mb-1 text-gray-800 dark:text-white flex items-center compact-on-small-height">
-              <FaHistory className="mr-1 text-blue-500" size={12} /> Recent Activity
-            </h2>
-            <div className="space-y-1 overflow-y-auto flex-1 scrollbar-thin">
-              <div className="border-l-4 border-green-500 pl-2 py-0.5">
-                <p className="text-xs text-gray-600 dark:text-gray-300">Today</p>
-                <p className="text-xs text-gray-800 dark:text-white">Attendance recorded for {attendance.length} employees</p>
-              </div>
-              <div className="border-l-4 border-blue-500 pl-2 py-0.5">
-                <p className="text-xs text-gray-600 dark:text-gray-300">Yesterday</p>
-                <p className="text-xs text-gray-800 dark:text-white">New employee added to the system</p>
-              </div>
-              <div className="border-l-4 border-purple-500 pl-2 py-0.5">
-                <p className="text-xs text-gray-600 dark:text-gray-300">Last Week</p>
-                <p className="text-xs text-gray-800 dark:text-white">Monthly attendance report generated</p>
-              </div>
-            </div>
-          </div>
-          
-          {/* System Status */}
-          <div className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-md reduce-padding-on-small-height">
-            <h2 className="text-sm font-semibold mb-1 text-gray-800 dark:text-white flex items-center compact-on-small-height">
-              <FaTachometerAlt className="mr-1 text-blue-500" size={12} /> System Status
-            </h2>
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-xs text-gray-700 dark:text-gray-300">System Status</span>
-                </div>
-                <span className="text-xs text-green-500">Operational</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-700 dark:text-gray-300">Database</span>
-                <span className="px-1.5 py-0.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full text-xs">Online</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-700 dark:text-gray-300">API Services</span>
-                <span className="px-1.5 py-0.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full text-xs">Online</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-700 dark:text-gray-300">Last Update</span>
-                <span className="text-xs text-gray-600 dark:text-gray-400">{new Date().toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Side Panel removed */}
       </div>
     </div>
   );

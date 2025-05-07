@@ -66,7 +66,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create a new raw material
-router.post('/', upload.single('image'), async (req, res) => {
+router.post('/', upload.single('materialImage'), async (req, res) => {
   try {
     const materialData = req.body;
     
@@ -99,7 +99,7 @@ router.post('/', upload.single('image'), async (req, res) => {
 });
 
 // Update a raw material
-router.put('/:id', upload.single('image'), async (req, res) => {
+router.put('/:id', upload.single('materialImage'), async (req, res) => {
   try {
     const materialData = req.body;
     

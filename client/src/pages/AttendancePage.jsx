@@ -9,7 +9,7 @@ import "react-toastify/dist/ReactToastify.css";
 import { ThemeContext } from '../context/ThemeProvider';
 
 import { format, startOfWeek, endOfWeek, addDays, differenceInMinutes } from 'date-fns';
-import { exportToExcel, exportToPDF } from '../utils/exportUtils';
+import { exportToExcel, exportToExcelEnhanced, exportToPDF } from '../utils/exportUtils';
 import AttendanceForm from '../components/attendance/AttendanceForm';
 import QuickAttendanceForm from '../components/attendance/QuickAttendanceForm';
 import { submitBulkAttendance } from '../lib/api';
@@ -732,13 +732,39 @@ const AttendancePage = () => {
                   >
                     Reset Filters
                   </button>
-                  <button
-                    onClick={() => exportToExcel(dateViewRecords, `attendance_${selectedDate || `${startDate}_to_${endDate}`}`)}
-                    className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm flex items-center gap-1"
-                    disabled={dateViewRecords.length === 0}
-                  >
-                    <FaFileExport size={14} /> Export
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        try {
+                          const dateRange = selectedDate ? selectedDate : `${startDate} to ${endDate}`;
+                          exportToExcelEnhanced(dateViewRecords, dateRange);
+                          toast.success('Excel file generated successfully!');
+                        } catch (error) {
+                          console.error('Excel generation error:', error);
+                          toast.error('Failed to generate Excel file');
+                        }
+                      }}
+                      className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm flex items-center gap-1"
+                      disabled={dateViewRecords.length === 0}
+                    >
+                      <FaFileExport size={14} /> Excel
+                    </button>
+                    <button
+                      onClick={() => {
+                        try {
+                          exportToPDF(dateViewRecords);
+                          toast.success('PDF file generated successfully!');
+                        } catch (error) {
+                          console.error('PDF generation error:', error);
+                          toast.error('Failed to generate PDF file');
+                        }
+                      }}
+                      className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm flex items-center gap-1"
+                      disabled={dateViewRecords.length === 0}
+                    >
+                      <FaFileExport size={14} /> PDF
+                    </button>
+                  </div>
                 </div>
               </div>
             

@@ -7,6 +7,8 @@ import axios from 'axios';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
 import { Doughnut, Bar } from 'react-chartjs-2';
 import { format } from 'date-fns';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 // Register ChartJS components
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
@@ -73,7 +75,7 @@ const RawMaterialDashboard = () => {
 
     // Calculate various metrics
     const totalMaterials = materials.length;
-    const totalValue = materials.reduce((sum, mat) => sum + (mat.quantity * mat.unitPrice), 0);
+    const totalValue = materials.reduce((sum, mat) => sum + (mat.stock * mat.unitPrice), 0);
     
     // Category distribution
     const categoryCounts = {};
@@ -83,7 +85,19 @@ const RawMaterialDashboard = () => {
     
     materials.forEach(mat => {
       if (mat.category) {
-        categoryCounts[mat.category] = (categoryCounts[mat.category] || 0) + 1;
+        // Check if the category exists in our predefined categories
+        const matchingCategory = categories.find(cat => 
+          cat.value && mat.category.includes(cat.value)
+        );
+        
+        if (matchingCategory) {
+          categoryCounts[matchingCategory.value] = (categoryCounts[matchingCategory.value] || 0) + 1;
+        } else if (categoryCounts[mat.category] !== undefined) {
+          categoryCounts[mat.category] = (categoryCounts[mat.category] || 0) + 1;
+        } else {
+          // If it's a new category not in our predefined list
+          categoryCounts[mat.category] = 1;
+        }
       }
     });
 
@@ -96,15 +110,16 @@ const RawMaterialDashboard = () => {
     };
     
     materials.forEach(mat => {
-      if (mat.quantity === 0) {
+      if (mat.stock === 0) {
         stockStatus['Out of Stock']++;
-      } else if (mat.quantity <= mat.reorderLevel) {
+      } else if (mat.stock <= mat.reorderLevel) {
         stockStatus['Low Stock']++;
       } else {
         stockStatus['In Stock']++;
       }
       
-      if (mat.onOrder && mat.onOrder > 0) {
+      // Check if there's any pending order
+      if (mat.pendingOrder && mat.pendingOrder > 0) {
         stockStatus['On Order']++;
       }
     });
@@ -117,36 +132,48 @@ const RawMaterialDashboard = () => {
     
     materials.forEach(mat => {
       if (mat.category) {
-        categoryValues[mat.category] = (categoryValues[mat.category] || 0) + (mat.quantity * mat.unitPrice);
+        // Check if the category exists in our predefined categories
+        const matchingCategory = categories.find(cat => 
+          cat.value && mat.category.includes(cat.value)
+        );
+        
+        if (matchingCategory) {
+          categoryValues[matchingCategory.value] = (categoryValues[matchingCategory.value] || 0) + (mat.stock * mat.unitPrice);
+        } else if (categoryValues[mat.category] !== undefined) {
+          categoryValues[mat.category] = (categoryValues[mat.category] || 0) + (mat.stock * mat.unitPrice);
+        } else {
+          // If it's a new category not in our predefined list
+          categoryValues[mat.category] = (mat.stock * mat.unitPrice);
+        }
       }
     });
 
     // Low stock items
     const lowStockItems = materials
-      .filter(mat => mat.quantity <= mat.reorderLevel && mat.quantity > 0)
-      .sort((a, b) => (a.quantity / a.reorderLevel) - (b.quantity / b.reorderLevel))
+      .filter(mat => mat.stock <= mat.reorderLevel && mat.stock > 0)
+      .sort((a, b) => (a.stock / a.reorderLevel) - (b.stock / b.reorderLevel))
       .slice(0, 5)
       .map(mat => ({
-        id: mat.materialId || mat._id,
+        id: mat._id,
         name: mat.name,
         category: mat.category,
-        quantity: mat.quantity,
+        quantity: mat.stock,
         reorderLevel: mat.reorderLevel,
         unitPrice: mat.unitPrice
       }));
 
-    // Recent transactions
+    // Recent transactions - using lastRestocked as a proxy for last transaction
     const recentTransactions = materials
-      .filter(mat => mat.lastTransaction)
-      .sort((a, b) => new Date(b.lastTransaction.date) - new Date(a.lastTransaction.date))
+      .filter(mat => mat.lastRestocked)
+      .sort((a, b) => new Date(b.lastRestocked) - new Date(a.lastRestocked))
       .slice(0, 5)
       .map(mat => ({
-        id: mat.materialId || mat._id,
+        id: mat._id,
         name: mat.name,
-        date: mat.lastTransaction.date,
-        type: mat.lastTransaction.type,
-        quantity: mat.lastTransaction.quantity,
-        value: mat.lastTransaction.quantity * mat.unitPrice
+        date: mat.lastRestocked,
+        type: 'Restocked',  // Assuming restocking as the transaction type
+        quantity: mat.stock,
+        value: mat.stock * mat.unitPrice
       }));
 
     // Set the processed data
@@ -218,9 +245,325 @@ const RawMaterialDashboard = () => {
     }));
   };
 
-  const exportToExcel = () => {
-    // In a real app, this would generate an Excel file with raw material data
-    alert('This would download an Excel file with the current raw material inventory data');
+  const exportToExcel = async () => {
+    try {
+      if (!materialData) {
+        console.error('No data available to export');
+        return;
+      }
+
+      // Create a new workbook and worksheet
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Textlaire';
+      workbook.lastModifiedBy = 'Textlaire';
+      workbook.created = new Date();
+      workbook.modified = new Date();
+      
+      // Format date for filename
+      const dateStr = format(new Date(), 'yyyy-MM-dd');
+
+      // Create Summary worksheet
+      const summarySheet = workbook.addWorksheet('Summary', {
+        properties: { tabColor: { argb: '4167B8' } }
+      });
+
+      // Add title
+      const headerRow = summarySheet.addRow(['TEXTLAIRE - RAW MATERIALS DASHBOARD']);
+      summarySheet.mergeCells('A1:H1');
+      const titleCell = summarySheet.getCell('A1');
+      titleCell.font = {
+        name: 'Arial',
+        size: 16,
+        bold: true,
+        color: { argb: '1A56DB' }
+      };
+      titleCell.alignment = { horizontal: 'center' };
+      headerRow.height = 30;
+
+      // Add date
+      const dateRow = summarySheet.addRow(['']);
+      summarySheet.mergeCells('A2:H2');
+      const dateCell = summarySheet.getCell('A2');
+      dateCell.value = `Generated on: ${format(new Date(), 'PPpp')}`;
+      dateCell.font = {
+        name: 'Arial',
+        size: 10,
+        italic: true,
+        color: { argb: '6B7280' }
+      };
+      dateCell.alignment = { horizontal: 'center' };
+      
+      // Add empty row
+      summarySheet.addRow([]);
+
+      // Add summary metrics
+      summarySheet.addRow(['INVENTORY OVERVIEW']);
+      summarySheet.mergeCells('A4:B4');
+      summarySheet.getCell('A4').font = { bold: true, size: 12 };
+      
+      summarySheet.addRow(['Total Materials:', materialData.totalMaterials]);
+      summarySheet.addRow(['Total Inventory Value:', materialData.totalValue]);
+      summarySheet.getCell('B6').numFmt = '₹#,##0.00';
+      
+      // Add empty row
+      summarySheet.addRow([]);
+
+      // Add stock status breakdown
+      summarySheet.addRow(['STOCK STATUS BREAKDOWN']);
+      summarySheet.mergeCells('A8:B8');
+      summarySheet.getCell('A8').font = { bold: true, size: 12 };
+      
+      summarySheet.addRow(['Status', 'Count']);
+      summarySheet.getCell('A9').font = { bold: true };
+      summarySheet.getCell('B9').font = { bold: true };
+      
+      Object.entries(materialData.stockStatus).forEach(([status, count]) => {
+        summarySheet.addRow([status, count]);
+      });
+
+      // Add empty row
+      summarySheet.addRow([]);
+
+      // Add category distribution
+      summarySheet.addRow(['CATEGORY DISTRIBUTION']);
+      summarySheet.mergeCells('A14:B14');
+      summarySheet.getCell('A14').font = { bold: true, size: 12 };
+      
+      summarySheet.addRow(['Category', 'Count']);
+      summarySheet.getCell('A15').font = { bold: true };
+      summarySheet.getCell('B15').font = { bold: true };
+      
+      Object.entries(materialData.categoryCounts).forEach(([category, count]) => {
+        if (category) {
+          summarySheet.addRow([category, count]);
+        }
+      });
+
+      // Set column widths
+      summarySheet.getColumn(1).width = 25;
+      summarySheet.getColumn(2).width = 15;
+
+      // Create Category Distribution worksheet
+      const categorySheet = workbook.addWorksheet('Category Distribution', {
+        properties: { tabColor: { argb: '6B7280' } }
+      });
+      
+      // Add title
+      const catHeaderRow = categorySheet.addRow(['CATEGORY DISTRIBUTION']);
+      categorySheet.mergeCells('A1:C1');
+      categorySheet.getCell('A1').font = {
+        name: 'Arial',
+        size: 14,
+        bold: true,
+        color: { argb: '1A56DB' }
+      };
+      categorySheet.getCell('A1').alignment = { horizontal: 'center' };
+      catHeaderRow.height = 25;
+      
+      // Add empty row
+      categorySheet.addRow([]);
+      
+      // Add headers
+      const catTableHeader = categorySheet.addRow(['Category', 'Count', 'Percentage']);
+      catTableHeader.eachCell((cell) => {
+        cell.font = { bold: true };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'E5E7EB' }
+        };
+      });
+      
+      // Calculate total for percentage
+      const totalItems = Object.values(materialData.categoryCounts).reduce((sum, count) => sum + count, 0);
+      
+      // Add data rows
+      Object.entries(materialData.categoryCounts).forEach(([category, count]) => {
+        if (category) {
+          const percentage = totalItems > 0 ? (count / totalItems) : 0;
+          const row = categorySheet.addRow([category, count, percentage]);
+          row.getCell(3).numFmt = '0.00%';
+        }
+      });
+      
+      // Set column widths
+      categorySheet.getColumn(1).width = 20;
+      categorySheet.getColumn(2).width = 15;
+      categorySheet.getColumn(3).width = 15;
+
+      // Create Category Values worksheet
+      const valueSheet = workbook.addWorksheet('Category Values', {
+        properties: { tabColor: { argb: '4F46E5' } }
+      });
+      
+      // Add title
+      const valueHeaderRow = valueSheet.addRow(['CATEGORY VALUE DISTRIBUTION']);
+      valueSheet.mergeCells('A1:C1');
+      valueSheet.getCell('A1').font = {
+        name: 'Arial',
+        size: 14,
+        bold: true,
+        color: { argb: '1A56DB' }
+      };
+      valueSheet.getCell('A1').alignment = { horizontal: 'center' };
+      valueHeaderRow.height = 25;
+      
+      // Add empty row
+      valueSheet.addRow([]);
+      
+      // Add headers
+      const valueTableHeader = valueSheet.addRow(['Category', 'Total Value', 'Percentage']);
+      valueTableHeader.eachCell((cell) => {
+        cell.font = { bold: true };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'E5E7EB' }
+        };
+      });
+      
+      // Calculate total for percentage
+      const totalValue = Object.values(materialData.categoryValues).reduce((sum, value) => sum + value, 0);
+      
+      // Add data rows
+      Object.entries(materialData.categoryValues).forEach(([category, value]) => {
+        if (category) {
+          const percentage = totalValue > 0 ? (value / totalValue) : 0;
+          const row = valueSheet.addRow([category, value, percentage]);
+          row.getCell(2).numFmt = '₹#,##0.00';
+          row.getCell(3).numFmt = '0.00%';
+        }
+      });
+      
+      // Set column widths
+      valueSheet.getColumn(1).width = 20;
+      valueSheet.getColumn(2).width = 20;
+      valueSheet.getColumn(3).width = 15;
+
+      // Create Low Stock Items worksheet
+      const lowStockSheet = workbook.addWorksheet('Low Stock Items', {
+        properties: { tabColor: { argb: 'EF4444' } }
+      });
+      
+      // Add title
+      const lowStockHeaderRow = lowStockSheet.addRow(['LOW STOCK ITEMS']);
+      lowStockSheet.mergeCells('A1:F1');
+      lowStockSheet.getCell('A1').font = {
+        name: 'Arial',
+        size: 14,
+        bold: true,
+        color: { argb: 'B91C1C' }
+      };
+      lowStockSheet.getCell('A1').alignment = { horizontal: 'center' };
+      lowStockHeaderRow.height = 25;
+      
+      // Add empty row
+      lowStockSheet.addRow([]);
+      
+      // Add headers
+      const lowStockTableHeader = lowStockSheet.addRow([
+        'ID', 'Name', 'Category', 'Current Stock', 'Reorder Level', 'Unit Price'
+      ]);
+      lowStockTableHeader.eachCell((cell) => {
+        cell.font = { bold: true };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FEE2E2' }
+        };
+      });
+      
+      // Add data rows
+      materialData.lowStockItems.forEach(item => {
+        const row = lowStockSheet.addRow([
+          item.id,
+          item.name,
+          item.category,
+          item.quantity,
+          item.reorderLevel,
+          item.unitPrice
+        ]);
+        row.getCell(6).numFmt = '₹#,##0.00';
+        
+        // Highlight critical items
+        if (item.quantity < item.reorderLevel * 0.5) {
+          row.eachCell((cell) => {
+            cell.font = { color: { argb: 'B91C1C' } };
+          });
+        }
+      });
+      
+      // Set column widths
+      lowStockSheet.getColumn(1).width = 10;
+      lowStockSheet.getColumn(2).width = 25;
+      lowStockSheet.getColumn(3).width = 15;
+      lowStockSheet.getColumn(4).width = 15;
+      lowStockSheet.getColumn(5).width = 15;
+      lowStockSheet.getColumn(6).width = 15;
+
+      // Create Recent Transactions worksheet
+      const transactionSheet = workbook.addWorksheet('Recent Transactions', {
+        properties: { tabColor: { argb: '10B981' } }
+      });
+      
+      // Add title
+      const transactionHeaderRow = transactionSheet.addRow(['RECENT TRANSACTIONS']);
+      transactionSheet.mergeCells('A1:F1');
+      transactionSheet.getCell('A1').font = {
+        name: 'Arial',
+        size: 14,
+        bold: true,
+        color: { argb: '047857' }
+      };
+      transactionSheet.getCell('A1').alignment = { horizontal: 'center' };
+      transactionHeaderRow.height = 25;
+      
+      // Add empty row
+      transactionSheet.addRow([]);
+      
+      // Add headers
+      const transactionTableHeader = transactionSheet.addRow([
+        'ID', 'Material', 'Date', 'Type', 'Quantity', 'Value'
+      ]);
+      transactionTableHeader.eachCell((cell) => {
+        cell.font = { bold: true };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'ECFDF5' }
+        };
+      });
+      
+      // Add data rows
+      materialData.recentTransactions.forEach(transaction => {
+        const row = transactionSheet.addRow([
+          transaction.id,
+          transaction.name,
+          new Date(transaction.date),
+          transaction.type,
+          transaction.quantity,
+          transaction.value
+        ]);
+        row.getCell(3).numFmt = 'yyyy-mm-dd';
+        row.getCell(6).numFmt = '₹#,##0.00';
+      });
+      
+      // Set column widths
+      transactionSheet.getColumn(1).width = 10;
+      transactionSheet.getColumn(2).width = 25;
+      transactionSheet.getColumn(3).width = 15;
+      transactionSheet.getColumn(4).width = 15;
+      transactionSheet.getColumn(5).width = 15;
+      transactionSheet.getColumn(6).width = 15;
+
+      // Generate Excel file
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, `Raw_Materials_Dashboard_${dateStr}.xlsx`);
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Failed to export data. Please try again.');
+    }
   };
 
   if (loading) return (

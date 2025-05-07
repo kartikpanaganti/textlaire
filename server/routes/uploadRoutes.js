@@ -8,7 +8,10 @@ const router = express.Router();
 // Configure multer storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = path.join(process.cwd(), 'uploads');
+    // Get upload directory from request or default to patterns directory
+    const uploadType = req.query.type || 'patterns';
+    const uploadDir = path.join(process.cwd(), 'uploads', uploadType);
+    
     // Create directory if it doesn't exist
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
@@ -48,8 +51,11 @@ router.post('/image', upload.single('image'), (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
+    // Get the upload type from query or default to patterns
+    const uploadType = req.query.type || 'patterns';
+    
     // Construct the URL to the uploaded file
-    const imageUrl = `/uploads/${req.file.filename}`;
+    const imageUrl = `/uploads/${uploadType}/${req.file.filename}`;
     
     return res.status(200).json({
       message: 'File uploaded successfully',

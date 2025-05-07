@@ -145,7 +145,9 @@ const ChatMessages = () => {
   // Scroll to bottom when messages change or when a chat is first loaded
   useEffect(() => {
     // Force scroll to bottom when messages load
-    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+    }
   }, [messages]);
   
   // Also scroll when selected chat changes
@@ -153,7 +155,9 @@ const ChatMessages = () => {
     if (selectedChat) {
       // Use a small timeout to ensure the DOM has updated
       setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+        }
       }, 100);
     }
   }, [selectedChat]);
@@ -333,7 +337,7 @@ const ChatMessages = () => {
           overflow: 'auto',
           p: 2,
           display: 'flex',
-          flexDirection: 'column',
+          flexDirection: 'column-reverse', /* This reverses the order to show latest at bottom */
           gap: 1,
           bgcolor: 'grey.50'
         }}
@@ -343,7 +347,8 @@ const ChatMessages = () => {
             <CircularProgress />
           </Box>
         ) : messageGroups.length > 0 ? (
-          messageGroups.map((group, index) => (
+          // Reverse the message groups to show latest at the bottom
+          [...messageGroups].reverse().map((group, index) => (
             <Box key={index} sx={{ mb: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
                 <Typography

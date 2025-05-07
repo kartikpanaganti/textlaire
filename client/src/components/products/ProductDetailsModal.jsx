@@ -1,7 +1,10 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaEdit, FaTrash, FaSave, FaTimes, FaSearchPlus, FaSearchMinus } from 'react-icons/fa';
+import { FaEdit, FaTrash, FaSave, FaTimes, FaSearchPlus, FaSearchMinus, FaDownload } from 'react-icons/fa';
 import { ThemeContext } from '../../context/ThemeProvider';
+import { getImageUrl, handleImageError } from '../../utils/imageUtils';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 const ProductDetailsModal = ({ show, product, onClose, onUpdate, onDelete }) => {
   const { theme } = useContext(ThemeContext);
@@ -242,6 +245,48 @@ const ProductDetailsModal = ({ show, product, onClose, onUpdate, onDelete }) => 
     return `${weight} GSM`;
   };
   
+  // Export product data as zip file
+  const exportProductData = async () => {
+    try {
+      // Create a new zip file
+      const zip = new JSZip();
+      
+      // Add product details as text file
+      const productDetails = [
+        `Product Name: ${product.name || 'Not specified'}`,
+        `Product Code: ${product.code || 'Not specified'}`,
+        `Price: ${formatPrice(product.price)}`,
+        `Dimensions: ${formatDimensions(product.dimensions, product.width, product.height, product.unit)}`,
+        `Weight: ${formatWeight(product.weight)}`,
+        `Material: ${product.material || 'Not specified'}`,
+        `Color: ${product.color || 'Not specified'}`,
+        `Type: ${product.type || 'Not specified'}`,
+        `Quality Grade: ${product.qualityGrade ? getQualityGradeDisplay(product.qualityGrade).label : 'Not specified'}`,
+        `Created At: ${formatDate(product.createdAt)}`,
+        `Tags: ${Array.isArray(product.tags) ? product.tags.join(', ') : (product.tags || 'None')}`,
+        `\nDescription:\n${product.description || 'No description available.'}`
+      ].join('\n');
+      
+      zip.file(`${product.name || 'product'}_details.txt`, productDetails);
+      
+      // Fetch and add the product image
+      const imageUrl = getImageUrl(product.imageUrl || product.image || `/api/products/images/${product._id}`);
+      const response = await fetch(imageUrl);
+      if (!response.ok) throw new Error('Failed to fetch image');
+      
+      const imageBlob = await response.blob();
+      const imageExtension = imageBlob.type.split('/')[1] || 'jpg';
+      zip.file(`${product.name || 'product'}_image.${imageExtension}`, imageBlob);
+      
+      // Generate and save the zip file
+      const zipContent = await zip.generateAsync({ type: 'blob' });
+      saveAs(zipContent, `${product.name || 'product'}_export.zip`);
+    } catch (error) {
+      console.error('Error exporting product data:', error);
+      alert('Failed to export product data. Please try again.');
+    }
+  };
+  
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex items-center justify-center min-h-screen p-4">
@@ -289,14 +334,11 @@ const ProductDetailsModal = ({ show, product, onClose, onUpdate, onDelete }) => 
               }}
             >
               <img 
-                src={product.imageUrl} 
+                src={getImageUrl(product.imageUrl || product.image || `/api/products/images/${product._id}`)} 
                 alt={product.name} 
                 className="w-full h-full object-cover"
                 style={{ pointerEvents: 'none' }}
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = 'https://via.placeholder.com/400x600?text=No+Image';
-                }}
+                onError={(e) => handleImageError(e, 'large')}
               />
             </div>
             
@@ -351,6 +393,13 @@ const ProductDetailsModal = ({ show, product, onClose, onUpdate, onDelete }) => 
               <div className="flex gap-2">
                 {!isEditing ? (
                   <>
+                    <button
+                      onClick={exportProductData}
+                      className="p-2 rounded-full text-green-500 hover:bg-green-50 dark:hover:bg-gray-700 transition-colors"
+                      title="Export product data"
+                    >
+                      <FaDownload size={18} />
+                    </button>
                     <button
                       onClick={() => setIsEditing(true)}
                       className="p-2 rounded-full text-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors"

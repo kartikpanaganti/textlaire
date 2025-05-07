@@ -3,14 +3,20 @@ import { FiEdit, FiTrash2, FiBriefcase, FiCalendar } from 'react-icons/fi';
 import { FaRupeeSign } from 'react-icons/fa';
 import EmployeeDetailsModal from './EmployeeDetailsModal';
 import defaultProfileImage from '../../assets/images/default-profile.png';
+import { getImageUrl, handleImageError } from '../../utils/imageUtils';
 
 const EmployeeCard = ({ employee, onEdit, onDelete }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
-  const getImageUrl = (url) => {
+  // Use the centralized image utility function with our default profile image
+  const getEmployeeImage = (url) => {
     if (!url) return defaultProfileImage;
-    return url.startsWith('http') ? url : `http://${window.location.hostname}:5000${url}`;
+    // For employee images, check if it's in the uploads/employees directory
+    if (url.includes('/uploads/employees/')) {
+      return getImageUrl(url, defaultProfileImage);
+    }
+    return getImageUrl(url, defaultProfileImage);
   };
 
   const getStatusColor = (status) => {
@@ -74,13 +80,10 @@ const EmployeeCard = ({ employee, onEdit, onDelete }) => {
           <div className="absolute -bottom-8 left-4">
             <div className="w-16 h-16 rounded-full border-2 border-white dark:border-gray-800 overflow-hidden bg-white dark:bg-gray-800 shadow-md">
               <img
-                src={getImageUrl(employee.image)}
+                src={getEmployeeImage(employee.image)}
                 alt={`${employee.name}'s profile`}
                 className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = defaultProfileImage;
-                }}
+                onError={(e) => handleImageError(e, 'small')}
               />
             </div>
           </div>

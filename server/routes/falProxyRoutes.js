@@ -3,6 +3,10 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
 import { fal } from "@fal-ai/client";
+import fs from 'fs';
+import path from 'path';
+import https from 'https';
+import ProductPattern from '../models/ProductPattern.js';
 
 dotenv.config();
 
@@ -86,11 +90,17 @@ router.post('/image-to-image', async (req, res) => {
 
     // Process the image data
     let processedImageData = imageData;
-    if (!imageData.startsWith('http') && !imageData.startsWith('https')) {
-      // If it's base64, ensure it has the correct prefix
-      if (!imageData.startsWith('data:image/')) {
-        processedImageData = `data:image/jpeg;base64,${imageData}`;
+    
+    // Check if it's a string and not a URL
+    if (typeof imageData === 'string') {
+      if (!imageData.startsWith('http') && !imageData.startsWith('https')) {
+        // If it's base64, ensure it has the correct prefix
+        if (!imageData.startsWith('data:image/')) {
+          processedImageData = `data:image/jpeg;base64,${imageData}`;
+        }
       }
+    } else {
+      return res.status(400).json({ error: 'Invalid image data format' });
     }
 
     // Enhance the prompt for better results
@@ -104,7 +114,36 @@ router.post('/image-to-image', async (req, res) => {
       cfg_scale: guidance_scale
     });
 
+    // Log image data format for debugging
+    console.log('Image data format:', {
+      type: typeof processedImageData,
+      isDataUrl: processedImageData.startsWith('data:image/'),
+      length: processedImageData.length,
+      preview: processedImageData.substring(0, 50) + '...' // Show just the beginning
+    });
+    
+    // Validate the data URL format
+    if (!processedImageData.startsWith('data:image/')) {
+      return res.status(400).json({
+        error: 'Invalid image format',
+        details: 'Image data must be a valid data URL starting with data:image/',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Set a timeout for the API call
+    const timeout = 50000; // 50 seconds
+    const timeoutId = setTimeout(() => {
+      console.log('API call timed out after', timeout, 'ms');
+      return res.status(504).json({
+        error: 'Request timed out',
+        details: 'The image generation request took too long to complete',
+        timestamp: new Date().toISOString()
+      });
+    }, timeout);
+    
     try {
+      // Call the image-to-image API with the data URL directly
       const result = await fal.subscribe("fal-ai/fast-lightning-sdxl/image-to-image", {
         input: {
           image_url: processedImageData,
@@ -117,6 +156,9 @@ router.post('/image-to-image', async (req, res) => {
           scheduler: "DPM++ 2M Karras"
         }
       });
+      
+      // Clear the timeout since the call completed successfully
+      clearTimeout(timeoutId);
 
       console.log('API response:', {
         success: true,
@@ -129,30 +171,61 @@ router.post('/image-to-image', async (req, res) => {
         throw new Error('No image generated in the response');
       }
 
-      return res.json({ imageUrl: result.data.images[0].url });
-    } catch (error) {
-      console.error('Fal.ai API error details:', {
-        status: error.status,
-        message: error.message,
-        body: JSON.stringify(error.body, null, 2),
-        validationDetails: error.body?.detail,
-        stack: error.stack
+      // Get the image URL from the API response
+      const imageUrl = result.data.images[0].url;
+      
+      // Generate a potential filename (for later use if saved)
+      const timestamp = Date.now();
+      const sanitizedPrompt = prompt.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+      const filename = `${sanitizedPrompt}_${timestamp}.png`;
+      
+      // Return the image URL and metadata for later saving
+      return res.json({ 
+        imageUrl: imageUrl,
+        metadata: {
+          prompt: prompt,
+          enhancedPrompt: enhancedPrompt,
+          timestamp: timestamp,
+          suggestedFilename: filename,
+          strength: strength,
+          steps: num_inference_steps,
+          guidance: guidance_scale
+        }
       });
-      throw error;
+    } catch (apiError) {
+      // Clear the timeout in case of error
+      clearTimeout(timeoutId);
+      
+      console.error('Fal.ai API error details:', {
+        status: apiError.status,
+        message: apiError.message,
+        body: apiError.body ? JSON.stringify(apiError.body, null, 2) : 'No body',
+        validationDetails: apiError.body?.detail,
+        stack: apiError.stack
+      });
+      
+      // Return a more specific error message
+      return res.status(500).json({
+        error: 'Failed to generate image with the AI service',
+        details: apiError.message,
+        timestamp: new Date().toISOString()
+      });
     }
   } catch (error) {
     console.error('Error in image-to-image generation:', {
       message: error.message,
       status: error.status,
-      body: JSON.stringify(error.body, null, 2),
+      body: error.body ? JSON.stringify(error.body, null, 2) : 'No body',
       validationDetails: error.body?.detail,
       stack: error.stack
     });
     
+    // Provide a more detailed error response
     return res.status(500).json({ 
       error: 'Failed to generate image',
       details: error.message,
-      validationErrors: error.body?.detail || []
+      validationErrors: error.body?.detail || [],
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -194,6 +267,97 @@ router.post('/upload-image', async (req, res) => {
     console.error('Error uploading image:', error);
     return res.status(500).json({ 
       error: 'Failed to upload image',
+      details: error.message
+    });
+  }
+});
+
+// New endpoint to save a generated image
+router.post('/save-generated-image', async (req, res) => {
+  try {
+    const { imageUrl, metadata, productData } = req.body;
+    
+    if (!imageUrl) {
+      return res.status(400).json({ error: 'No image URL provided' });
+    }
+    
+    // Create the patterns directory if it doesn't exist
+    const patternDir = path.join(process.cwd(), 'uploads', 'patterns');
+    if (!fs.existsSync(patternDir)) {
+      fs.mkdirSync(patternDir, { recursive: true });
+    }
+    
+    // Generate a filename
+    let filename;
+    if (metadata && metadata.suggestedFilename) {
+      filename = metadata.suggestedFilename;
+    } else {
+      const timestamp = Date.now();
+      const productName = productData?.name ? productData.name.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30) : 'product';
+      filename = `${productName}_${timestamp}.png`;
+    }
+    
+    const filePath = path.join(patternDir, filename);
+    const serverImagePath = `/uploads/patterns/${filename}`;
+    
+    console.log(`Saving generated image to ${filePath}`);
+    
+    // Download and save the image
+    return new Promise((resolve, reject) => {
+      const fileStream = fs.createWriteStream(filePath);
+      
+      https.get(imageUrl, (response) => {
+        response.pipe(fileStream);
+        
+        fileStream.on('finish', async () => {
+          fileStream.close();
+          console.log('Image saved successfully');
+          
+          // If product data was provided, save it to the database
+          if (productData) {
+            try {
+              // Prepare product data
+              const productToSave = {
+                ...productData,
+                imageUrl: serverImagePath, // Use the local server path for the image
+                id: productData.id || `PROD_${Date.now()}`,
+                createdAt: new Date(),
+                type: productData.type || 'pattern',
+                material: productData.material || 'cotton',
+                qualityGrade: productData.qualityGrade || 'premium'
+              };
+              
+              console.log('Saving product to database:', productToSave);
+              
+              // Create new product pattern
+              const newProductPattern = new ProductPattern(productToSave);
+              const savedProductPattern = await newProductPattern.save();
+              
+              console.log('Product saved successfully:', savedProductPattern);
+            } catch (productError) {
+              console.error('Error saving product to database:', productError);
+              // Continue with the response even if product saving fails
+            }
+          }
+          
+          res.json({ 
+            success: true, 
+            message: 'Image saved successfully',
+            localImagePath: serverImagePath
+          });
+          resolve();
+        });
+      }).on('error', (err) => {
+        fs.unlink(filePath, () => {}); // Delete the file if there's an error
+        console.error('Error downloading image:', err);
+        res.status(500).json({ error: 'Failed to download and save image' });
+        reject(err);
+      });
+    });
+  } catch (error) {
+    console.error('Error saving generated image:', error);
+    return res.status(500).json({ 
+      error: 'Failed to save image',
       details: error.message
     });
   }
