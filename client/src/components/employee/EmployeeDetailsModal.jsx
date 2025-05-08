@@ -200,907 +200,8 @@ ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 
   const handleExport = async (mode = 'download') => {
     try {
       toast.loading(mode === 'download' ? 'Generating PDF...' : 'Preparing to share via WhatsApp...');
-      // Create a temporary div to render the content that only includes employee details
-      const contentDiv = document.createElement('div');
-      contentDiv.style.position = 'absolute';
-      contentDiv.style.left = '-9999px';
-      contentDiv.style.top = '-9999px';
-      contentDiv.innerHTML = `
-        <div class="export-container">
-          <style>
-            @page {
-              size: A4;
-              margin: 1cm;
-            }
-            .export-container {
-              font-family: 'Segoe UI', Arial, sans-serif;
-              line-height: 1.6;
-              color: #000000 !important;
-              padding: 20px;
-              max-width: 800px;
-              margin: 0 auto;
-              background: #ffffff !important;
-            }
-            * {
-              box-sizing: border-box;
-              color: #000000 !important;
-            }
-            .header {
-              margin-bottom: 20px;
-              padding-bottom: 15px;
-              border-bottom: 3px solid #1a56db;
-              position: relative;
-              display: flex;
-              align-items: center;
-              page-break-after: avoid;
-            }
-            .header-logo {
-              width: 60px;
-              height: 60px;
-              border-radius: 50%;
-              background: #1a56db;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              margin-right: 15px;
-              color: white !important;
-              font-weight: bold;
-              font-size: 24px;
-            }
-            .header-text {
-              flex: 1;
-            }
-            .header h1 {
-              color: #1a56db !important;
-              margin: 0 0 5px 0;
-              font-size: 24pt;
-              font-weight: 700;
-            }
-            .header p {
-              color: #6b7280 !important;
-              margin: 0;
-              font-size: 10pt;
-            }
-            .profile-section {
-              display: flex;
-              gap: 20px;
-              margin-bottom: 20px;
-              padding: 20px;
-              background: linear-gradient(to right, #f8fafc, #f1f5f9);
-              border-radius: 10px;
-              box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-              page-break-after: avoid;
-            }
-            .profile-image-container {
-              width: 100px;
-              height: 100px;
-              border-radius: 50%;
-              overflow: hidden;
-              border: 3px solid #1a56db;
-              background: white;
-              box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            }
-            .profile-image {
-              width: 100%;
-              height: 100%;
-              object-fit: cover;
-            }
-            .profile-info {
-              flex: 1;
-            }
-            .profile-info h2 {
-              margin: 0 0 10px 0;
-              font-size: 18pt;
-              color: #111827 !important;
-            }
-            .profile-info p {
-              margin: 5px 0;
-              font-size: 11pt;
-              color: #4b5563 !important;
-              display: flex;
-              align-items: center;
-              gap: 5px;
-            }
-            .profile-info p.subtitle {
-              font-size: 12pt;
-              color: #1f2937 !important;
-              font-weight: 500;
-            }
-            .status-badge {
-              display: inline-block;
-              padding: 5px 12px;
-              border-radius: 30px;
-              font-size: 10pt;
-              font-weight: 600;
-              margin-top: 5px;
-              text-transform: uppercase;
-            }
-            .status-active {
-              background: #dcfce7;
-              color: #166534 !important;
-            }
-            .status-inactive {
-              background: #fee2e2;
-              color: #b91c1c !important;
-            }
-            .status-leave {
-              background: #fef9c3;
-              color: #854d0e !important;
-            }
-            .section {
-              margin-bottom: 25px;
-              page-break-inside: avoid;
-            }
-            .section-title {
-              position: relative;
-              color: #1e40af !important;
-              font-size: 14pt;
-              font-weight: bold;
-              margin-bottom: 15px;
-              padding-bottom: 10px;
-              display: flex;
-              align-items: center;
-              gap: 8px;
-            }
-            .section-title::after {
-              content: "";
-              position: absolute;
-              bottom: 0;
-              left: 0;
-              width: 100%;
-              height: 1px;
-              background: linear-gradient(to right, #1a56db, #dbeafe);
-            }
-            .section-title-icon {
-              display: inline-flex;
-              width: 24px;
-              height: 24px;
-              background: #dbeafe;
-              border-radius: 50%;
-              align-items: center;
-              justify-content: center;
-              color: #1e40af !important;
-              font-size: 12pt;
-              font-weight: bold;
-            }
-            .section-content {
-              padding: 0;
-            }
-            .grid {
-              display: grid;
-              grid-template-columns: repeat(2, 1fr);
-              gap: 15px;
-              margin-bottom: 20px;
-            }
-            .info-item {
-              display: flex;
-              flex-direction: column;
-              gap: 5px;
-              background: #f9fafb;
-              padding: 10px 15px;
-              border-radius: 8px;
-              border-left: 3px solid #1a56db;
-            }
-            .info-label {
-              font-weight: bold;
-              color: #6b7280 !important;
-              font-size: 9pt;
-              text-transform: uppercase;
-              letter-spacing: 0.05em;
-            }
-            .info-value {
-              color: #111827 !important;
-              font-size: 11pt;
-              font-weight: 500;
-            }
-            .attendance-summary {
-              background: #f9fafb;
-              padding: 15px;
-              border-radius: 8px;
-              margin-bottom: 20px;
-              page-break-inside: avoid;
-            }
-            .attendance-header {
-              display: flex;
-              justify-content: space-between;
-              margin-bottom: 10px;
-              padding-bottom: 10px;
-                margin: 1cm;
-              }
-              .export-container {
-                font-family: 'Segoe UI', Arial, sans-serif;
-                line-height: 1.6;
-                color: #000000 !important;
-                padding: 20px;
-                max-width: 800px;
-                margin: 0 auto;
-                background: #ffffff !important;
-              }
-              * {
-                box-sizing: border-box;
-                color: #000000 !important;
-              }
-              .header {
-                margin-bottom: 20px;
-                padding-bottom: 15px;
-                border-bottom: 3px solid #1a56db;
-                position: relative;
-                display: flex;
-                align-items: center;
-                page-break-after: avoid;
-              }
-              .header-logo {
-                width: 60px;
-                height: 60px;
-                border-radius: 50%;
-                background: #1a56db;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin-right: 15px;
-                color: white !important;
-                font-weight: bold;
-                font-size: 24px;
-              }
-              .header-text {
-                flex: 1;
-              }
-              .header h1 {
-                color: #1a56db !important;
-                margin: 0 0 5px 0;
-                font-size: 24pt;
-                font-weight: 700;
-              }
-              .header p {
-                color: #6b7280 !important;
-                margin: 0;
-                font-size: 10pt;
-              }
-              .profile-section {
-                display: flex;
-                gap: 20px;
-                margin-bottom: 20px;
-                padding: 20px;
-                background: linear-gradient(to right, #f8fafc, #f1f5f9);
-                border-radius: 10px;
-                box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-                page-break-after: avoid;
-              }
-              .profile-image-container {
-                width: 100px;
-                height: 100px;
-                border-radius: 50%;
-                overflow: hidden;
-                border: 3px solid #1a56db;
-                background: white;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-              }
-              .profile-image {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-              }
-              .profile-info {
-                flex: 1;
-              }
-              .profile-info h2 {
-                margin: 0 0 10px 0;
-                font-size: 18pt;
-                color: #111827 !important;
-              }
-              .profile-info p {
-                margin: 5px 0;
-                font-size: 11pt;
-                color: #4b5563 !important;
-                display: flex;
-                align-items: center;
-                gap: 5px;
-              }
-              .profile-info p.subtitle {
-                font-size: 12pt;
-                color: #1f2937 !important;
-                font-weight: 500;
-              }
-              .status-badge {
-                display: inline-block;
-                padding: 5px 12px;
-                border-radius: 30px;
-                font-size: 10pt;
-                font-weight: 600;
-                margin-top: 5px;
-                text-transform: uppercase;
-              }
-              .status-active {
-                background: #dcfce7;
-                color: #166534 !important;
-              }
-              .status-inactive {
-                background: #fee2e2;
-                color: #b91c1c !important;
-              }
-              .status-leave {
-                background: #fef9c3;
-                color: #854d0e !important;
-              }
-              .section {
-                margin-bottom: 25px;
-                page-break-inside: avoid;
-              }
-              .section-title {
-                position: relative;
-                color: #1e40af !important;
-                font-size: 14pt;
-                font-weight: bold;
-                margin-bottom: 15px;
-                padding-bottom: 10px;
-                display: flex;
-                align-items: center;
-                gap: 8px;
-              }
-              .section-title::after {
-                content: "";
-                position: absolute;
-                bottom: 0;
-                left: 0;
-                width: 100%;
-                height: 1px;
-                background: linear-gradient(to right, #1a56db, #dbeafe);
-              }
-              .section-title-icon {
-                display: inline-flex;
-                width: 24px;
-                height: 24px;
-                background: #dbeafe;
-                border-radius: 50%;
-                align-items: center;
-                justify-content: center;
-                color: #1e40af !important;
-                font-size: 12pt;
-                font-weight: bold;
-              }
-              .section-content {
-                padding: 0;
-              }
-              .grid {
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
-                gap: 15px;
-                margin-bottom: 20px;
-              }
-              .info-item {
-                display: flex;
-                flex-direction: column;
-                gap: 5px;
-                background: #f9fafb;
-                padding: 10px 15px;
-                border-radius: 8px;
-                border-left: 3px solid #1a56db;
-              }
-              .info-label {
-                font-weight: bold;
-                color: #6b7280 !important;
-                font-size: 9pt;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-              }
-              .info-value {
-                color: #111827 !important;
-                font-size: 11pt;
-                font-weight: 500;
-              }
-              .attendance-summary {
-                background: #f9fafb;
-                padding: 15px;
-                border-radius: 8px;
-                margin-bottom: 20px;
-                page-break-inside: avoid;
-              }
-              .attendance-header {
-                display: flex;
-                justify-content: space-between;
-                margin-bottom: 10px;
-                padding-bottom: 10px;
-              margin: 1cm;
-            }
-            .export-container {
-              font-family: 'Segoe UI', Arial, sans-serif;
-              line-height: 1.6;
-              color: #000000 !important;
-              padding: 20px;
-              max-width: 800px;
-              margin: 0 auto;
-              background: #ffffff !important;
-            }
-            * {
-              box-sizing: border-box;
-              color: #000000 !important;
-            }
-            .header {
-              margin-bottom: 20px;
-              padding-bottom: 15px;
-              border-bottom: 3px solid #1a56db;
-              position: relative;
-              display: flex;
-              align-items: center;
-              page-break-after: avoid;
-            }
-            .header-logo {
-              width: 60px;
-              height: 60px;
-              border-radius: 50%;
-              background: #1a56db;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              margin-right: 15px;
-              color: white !important;
-              font-weight: bold;
-              font-size: 24px;
-            }
-            .header-text {
-              flex: 1;
-            }
-            .header h1 {
-              color: #1a56db !important;
-              margin: 0 0 5px 0;
-              font-size: 24pt;
-              font-weight: 700;
-            }
-            .header p {
-              color: #6b7280 !important;
-              margin: 0;
-              font-size: 10pt;
-            }
-            .profile-section {
-              display: flex;
-              gap: 20px;
-              margin-bottom: 20px;
-              padding: 20px;
-              background: linear-gradient(to right, #f8fafc, #f1f5f9);
-              border-radius: 10px;
-              box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-              page-break-after: avoid;
-            }
-            .profile-image-container {
-              width: 100px;
-              height: 100px;
-              border-radius: 50%;
-              overflow: hidden;
-              border: 3px solid #1a56db;
-              background: white;
-              box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            }
-            .profile-image {
-              width: 100%;
-              height: 100%;
-              object-fit: cover;
-            }
-            .profile-info {
-              flex: 1;
-            }
-            .profile-info h2 {
-              margin: 0 0 10px 0;
-              font-size: 18pt;
-              color: #111827 !important;
-            }
-            .profile-info p {
-              margin: 5px 0;
-              font-size: 11pt;
-              color: #4b5563 !important;
-              display: flex;
-              align-items: center;
-              gap: 5px;
-            }
-            .profile-info p.subtitle {
-              font-size: 12pt;
-              color: #1f2937 !important;
-              font-weight: 500;
-            }
-            .status-badge {
-              display: inline-block;
-              padding: 5px 12px;
-              border-radius: 30px;
-              font-size: 10pt;
-              font-weight: 600;
-              margin-top: 5px;
-              text-transform: uppercase;
-            }
-            .status-active {
-              background: #dcfce7;
-              color: #166534 !important;
-            }
-            .status-inactive {
-              background: #fee2e2;
-              color: #b91c1c !important;
-            }
-            .status-leave {
-              background: #fef9c3;
-              color: #854d0e !important;
-            }
-            .section {
-              margin-bottom: 25px;
-              page-break-inside: avoid;
-            }
-            .section-title {
-              position: relative;
-              color: #1e40af !important;
-              font-size: 14pt;
-              font-weight: bold;
-              margin-bottom: 15px;
-              padding-bottom: 10px;
-              display: flex;
-              align-items: center;
-              gap: 8px;
-            }
-            .section-title::after {
-              content: "";
-              position: absolute;
-              bottom: 0;
-              left: 0;
-              width: 100%;
-              height: 1px;
-              background: linear-gradient(to right, #1a56db, #dbeafe);
-            }
-            .section-title-icon {
-              display: inline-flex;
-              width: 24px;
-              height: 24px;
-              background: #dbeafe;
-              border-radius: 50%;
-              align-items: center;
-              justify-content: center;
-              color: #1e40af !important;
-              font-size: 12pt;
-              font-weight: bold;
-            }
-            .section-content {
-              padding: 0;
-            }
-            .grid {
-              display: grid;
-              grid-template-columns: repeat(2, 1fr);
-              gap: 15px;
-              margin-bottom: 20px;
-            }
-            .info-item {
-              display: flex;
-              flex-direction: column;
-              gap: 5px;
-              background: #f9fafb;
-              padding: 10px 15px;
-              border-radius: 8px;
-              border-left: 3px solid #1a56db;
-            }
-            .info-label {
-              font-weight: bold;
-              color: #6b7280 !important;
-              font-size: 9pt;
-              text-transform: uppercase;
-              letter-spacing: 0.05em;
-            }
-            .info-value {
-              color: #111827 !important;
-              font-size: 11pt;
-              font-weight: 500;
-            }
-            .attendance-summary {
-              background: #f9fafb;
-              padding: 15px;
-              border-radius: 8px;
-              margin-bottom: 20px;
-              page-break-inside: avoid;
-            }
-            .attendance-header {
-              display: flex;
-              justify-content: space-between;
-              margin-bottom: 10px;
-              padding-bottom: 10px;
-              border-bottom: 1px solid #e5e7eb;
-            }
-            .attendance-title {
-              font-size: 14pt;
-              font-weight: bold;
-              color: #1e40af !important;
-            }
-            .attendance-date {
-              font-size: 10pt;
-              color: #6b7280 !important;
-            }
-            .attendance-stats {
-              display: flex;
-              flex-wrap: wrap;
-              gap: 20px;
-              justify-content: space-between;
-            }
-            .attendance-stat {
-              flex: 1;
-              min-width: 120px;
-            }
-            .attendance-stat-label {
-              font-size: 9pt;
-              color: #6b7280 !important;
-              margin-bottom: 5px;
-            }
-            .attendance-stat-value {
-              font-size: 16pt;
-              font-weight: bold;
-              color: #1e40af !important;
-            }
-            .attendance-stat-subtext {
-              font-size: 8pt;
-              color: #9ca3af !important;
-            }
-            .attendance-table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 15px;
-              font-size: 9pt;
-              page-break-inside: auto;
-              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-              border-radius: 8px;
-              overflow: hidden;
-            }
-            .attendance-table thead {
-              display: table-header-group;
-            }
-            .attendance-table th,
-            .attendance-table td {
-              border: 1px solid #e5e7eb;
-              padding: 8px 12px;
-              text-align: left;
-              color: #000000 !important;
-            }
-            .attendance-table th {
-              background: #000000;
-              font-weight: 600;
-              color: #ffffff !important;
-              text-transform: uppercase;
-              letter-spacing: 0.05em;
-              font-size: 9pt;
-            }
-            .attendance-table tr:nth-child(even) {
-              background: #f9fafb;
-            }
-            .attendance-table tr:hover {
-              background: #f3f4f6;
-            }
-            .attendance-table tr {
-              page-break-inside: avoid;
-              page-break-after: auto;
-            }
-            .attendance-table td:first-child {
-              font-weight: 600;
-            }
-            .footer {
-              margin-top: 30px;
-              padding-top: 15px;
-              border-top: 1px solid #e5e7eb;
-              text-align: center;
-              color: #6b7280 !important;
-              font-size: 9pt;
-              page-break-inside: avoid;
-              display: flex;
-              flex-direction: column;
-              gap: 5px;
-            }
-            .footer-logo {
-              font-size: 12pt;
-              font-weight: bold;
-              color: #1e40af !important;
-              margin-bottom: 5px;
-            }
-            .page-break {
-              page-break-before: always;
-            }
-            .status-present {
-              color: #166534 !important;
-              font-weight: 600;
-            }
-            .status-weekend {
-              color: #9ca3af !important;
-              font-style: italic;
-            }
-            .status-absent {
-              color: #b91c1c !important;
-              font-weight: 600;
-            }
-            .watermark {
-              position: fixed;
-              top: 50%;
-              left: 50%;
-              transform: translate(-50%, -50%) rotate(-45deg);
-              font-size: 80pt;
-              color: rgba(0, 0, 0, 0.03) !important;
-              z-index: -1;
-              white-space: nowrap;
-            }
-          </style>
-
-          <div class="watermark">TEXTLAIRE CONFIDENTIAL</div>
-          <div class="header">
-            <div class="header-logo">TL</div>
-            <div class="header-text">
-              <h1 style="margin: 0; color: #1a56db; font-size: 24px;">Textlaire</h1>
-              <h2 style="margin: 4px 0; color: #374151; font-size: 18px;">${employee.name} - Employee Details</h2>
-              <p style="margin: 0; color: #6b7280; font-size: 14px;">Generated on ${new Date().toLocaleDateString('en-IN', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              })}</p>
-            </div>
-          </div>
-          </div>
-
-          <div class="profile-section">
-            <div class="profile-image-container">
-              <img src="${getImageUrl(employee.image)}" alt="${employee.name}" class="profile-image" crossorigin="anonymous" />
-            </div>
-            <div class="profile-info">
-              <h2>${employee.name}</h2>
-              <p class="subtitle">${employee.position}</p>
-              <p>${employee.department}</p>
-              <div class="status-badge ${
-                employee.status === 'Active' ? 'status-active' : 
-                employee.status === 'Inactive' ? 'status-inactive' : 
-                employee.status === 'On Leave' ? 'status-leave' : ''
-              }">
-                ${employee.status}
-              </div>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="section-title">
-              <span class="section-title-icon">👤</span>
-              Personal Information
-            </div>
-            <div class="section-content">
-              <div class="grid">
-                <div class="info-item">
-                  <span class="info-label">Employee ID</span>
-                  <span class="info-value">${employee.employeeID}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Email</span>
-                  <span class="info-value">${employee.email || 'N/A'}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Phone</span>
-                  <span class="info-value">${employee.phoneNumber || 'N/A'}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Emergency Contact</span>
-                  <span class="info-value">${employee.emergencyContact || 'N/A'}</span>
-                </div>
-                ${employee.address ? `
-                <div class="info-item" style="grid-column: span 2;">
-                  <span class="info-label">Address</span>
-                  <span class="info-value">${employee.address}</span>
-                </div>
-                ` : ''}
-              </div>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="section-title">
-              <span class="section-title-icon">💼</span>
-              Employment Details
-            </div>
-            <div class="section-content">
-              <div class="grid">
-                <div class="info-item">
-                  <span class="info-label">Department</span>
-                  <span class="info-value">${employee.department}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Position</span>
-                  <span class="info-value">${employee.position}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Work Type</span>
-                  <span class="info-value">${employee.workType || 'N/A'}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Joining Date</span>
-                  <span class="info-value">${formatDate(employee.joiningDate)}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Salary</span>
-                  <span class="info-value">₹${employee.salary.toLocaleString()}</div>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Status</span>
-                  <span class="info-value">${employee.status}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          ${employee.bankName || employee.accountNumber || employee.accountHolderName || employee.ifscCode ? `
-          <div class="section">
-            <div class="section-title">
-              <span class="section-title-icon">🏦</span>
-              Bank Details
-            </div>
-            <div class="section-content">
-              <div class="grid">
-                <div class="info-item">
-                  <span class="info-label">Bank Name</span>
-                  <span class="info-value">${employee.bankName || 'N/A'}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Account Number</span>
-                  <span class="info-value">${employee.accountNumber || 'N/A'}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Account Holder</span>
-                  <span class="info-value">${employee.accountHolderName || 'N/A'}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">IFSC Code</span>
-                  <span class="info-value">${employee.ifscCode || 'N/A'}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          ` : ''}
-
-          ${employee.homeAddress || employee.homePhone || employee.homeEmail ? `
-          <div class="section">
-            <div class="section-title">
-              <span class="section-title-icon">🏡</span>
-              Home Details
-            </div>
-            <div class="section-content">
-              <div class="grid">
-                ${employee.homeAddress ? `
-                <div class="info-item" style="grid-column: span 2;">
-                  <span class="info-label">Home Address</span>
-                  <span class="info-value">${employee.homeAddress}</span>
-                </div>
-                ` : ''}
-                <div class="info-item">
-                  <span class="info-label">Home Phone</span>
-                  <span class="info-value">${employee.homePhone || 'N/A'}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Home Email</span>
-                  <span class="info-value">${employee.homeEmail || 'N/A'}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          ` : ''}
-
-          <!-- Attendance section removed per user request -->
-
-          <div class="footer">
-            <div class="footer-logo">TEXTLAIRE</div>
-            <p>This document is computer-generated and does not require a signature.</p>
-            <p>Confidential - For authorized personnel only.</p>
-            <p>&copy; Textlaire ${new Date().getFullYear()} - All rights reserved.</p>
-          </div>
-        </div>
-      `;
-
-      // Add the content to the document for rendering
-      document.body.appendChild(contentDiv);
-
-      // Wait for content to render
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Use html2canvas to convert the div to an image
-      const canvas = await html2canvas(contentDiv, {
-        scale: 2, // Higher scale for better quality
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff'
-      });
-
-      // Create PDF document with metadata
+      
+      // Create a PDF document with A4 format
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -1117,61 +218,249 @@ ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 
         creator: 'Textlaire HRMS'
       });
       
-      // Add custom fonts if needed
-      pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(35, 31, 32);
-
-      // Add the image to the PDF
-      const imgData = canvas.toDataURL('image/png');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-      const imgX = (pdfWidth - imgWidth * ratio) / 2;
-      const imgY = 0;
-
-      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+      // Create a temporary div to render the content
+      const contentDiv = document.createElement('div');
+      contentDiv.style.position = 'absolute';
+      contentDiv.style.left = '-9999px';
+      contentDiv.style.top = '-9999px';
+      contentDiv.style.width = '794px'; // A4 width in pixels at 96 DPI
+      contentDiv.style.backgroundColor = '#ffffff';
       
-      // Get total pages based on content height
-      const totalPages = Math.ceil(imgHeight * ratio / pdfHeight);
-      
-      // Add footer to each page without page numbers
-      for (let i = 1; i <= totalPages; i++) {
-        pdf.setPage(i);
-        
-        // Add Textlaire footer
-        pdf.setFontSize(8);
-        pdf.setTextColor(100, 100, 100);
-        pdf.text('Textlaire Confidential', 14, pdfHeight - 10);
-        pdf.text(`Generated on ${new Date().toLocaleDateString()}`, pdfWidth - 14, pdfHeight - 10, { align: 'right' });
-      }
+      // Set inner HTML with styled content
+      contentDiv.innerHTML = `
+        <div class="export-container" style="font-family: Arial, sans-serif; line-height: 1.6; color: #000000; padding: 20px; background: #ffffff; width: 100%;">
+          <div style="margin-bottom: 20px; padding-bottom: 15px; border-bottom: 3px solid #1a56db; display: flex; align-items: center;">
+            <div style="width: 60px; height: 60px; border-radius: 50%; background: #1a56db; display: flex; align-items: center; justify-content: center; margin-right: 15px; color: white; font-weight: bold; font-size: 24px;">TL</div>
+            <div>
+              <h1 style="color: #1a56db; margin: 0 0 5px 0; font-size: 24px; font-weight: 700;">Textlaire</h1>
+              <h2 style="margin: 4px 0; color: #374151; font-size: 18px;">${employee.name} - Employee Details</h2>
+              <p style="margin: 0; color: #6b7280; font-size: 14px;">Generated on ${new Date().toLocaleDateString('en-IN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}</p>
+            </div>
+          </div>
 
-      // Create a sanitized filename with Textlaire branding
-      const sanitizedName = employee.name.replace(/[^a-zA-Z0-9]/g, '_');
-      const filename = `Textlaire_${sanitizedName}_Employee_Details.pdf`;
+          <div style="display: flex; gap: 20px; margin-bottom: 20px; padding: 20px; background: #f8fafc; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+            <div style="width: 100px; height: 100px; border-radius: 50%; overflow: hidden; border: 3px solid #1a56db; background: white;">
+              <img 
+                src="${getImageUrl(employee.image)}" 
+                alt="${employee.name}" 
+                style="width: 100%; height: 100%; object-fit: cover;"
+                crossorigin="anonymous" 
+                onerror="this.onerror=null; this.src='${defaultProfileImage}';"
+              />
+            </div>
+            <div>
+              <h2 style="margin: 0 0 10px 0; font-size: 22px; color: #111827;">${employee.name}</h2>
+              <p style="margin: 5px 0; font-size: 18px; color: #1f2937; font-weight: 500;">${employee.position}</p>
+              <p style="margin: 5px 0; font-size: 16px; color: #4b5563;">${employee.department}</p>
+              <div style="display: inline-block; padding: 5px 12px; border-radius: 30px; font-size: 14px; font-weight: 600; margin-top: 5px; text-transform: uppercase; background: ${
+                employee.status === 'Active' ? '#dcfce7; color: #166534' : 
+                employee.status === 'Inactive' ? '#fee2e2; color: #b91c1c' : 
+                employee.status === 'On Leave' ? '#fef9c3; color: #854d0e' : '#f3f4f6; color: #111827'
+              }">
+                ${employee.status}
+              </div>
+            </div>
+          </div>
 
-      // Clean up
-      document.body.removeChild(contentDiv);
+          <!-- Personal Information Section -->
+          <div style="margin-bottom: 25px;">
+            <div style="position: relative; color: #1e40af; font-size: 18px; font-weight: bold; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #dbeafe;">
+              Personal Information
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 20px;">
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Employee ID</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.employeeID || 'N/A'}</div>
+              </div>
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Phone Number</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.phoneNumber || 'N/A'}</div>
+              </div>
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Email</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.email || 'N/A'}</div>
+              </div>
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Address</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.address || 'N/A'}</div>
+              </div>
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Emergency Contact</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.emergencyContact || 'N/A'}</div>
+              </div>
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Date of Birth</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.dateOfBirth ? formatDate(employee.dateOfBirth) : 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Employment Details Section -->
+          <div style="margin-bottom: 25px;">
+            <div style="position: relative; color: #1e40af; font-size: 18px; font-weight: bold; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #dbeafe;">
+              Employment Details
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 20px;">
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Department</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.department || 'N/A'}</div>
+              </div>
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Position</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.position || 'N/A'}</div>
+              </div>
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Work Type</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.workType || 'N/A'}</div>
+              </div>
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Status</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.status || 'N/A'}</div>
+              </div>
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Joining Date</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.joiningDate ? formatDate(employee.joiningDate) : 'N/A'}</div>
+              </div>
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Salary (CTC)</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">₹${employee.salary ? employee.salary.toLocaleString() : 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bank Details Section -->
+          <div style="margin-bottom: 25px;">
+            <div style="position: relative; color: #1e40af; font-size: 18px; font-weight: bold; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #dbeafe;">
+              Bank Details
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 20px;">
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Bank Name</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.bankName || 'N/A'}</div>
+              </div>
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Account Number</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.accountNumber || 'N/A'}</div>
+              </div>
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Account Holder</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.accountHolderName || employee.name}</div>
+              </div>
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">IFSC Code</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.ifscCode || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Home Details Section -->
+          <div style="margin-bottom: 25px;">
+            <div style="position: relative; color: #1e40af; font-size: 18px; font-weight: bold; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #dbeafe;">
+              Home Details
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 20px;">
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Home Address</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.homeAddress || 'N/A'}</div>
+              </div>
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Home Phone</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.homePhone || 'N/A'}</div>
+              </div>
+              <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
+                <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Home Email</div>
+                <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.homeEmail || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 12px;">
+            <div style="font-size: 16px; font-weight: bold; color: #1e40af; margin-bottom: 5px;">Textlaire HR Management System</div>
+            <div>This document is confidential and intended only for authorized personnel.</div>
+            <div>Generated on ${new Date().toLocaleDateString('en-IN', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}</div>
+          </div>
+        </div>
+      `;
       
-      if (mode === 'download') {
-        // Save the PDF
-        pdf.save(filename);
-        
-        // Show success message
-        toast.dismiss();
-        toast.success('Employee details exported as PDF!', {
-          duration: 3000
-        });
-      } else if (mode === 'whatsapp') {
-        // Clean up the temporary div only if it was added to the document
-        if (document.body.contains(contentDiv)) {
-          document.body.removeChild(contentDiv);
+      // Append to the body temporarily
+      document.body.appendChild(contentDiv);
+      
+      // Function to handle image loading and PDF generation
+      const generatePDF = async () => {
+        try {
+          // Allow some time for images to load
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Capture using html2canvas
+          const canvas = await html2canvas(contentDiv.querySelector('.export-container'), {
+            scale: 2, // Higher scale for better quality
+            useCORS: true,
+            logging: false,
+            backgroundColor: '#ffffff',
+            allowTaint: true
+          });
+          
+          // Get canvas data
+          const imgData = canvas.toDataURL('image/jpeg', 1.0);
+          
+          // Calculate dimensions for the PDF
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const pdfHeight = pdf.internal.pageSize.getHeight();
+          const imgWidth = canvas.width;
+          const imgHeight = canvas.height;
+          const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+          
+          // Center the image horizontally
+          const imgX = (pdfWidth - imgWidth * ratio) / 2;
+          let imgY = 0;
+          
+          // Add the image to the PDF
+          pdf.addImage(imgData, 'JPEG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+          
+          // Create a sanitized filename with Textlaire branding
+          const sanitizedName = employee.name.replace(/[^a-zA-Z0-9]/g, '_');
+          const filename = `Textlaire_${sanitizedName}_Employee_Details.pdf`;
+          
+          // Clean up - remove the temporary div
+          if (document.body.contains(contentDiv)) {
+            document.body.removeChild(contentDiv);
+          }
+          
+          if (mode === 'download') {
+            // Save the PDF
+            pdf.save(filename);
+            
+            // Show success message
+            toast.dismiss();
+            toast.success('Employee details exported as PDF!');
+          } else if (mode === 'whatsapp') {
+            // For WhatsApp, we'll just share text directly
+            openWhatsAppWithMessage(employee);
+          }
+        } catch (err) {
+          console.error('HTML2Canvas or PDF generation error:', err);
+          // Clean up the temporary element
+          if (document.body.contains(contentDiv)) {
+            document.body.removeChild(contentDiv);
+          }
+          throw err;
         }
-        
-        // For WhatsApp, we don't need the PDF, just share text directly
-        openWhatsAppWithMessage(employee);
-      }
+      };
+      
+      // Generate the PDF
+      await generatePDF();
+      
     } catch (error) {
       console.error('Error exporting PDF:', error);
       toast.dismiss();
@@ -1610,7 +899,7 @@ ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 
                             </div>
                             <div>
                               <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Account Holder</div>
-                              <div className="text-sm sm:text-base text-gray-900 dark:text-white">{employee.accountHolderName || 'N/A'}</div>
+                              <div className="text-sm sm:text-base text-gray-900 dark:text-white">{employee.accountHolderName || employee.name}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 sm:gap-3">
