@@ -140,10 +140,8 @@ function Dashboard() {
   const dashboardTabs = [
     { id: 'attendance', label: 'Attendance', icon: <FaUserCheck /> },
     { id: 'workforce', label: 'Workforce', icon: <FaUsers /> },
-    { id: 'payroll', label: 'Payroll', icon: <FaMoneyBillWave /> },
     { id: 'rawmaterials', label: 'Raw Materials', icon: <FaBoxes /> },
-    { id: 'products', label: 'Products', icon: <FaTshirt /> },
-    { id: 'analytics', label: 'Analytics', icon: <FaChartLine />, comingSoon: true }
+    { id: 'products', label: 'Products', icon: <FaTshirt /> }
   ];
 
   // Placeholder data for future dashboards
@@ -216,13 +214,9 @@ function Dashboard() {
                     ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' 
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                   }`}
-                disabled={tab.comingSoon}
               >
                 {tab.icon}
                 <span>{tab.label}</span>
-                {tab.comingSoon && (
-                  <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs px-1 rounded-full text-[0.6rem]">Soon</span>
-                )}
               </button>
             ))}
           </div>
@@ -317,18 +311,6 @@ function Dashboard() {
               </h2>
               <div className="flex-1">
                 <WorkforceDashboard />
-              </div>
-            </div>
-          )}
-
-          {/* Payroll Tab */}
-          {activeTab === 'payroll' && (
-            <div className="flex flex-col h-full">
-              <h2 className="text-lg font-semibold flex items-center text-gray-800 dark:text-white mb-3">
-                <FaMoneyBillWave className="mr-2 text-blue-500" /> Payroll Management
-              </h2>
-              <div className="flex-1">
-                <PayrollDashboard />
               </div>
             </div>
           )}

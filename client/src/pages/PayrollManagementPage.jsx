@@ -426,6 +426,16 @@ useEffect(() => {
     setRefreshing(true);
     try {
       await fetchPayrolls();
+      
+      // If we have a selected payroll, refresh it with recalculated values
+      if (selectedPayroll) {
+        const response = await axios.get(`/api/payroll/${selectedPayroll._id}`);
+        if (response.data.success) {
+          const refreshedPayroll = recalculatePayrollValues(response.data.data);
+          setSelectedPayroll(refreshedPayroll);
+        }
+      }
+      
       setLastRefreshed(new Date());
     } catch (error) {
       console.error('Error refreshing data:', error);
@@ -439,7 +449,13 @@ useEffect(() => {
       setLoading(true);
       const response = await axios.get(`/api/payroll?month=${filterMonth}&year=${filterYear}`);
       if (response.data.success) {
-        setPayrolls(response.data.data);
+        // Process the payroll data to ensure correct values
+        const processedPayrolls = response.data.data.map(payroll => {
+          return recalculatePayrollValues(payroll);
+        });
+        
+        // Set the processed payrolls
+        setPayrolls(processedPayrolls);
       }
     } catch (error) {
       console.error('Error fetching payrolls:', error);
@@ -448,28 +464,175 @@ useEffect(() => {
       setLoading(false);
     }
   };
-
-
-
-  const handleViewPayroll = (payroll) => {
-    setSelectedPayroll(payroll);
-    setShowDetailModal(true);
+  
+  // Function to recalculate/fix payroll values to match the detail view
+  const recalculatePayrollValues = (payroll) => {
+    // Get actual days in the month
+    const daysInMonth = new Date(payroll.year, payroll.month, 0).getDate();
+    
+    // Calculate working days (present + late)
+    const present = payroll.attendanceSummary?.present || 0;
+    const late = payroll.attendanceSummary?.late || 0;
+    const workingDays = present + late;
+    
+    // Calculate proration factor
+    const prorationFactor = workingDays / daysInMonth;
+    
+    // Calculate base salary components
+    const basicSalary = parseFloat(payroll.basicSalary || 5999);
+    
+    // Calculate allowances
+    let totalAllowances = 0;
+    if (payroll.allowances) {
+      Object.values(payroll.allowances).forEach(value => {
+        totalAllowances += parseFloat(value || 0);
+      });
+    }
+    
+    // Calculate additional earnings
+    const bonus = parseFloat(payroll.bonus || 0);
+    const overtime = parseFloat(payroll.overtime?.amount || 0);
+    
+    // Calculate full month gross salary
+    const fullMonthGross = basicSalary + totalAllowances + bonus + overtime;
+    
+    // Calculate prorated gross salary
+    const proratedGross = (fullMonthGross * prorationFactor).toFixed(2);
+    
+    // Set default values for deductions if they don't exist
+    const deductions = {
+      professionalTax: 150,
+      incomeTax: 0,
+      providentFund: 719.88,
+      healthInsurance: 299.95,
+      loanRepayment: 0,
+      absentDeduction: 0,
+      lateDeduction: 193.52,
+      other: 0,
+      ...(payroll.deductions || {})
+    };
+    
+    // Calculate total deductions
+    let totalDeductions = 0;
+    Object.values(deductions).forEach(value => {
+      totalDeductions += parseFloat(value || 0);
+    });
+    totalDeductions += parseFloat(payroll.leaveDeduction || 0);
+    
+    // Calculate net salary
+    const netSalary = (parseFloat(proratedGross) - totalDeductions).toFixed(2);
+    
+    // Return updated payroll with correct values
+    return {
+      ...payroll,
+      attendanceSummary: {
+        ...payroll.attendanceSummary,
+        workingDays: workingDays,
+        totalWorkingDays: daysInMonth
+      },
+      grossSalary: proratedGross,
+      totalDeductions: totalDeductions.toFixed(2),
+      netSalary: netSalary,
+      deductions: deductions
+    };
   };
 
-  const handleUpdateStatus = (payroll) => {
-    setSelectedPayroll(payroll);
+  // Add a useEffect to refresh data when modal closes
+  useEffect(() => {
+    if (!showDetailModal && selectedPayroll) {
+      // When modal closes, fetch fresh data to ensure UI is up to date
+      refreshData();
+    }
+  }, [showDetailModal]);
+
+  const handleViewPayroll = async (payroll) => {
+    // If we already have this payroll in our selectedPayroll state and it's updated, use that
+    if (selectedPayroll && selectedPayroll._id === payroll._id) {
+      setShowDetailModal(true);
+      return;
+    }
+    
+    try {
+      const toastId = toast.loading('Loading payroll details...');
+      // Fetch the latest data from the server
+      const response = await axios.get(`/api/payroll/${payroll._id}`);
+      if (response.data.success) {
+        // Use recalculated values to ensure consistency
+        const updatedPayroll = recalculatePayrollValues(response.data.data);
+        setSelectedPayroll(updatedPayroll);
+        setShowDetailModal(true);
+        toast.success('Payroll details loaded', { id: toastId });
+      } else {
+        toast.error('Failed to load payroll details', { id: toastId });
+      }
+    } catch (error) {
+      console.error('Error fetching payroll details:', error);
+      toast.error('Failed to load payroll details');
+      // Fall back to the existing data if fetch fails
+      setSelectedPayroll(payroll);
+      setShowDetailModal(true);
+    }
+  };
+
+  const handleUpdateStatus = async (payroll) => {
+    // First, check if this is the payroll being viewed in detail and use that if available
+    let updatedPayroll = payroll;
+    
+    if (selectedPayroll && selectedPayroll._id === payroll._id) {
+      updatedPayroll = selectedPayroll;
+    } else {
+      // Otherwise fetch the latest data from the server
+      try {
+        const response = await axios.get(`/api/payroll/${payroll._id}`);
+        if (response.data.success) {
+          // Use recalculated values to ensure consistency
+          updatedPayroll = recalculatePayrollValues(response.data.data);
+        }
+      } catch (error) {
+        console.error('Error fetching latest payroll data:', error);
+        // Continue with existing data if fetch fails
+      }
+    }
+    
+    setSelectedPayroll(updatedPayroll);
     setShowStatusModal(true);
   };
 
   const handleDeletePayroll = async (payrollId) => {
-    if (!window.confirm('Are you sure you want to update this payroll? This will recalculate all values.')) {
+    if (!window.confirm('Are you sure you want to recalculate this payroll? This will update all values.')) {
       return;
     }
 
     try {
-      // Since we use real-time calculation, just refresh the data
-      toast.success('Payroll recalculated successfully');
-      refreshData();
+      const toastId = toast.loading('Recalculating payroll...');
+      
+      // First get the latest data
+      const response = await axios.get(`/api/payroll/${payrollId}`);
+      if (response.data.success) {
+        // Apply recalculation
+        const recalculatedPayroll = recalculatePayrollValues(response.data.data);
+        
+        // If this is the same as our currently selected payroll, update that too
+        if (selectedPayroll && selectedPayroll._id === payrollId) {
+          setSelectedPayroll(recalculatedPayroll);
+        }
+        
+        // Update the payroll in our local state
+        setPayrolls(prevPayrolls => 
+          prevPayrolls.map(p => p._id === payrollId ? recalculatedPayroll : p)
+        );
+        
+        // Now save the recalculated data to the server
+        const updateResponse = await axios.put(`/api/payroll/${payrollId}`, recalculatedPayroll);
+        if (updateResponse.data.success) {
+          toast.success('Payroll recalculated successfully', { id: toastId });
+          refreshData(); // Refresh all data to ensure consistency
+        } else {
+          toast.error('Failed to save recalculated payroll', { id: toastId });
+        }
+      } else {
+        toast.error('Failed to recalculate payroll', { id: toastId });
+      }
     } catch (error) {
       console.error('Error recalculating payroll:', error);
       toast.error('Failed to recalculate payroll');
@@ -480,6 +643,26 @@ useEffect(() => {
     try {
       // Create a loading toast
       const toastId = toast.loading('Generating payslip...');
+      
+      // First, get the latest data for this payroll to ensure values are up-to-date
+      let currentPayroll = payroll;
+      
+      // If this is the selectedPayroll that's been edited in the PayrollDetail component, use that instead
+      if (selectedPayroll && selectedPayroll._id === payroll._id) {
+        currentPayroll = selectedPayroll;
+      } else {
+        // Otherwise fetch the latest data from the server
+        try {
+          const response = await axios.get(`/api/payroll/${payroll._id}`);
+          if (response.data.success) {
+            // Use recalculated values to ensure consistency
+            currentPayroll = recalculatePayrollValues(response.data.data);
+          }
+        } catch (error) {
+          console.error('Error fetching latest payroll data:', error);
+          // Continue with existing data if fetch fails
+        }
+      }
       
       // Import jsPDF and jsPDF-AutoTable libraries
       const { jsPDF } = await import('jspdf');
@@ -492,8 +675,8 @@ useEffect(() => {
       const currentYear = today.getFullYear();
       
       // Calculate correct working days for current month
-      let correctWorkingDays = payroll.attendanceSummary?.totalWorkingDays || 0;
-      let isCurrentMonth = parseInt(payroll.month) === currentMonth && parseInt(payroll.year) === currentYear;
+      let correctWorkingDays = currentPayroll.attendanceSummary?.totalWorkingDays || 0;
+      let isCurrentMonth = parseInt(currentPayroll.month) === currentMonth && parseInt(currentPayroll.year) === currentYear;
       
       // For current month, only count days up to today
       if (isCurrentMonth) {
@@ -529,7 +712,7 @@ useEffect(() => {
       // Payslip title
       doc.setFontSize(14);
       doc.setTextColor(0, 102, 204); // Blue
-      doc.text(`PAYSLIP - ${getMonthName(payroll.month).toUpperCase()} ${payroll.year}`, 105, 37, { align: 'center' });
+      doc.text(`PAYSLIP - ${getMonthName(currentPayroll.month).toUpperCase()} ${currentPayroll.year}`, 105, 37, { align: 'center' });
       
       // Create a 2-column layout for employee details and payment details
       autoTable(doc, {
@@ -542,27 +725,27 @@ useEffect(() => {
         body: [
           // Row 1
           [{ content: 'Name:', styles: { fontStyle: 'bold', fontSize: 9 } }, 
-           { content: payroll.employeeDetails?.name || 'N/A', styles: { fontSize: 9, overflow: 'ellipsize' } },
+           { content: currentPayroll.employeeDetails?.name || 'N/A', styles: { fontSize: 9, overflow: 'ellipsize' } },
            { content: 'Payment Status:', styles: { fontStyle: 'bold', fontSize: 9 } }, 
-           { content: payroll.paymentStatus || 'N/A', styles: { fontSize: 9, overflow: 'ellipsize' } }],
+           { content: currentPayroll.paymentStatus || 'N/A', styles: { fontSize: 9, overflow: 'ellipsize' } }],
           // Row 2
           [{ content: 'Employee ID:', styles: { fontStyle: 'bold', fontSize: 9 } }, 
-           { content: payroll.employeeDetails?.employeeID || 'N/A', styles: { fontSize: 9, overflow: 'ellipsize' } },
+           { content: currentPayroll.employeeDetails?.employeeID || 'N/A', styles: { fontSize: 9, overflow: 'ellipsize' } },
            { content: 'Payment Method:', styles: { fontStyle: 'bold', fontSize: 9 } }, 
            { content: 'Bank Transfer', styles: { fontSize: 9, overflow: 'ellipsize' } }],
           // Row 3
           [{ content: 'Department:', styles: { fontStyle: 'bold', fontSize: 9 } }, 
-           { content: payroll.employeeDetails?.department || 'N/A', styles: { fontSize: 9, overflow: 'ellipsize' } },
+           { content: currentPayroll.employeeDetails?.department || 'N/A', styles: { fontSize: 9, overflow: 'ellipsize' } },
            { content: 'Payment Date:', styles: { fontStyle: 'bold', fontSize: 9 } }, 
-           { content: payroll.paymentStatus === 'Paid' ? new Date().toLocaleDateString() : 'Not paid yet', styles: { fontSize: 9, overflow: 'ellipsize' } }],
+           { content: currentPayroll.paymentStatus === 'Paid' ? new Date().toLocaleDateString() : 'Not paid yet', styles: { fontSize: 9, overflow: 'ellipsize' } }],
           // Row 4
           [{ content: 'Position:', styles: { fontStyle: 'bold', fontSize: 9 } }, 
-           { content: payroll.employeeDetails?.position || 'N/A', styles: { fontSize: 9, overflow: 'ellipsize' } },
+           { content: currentPayroll.employeeDetails?.position || 'N/A', styles: { fontSize: 9, overflow: 'ellipsize' } },
            { content: 'Generation Date:', styles: { fontStyle: 'bold', fontSize: 9 } }, 
            { content: new Date().toLocaleDateString(), styles: { fontSize: 9, overflow: 'ellipsize' } }],
           // Row 5
           [{ content: 'Joining Date:', styles: { fontStyle: 'bold', fontSize: 9 } }, 
-           { content: payroll.employeeDetails?.joiningDate ? new Date(payroll.employeeDetails.joiningDate).toLocaleDateString() : 'N/A', styles: { fontSize: 9, overflow: 'ellipsize' } },
+           { content: currentPayroll.employeeDetails?.joiningDate ? new Date(currentPayroll.employeeDetails.joiningDate).toLocaleDateString() : 'N/A', styles: { fontSize: 9, overflow: 'ellipsize' } },
            { content: '', colSpan: 2, styles: { fontSize: 9 } }]
         ],
         styles: { cellPadding: 2 },
@@ -592,11 +775,11 @@ useEffect(() => {
           { content: 'Working Days', styles: { fontStyle: 'bold', fontSize: 9 } }
         ],
         [
-          { content: payroll.attendanceSummary?.present || 0, styles: { fontSize: 9 } },
-          { content: payroll.attendanceSummary?.absent || 0, styles: { fontSize: 9 } },
-          { content: payroll.attendanceSummary?.late || 0, styles: { fontSize: 9 } },
-          { content: payroll.attendanceSummary?.onLeave || 0, styles: { fontSize: 9 } },
-          { content: `${payroll.attendanceSummary?.workingDays || 0}/${isCurrentMonth ? currentDay : payroll.attendanceSummary?.totalWorkingDays || 0}`, styles: { fontSize: 9 } }
+          { content: currentPayroll.attendanceSummary?.present || 0, styles: { fontSize: 9 } },
+          { content: currentPayroll.attendanceSummary?.absent || 0, styles: { fontSize: 9 } },
+          { content: currentPayroll.attendanceSummary?.late || 0, styles: { fontSize: 9 } },
+          { content: currentPayroll.attendanceSummary?.onLeave || 0, styles: { fontSize: 9 } },
+          { content: `${currentPayroll.attendanceSummary?.workingDays || 0}/${isCurrentMonth ? currentDay : currentPayroll.attendanceSummary?.totalWorkingDays || 0}`, styles: { fontSize: 9 } }
         ]],
         theme: 'grid',
         styles: { halign: 'center', cellPadding: 2 },
@@ -622,26 +805,26 @@ useEffect(() => {
       
       // Earnings data
       const earningsData = [
-        [{ content: 'Basic Salary', styles: { fontStyle: 'bold' } }, formatRupee(payroll.basicSalary)],
-        [{ content: 'House Rent Allowance', styles: { fontStyle: 'bold' } }, formatRupee(payroll.allowances?.houseRent)],
-        [{ content: 'Medical Allowance', styles: { fontStyle: 'bold' } }, formatRupee(payroll.allowances?.medical)],
-        [{ content: 'Travel Allowance', styles: { fontStyle: 'bold' } }, formatRupee(payroll.allowances?.travel)],
-        [{ content: 'Food Allowance', styles: { fontStyle: 'bold' } }, formatRupee(payroll.allowances?.food)],
-        [{ content: 'Overtime', styles: { fontStyle: 'bold' } }, formatRupee(payroll.overtime?.amount)],
+        [{ content: 'Basic Salary', styles: { fontStyle: 'bold' } }, formatRupee(currentPayroll.basicSalary)],
+        [{ content: 'House Rent Allowance', styles: { fontStyle: 'bold' } }, formatRupee(currentPayroll.allowances?.houseRent)],
+        [{ content: 'Medical Allowance', styles: { fontStyle: 'bold' } }, formatRupee(currentPayroll.allowances?.medical)],
+        [{ content: 'Travel Allowance', styles: { fontStyle: 'bold' } }, formatRupee(currentPayroll.allowances?.travel)],
+        [{ content: 'Food Allowance', styles: { fontStyle: 'bold' } }, formatRupee(currentPayroll.allowances?.food)],
+        [{ content: 'Overtime', styles: { fontStyle: 'bold' } }, formatRupee(currentPayroll.overtime?.amount)],
         [{ content: 'Gross Earnings', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }, 
-         { content: formatRupee(payroll.grossSalary), styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }]
+         { content: formatRupee(currentPayroll.grossSalary), styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }]
       ];
       
       // Deductions data
       const deductionsData = [
-        [{ content: 'Professional Tax', styles: { fontStyle: 'bold' } }, formatRupee(payroll.deductions?.professionalTax)],
-        [{ content: 'Income Tax', styles: { fontStyle: 'bold' } }, formatRupee(payroll.deductions?.incomeTax)],
-        [{ content: 'Provident Fund', styles: { fontStyle: 'bold' } }, formatRupee(payroll.deductions?.providentFund)],
-        [{ content: 'Health Insurance', styles: { fontStyle: 'bold' } }, formatRupee(payroll.deductions?.healthInsurance)],
-        [{ content: 'Absent Deduction', styles: { fontStyle: 'bold' } }, formatRupee(payroll.deductions?.absentDeduction)],
-        [{ content: 'Late Deduction', styles: { fontStyle: 'bold' } }, formatRupee(payroll.deductions?.lateDeduction)],
+        [{ content: 'Professional Tax', styles: { fontStyle: 'bold' } }, formatRupee(currentPayroll.deductions?.professionalTax)],
+        [{ content: 'Income Tax', styles: { fontStyle: 'bold' } }, formatRupee(currentPayroll.deductions?.incomeTax)],
+        [{ content: 'Provident Fund', styles: { fontStyle: 'bold' } }, formatRupee(currentPayroll.deductions?.providentFund)],
+        [{ content: 'Health Insurance', styles: { fontStyle: 'bold' } }, formatRupee(currentPayroll.deductions?.healthInsurance)],
+        [{ content: 'Absent Deduction', styles: { fontStyle: 'bold' } }, formatRupee(currentPayroll.deductions?.absentDeduction)],
+        [{ content: 'Late Deduction', styles: { fontStyle: 'bold' } }, formatRupee(currentPayroll.deductions?.lateDeduction)],
         [{ content: 'Total Deductions', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }, 
-         { content: formatRupee(payroll.totalDeductions), styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }]
+         { content: formatRupee(currentPayroll.totalDeductions), styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }]
       ];
       
       // Create separate tables for earnings and deductions to avoid overflow issues
@@ -688,7 +871,7 @@ useEffect(() => {
           { content: 'NET SALARY', styles: { halign: 'center', fillColor: [52, 73, 94], textColor: [255, 255, 255], fontSize: 12 } }
         ]],
         body: [[
-          { content: formatRupee(payroll.netSalary), styles: { halign: 'center', fontStyle: 'bold', fontSize: 12 } }
+          { content: formatRupee(currentPayroll.netSalary), styles: { halign: 'center', fontStyle: 'bold', fontSize: 12 } }
         ]],
         theme: 'grid',
         tableWidth: 100,
@@ -704,10 +887,10 @@ useEffect(() => {
           { content: 'Bank Details', colSpan: 2, styles: { halign: 'center', fillColor: [108, 117, 125], textColor: [255, 255, 255] } }
         ]],
         body: [
-          [{ content: 'Bank Name:', styles: { fontStyle: 'bold' } }, payroll.employeeDetails?.bankDetails?.bankName || 'N/A'],
-          [{ content: 'Account Number:', styles: { fontStyle: 'bold' } }, payroll.employeeDetails?.bankDetails?.accountNumber || 'N/A'],
-          [{ content: 'Account Holder:', styles: { fontStyle: 'bold' } }, payroll.employeeDetails?.bankDetails?.accountHolderName || payroll.employeeDetails?.name || 'N/A'],
-          [{ content: 'IFSC Code:', styles: { fontStyle: 'bold' } }, payroll.employeeDetails?.bankDetails?.ifscCode || 'N/A']
+          [{ content: 'Bank Name:', styles: { fontStyle: 'bold' } }, currentPayroll.employeeDetails?.bankDetails?.bankName || 'N/A'],
+          [{ content: 'Account Number:', styles: { fontStyle: 'bold' } }, currentPayroll.employeeDetails?.bankDetails?.accountNumber || 'N/A'],
+          [{ content: 'Account Holder:', styles: { fontStyle: 'bold' } }, currentPayroll.employeeDetails?.bankDetails?.accountHolderName || currentPayroll.employeeDetails?.name || 'N/A'],
+          [{ content: 'IFSC Code:', styles: { fontStyle: 'bold' } }, currentPayroll.employeeDetails?.bankDetails?.ifscCode || 'N/A']
         ],
         theme: 'grid',
         styles: { fontSize: 9, cellPadding: 2 },
@@ -727,7 +910,7 @@ useEffect(() => {
       doc.text(`Generated on: ${new Date().toLocaleString()}`, 105, footerY + 4, { align: 'center' });
       
       // Save the PDF
-      const pdfFileName = `payslip_${payroll.employeeDetails?.name || 'employee'}_${getMonthName(payroll.month)}_${payroll.year}.pdf`;
+      const pdfFileName = `payslip_${currentPayroll.employeeDetails?.name || 'employee'}_${getMonthName(currentPayroll.month)}_${currentPayroll.year}.pdf`;
       doc.save(pdfFileName);
       
       // Update toast to success
@@ -764,26 +947,63 @@ useEffect(() => {
     }
   };
 
-  const handlePayrollUpdate = (updatedPayroll) => {
+  const handlePayrollUpdate = (updatedPayroll, closeAfterUpdate = false) => {
+    console.log("Received updated payroll:", updatedPayroll);
+    
+    // Recalculate values to ensure consistency
+    const recalculatedPayroll = recalculatePayrollValues(updatedPayroll);
+    console.log("Recalculated payroll values:", recalculatedPayroll);
+    
+    // Update the selectedPayroll directly
+    setSelectedPayroll(recalculatedPayroll);
+    
     // Update the payroll in the local state
     setPayrolls(prevPayrolls => {
-      return prevPayrolls.map(p => {
-        if (p._id === updatedPayroll._id) {
-          return updatedPayroll;
+      const updatedPayrolls = prevPayrolls.map(p => {
+        if (p._id === recalculatedPayroll._id) {
+          console.log("Updating payroll in state:", recalculatedPayroll);
+          return recalculatedPayroll;
         }
         return p;
       });
+      return updatedPayrolls;
     });
-    // Close the modal if it's open
-    setShowDetailModal(false);
+    
+    // Ensure filtered payrolls are also updated
+    setFilteredPayrolls(prevFiltered => {
+      const updatedFiltered = prevFiltered.map(p => {
+        if (p._id === recalculatedPayroll._id) {
+          return recalculatedPayroll;
+        }
+        return p;
+      });
+      return updatedFiltered;
+    });
+    
+    // Show success notification
+    toast.success("Payroll updated successfully");
+    
+    // Reload data to ensure everything is in sync
+    refreshData();
+    
+    // Close the modal if requested
+    if (closeAfterUpdate) {
+      setShowDetailModal(false);
+    }
   };
 
   const formatCurrency = (amount) => {
     // Ensure amount is a number and fixed to 2 decimal places
     const numericValue = parseFloat(amount || 0);
-    return `₹${numericValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    
+    // Use the toLocaleString method for more reliable formatting
+    return `₹${numericValue.toLocaleString('en-IN', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    })}`;
   };
 
+  // Function to determine status color class
   const getStatusColor = (status) => {
     switch (status) {
       case 'Paid':
@@ -820,8 +1040,26 @@ useEffect(() => {
   };
 
   // Function to open the advanced features modal
-  const openAdvancedFeatures = (payroll) => {
-    setSelectedPayroll(payroll);
+  const openAdvancedFeatures = async (payroll) => {
+    // Check if we already have this payroll selected and updated
+    let currentPayroll = payroll;
+    
+    if (selectedPayroll && selectedPayroll._id === payroll._id) {
+      currentPayroll = selectedPayroll;
+    } else {
+      // Otherwise fetch the latest data
+      try {
+        const response = await axios.get(`/api/payroll/${payroll._id}`);
+        if (response.data.success) {
+          currentPayroll = recalculatePayrollValues(response.data.data);
+        }
+      } catch (error) {
+        console.error('Error fetching latest payroll data:', error);
+        // Continue with existing data if fetch fails
+      }
+    }
+    
+    setSelectedPayroll(currentPayroll);
     setShowFeaturesModal(true);
   };
 
@@ -1541,11 +1779,19 @@ useEffect(() => {
       {showDetailModal && (
         <Modal
           isOpen={showDetailModal}
-          onClose={() => setShowDetailModal(false)}
+          onClose={() => {
+            setShowDetailModal(false);
+            refreshData(); // Refresh data when modal closes
+          }}
           title="Payroll Details"
           size="full"
         >
-          <PayrollDetail payroll={selectedPayroll} onGeneratePayslip={handleGeneratePayslip} onUpdate={handlePayrollUpdate} />
+          <PayrollDetail 
+            payroll={selectedPayroll} 
+            onGeneratePayslip={handleGeneratePayslip} 
+            onUpdate={handlePayrollUpdate} 
+            isAdmin={true} // Enable admin override by default
+          />
         </Modal>
       )}
 

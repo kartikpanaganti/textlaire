@@ -5,26 +5,28 @@ const PayrollForm = ({ employees, initialData, onSubmit, mode, month, year }) =>
     employeeId: '',
     month: month || new Date().getMonth() + 1,
     year: year || new Date().getFullYear(),
-    basicSalary: 0,
+    basicSalary: 5999,
     allowances: {
-      houseRent: 0,
-      medical: 0,
-      travel: 0,
-      food: 0,
+      houseRent: 2399.6,
+      medical: 599.9,
+      travel: 299.95,
+      food: 299.95,
       special: 0,
       other: 0
     },
     deductions: {
-      professionalTax: 0,
+      professionalTax: 150,
       incomeTax: 0,
-      providentFund: 0,
-      healthInsurance: 0,
+      providentFund: 719.88,
+      healthInsurance: 299.95,
       loanRepayment: 0,
+      absentDeduction: 0,
+      lateDeduction: 193.52,
       other: 0
     },
     overtime: {
       hours: 0,
-      rate: 0
+      rate: 1.5
     },
     bonus: 0,
     leaveDeduction: 0

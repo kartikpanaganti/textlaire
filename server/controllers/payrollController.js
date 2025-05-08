@@ -31,10 +31,110 @@ const syncPayrollWithAttendance = async (employeeId, month, year) => {
     const isCurrentOrPastMonth = (parseInt(year) < currentYear) || 
                                (parseInt(year) === currentYear && parseInt(month) <= currentMonth);
     
-    // For future months, return empty data
+    // For future months, use the employee's full salary instead of returning null
     if (!isCurrentOrPastMonth) {
-      console.log(`Cannot calculate attendance for future month: ${month}/${year}`);
-      return null;
+      console.log(`Calculating future month payroll for ${month}/${year} using full salary`);
+      
+      // Create a basic payroll with the employee's full salary for future months
+      let payroll = await Payroll.findOne({ employeeId, month, year });
+      
+      if (!payroll) {
+        // Create new payroll for future month
+        payroll = new Payroll({
+          employeeId,
+          month: parseInt(month),
+          year: parseInt(year),
+          employeeDetails: {
+            name: employee.name,
+            employeeID: employee.employeeID,
+            department: employee.department,
+            position: employee.position,
+            joiningDate: employee.joiningDate,
+            bankDetails: {
+              bankName: employee.bankDetails?.bankName || employee.bankName || '',
+              accountNumber: employee.bankDetails?.accountNumber || employee.accountNumber || '',
+              accountHolderName: employee.bankDetails?.accountHolderName || employee.accountHolderName || employee.name || '',
+              ifscCode: employee.bankDetails?.ifscCode || employee.ifscCode || ''
+            }
+          },
+          basicSalary: employee.salary, // Use full salary
+          originalSalary: employee.salary
+        });
+        
+        // Set attendance for future months - perfect attendance
+        const daysInFutureMonth = getDaysInMonth(parseInt(month), parseInt(year));
+        payroll.attendanceSummary = {
+          present: daysInFutureMonth,
+          absent: 0,
+          late: 0,
+          onLeave: 0,
+          workingDays: daysInFutureMonth,
+          totalWorkingDays: daysInFutureMonth
+        };
+        
+        // Set standard allowances based on the full salary
+        payroll.allowances = {
+          houseRent: employee.salary * 0.4, // 40% of basic salary
+          medical: employee.salary * 0.1, // 10% of basic salary
+          travel: employee.salary * 0.05, // 5% of basic salary
+          food: employee.salary * 0.05, // 5% of basic salary
+          special: 0,
+          other: 0
+        };
+        
+        // Calculate allowance total
+        const allowanceTotal = 
+          (payroll.allowances.houseRent || 0) +
+          (payroll.allowances.medical || 0) +
+          (payroll.allowances.travel || 0) +
+          (payroll.allowances.food || 0) +
+          (payroll.allowances.special || 0) +
+          (payroll.allowances.other || 0);
+        
+        // Set deductions based on the full salary
+        const healthInsuranceAmount = Math.min(employee.salary * 0.05, 1000); // 5% of salary up to 1000 max
+        
+        payroll.deductions = {
+          professionalTax: employee.salary > 15000 ? 200 : 150, // Example tax rule
+          incomeTax: calculateIncomeTax(employee.salary), // Calculate income tax on full salary
+          providentFund: employee.salary * 0.12, // 12% of basic salary
+          healthInsurance: healthInsuranceAmount, // Proportional to salary
+          loanRepayment: 0,
+          absentDeduction: 0,
+          lateDeduction: 0,
+          other: 0
+        };
+        
+        // Calculate deduction total
+        const deductionTotal = 
+          (payroll.deductions.professionalTax || 0) +
+          (payroll.deductions.incomeTax || 0) +
+          (payroll.deductions.providentFund || 0) +
+          (payroll.deductions.healthInsurance || 0) +
+          (payroll.deductions.loanRepayment || 0) +
+          (payroll.deductions.absentDeduction || 0) +
+          (payroll.deductions.lateDeduction || 0) +
+          (payroll.deductions.other || 0);
+        
+        // Set overtime and totals
+        payroll.overtime = { hours: 0, rate: 1.5, amount: 0 };
+        payroll.bonus = 0;
+        payroll.leaveDeduction = 0;
+        
+        // Calculate final figures
+        payroll.grossSalary = employee.salary + allowanceTotal;
+        payroll.totalDeductions = deductionTotal;
+        payroll.netSalary = payroll.grossSalary - payroll.totalDeductions;
+        
+        // Set payment details
+        payroll.paymentStatus = 'Pending';
+        payroll.paymentMethod = 'Bank Transfer';
+        payroll.lastCalculated = new Date();
+        
+        await payroll.save();
+      }
+      
+      return payroll;
     }
     
     // Check if the payroll month/year is before the employee's joining date
@@ -135,21 +235,51 @@ const syncPayrollWithAttendance = async (employeeId, month, year) => {
       return createDemoPayroll(employee, month, year, attendanceSummary);
     }
     
+    // Handle missing attendance records for past dates
+    const daysInMonth = getDaysInMonth(parseInt(month), parseInt(year));
+    
+    // Get a list of days that have attendance records
+    const recordedDays = attendanceRecords.map(record => {
+      return parseInt(record.date.split('-')[2]); // Get day part from YYYY-MM-DD
+    });
+    
+    console.log(`Recorded days: ${recordedDays.join(', ')}`);
+    
+    // Find missing days (days that should have attendance but don't)
+    const maxDay = isPastMonth ? daysInMonth : Math.min(daysInMonth, currentDay);
+    const missingDays = [];
+    
+    for (let day = 1; day <= maxDay; day++) {
+      if (!recordedDays.includes(day)) {
+        missingDays.push(day);
+      }
+    }
+    
+    console.log(`Missing days: ${missingDays.join(', ')}`);
+    
+    // Count the missing days as "on leave" if they're in the past
+    // For current month, only count missing days that are in the past (not today)
+    const todayDay = new Date().getDate();
+    const missingPastDays = missingDays.filter(day => {
+      if (isPastMonth) return true;
+      return day < todayDay; // For current month, only count days before today
+    });
+    
+    console.log(`Missing past days (counted as on leave): ${missingPastDays.join(', ')}`);
+    
     // For real attendance records, count actual statuses
     const presentDays = attendanceRecords.filter(record => record.status === 'Present').length;
     const absentDays = attendanceRecords.filter(record => record.status === 'Absent').length;
     const lateDays = attendanceRecords.filter(record => record.status === 'Late').length;
-    const leaveDays = attendanceRecords.filter(record => record.status === 'On Leave').length;
     
-    // Total recorded days is the sum of all attendance records
-    let totalRecordedDays = presentDays + absentDays + lateDays + leaveDays;
+    // Add missing days as "on leave" days
+    const recordedLeaveDays = attendanceRecords.filter(record => record.status === 'On Leave').length;
+    const leaveDays = recordedLeaveDays + missingPastDays.length;
     
-    // For past months with few records, use full month days instead
-    if (isPastMonth && totalRecordedDays < 10) {
-      totalRecordedDays = getDaysInMonth(parseInt(month), parseInt(year));
-    }
+    // Total recorded days is the sum of all attendance records plus missing days
+    const totalRecordedDays = presentDays + absentDays + lateDays + leaveDays;
     
-    console.log(`Attendance breakdown - Present: ${presentDays}, Absent: ${absentDays}, Late: ${lateDays}, Leave: ${leaveDays}`);
+    console.log(`Attendance breakdown - Present: ${presentDays}, Absent: ${absentDays}, Late: ${lateDays}, Leave: ${leaveDays} (including ${missingPastDays.length} missing days)`);
     
     // Use attendance data appropriately for current vs past months
     const attendanceSummary = {
@@ -158,10 +288,10 @@ const syncPayrollWithAttendance = async (employeeId, month, year) => {
       late: lateDays,
       onLeave: leaveDays,
       workingDays: totalRecordedDays,
-      totalWorkingDays: isPastMonth ? getDaysInMonth(parseInt(month), parseInt(year)) : totalRecordedDays
+      totalWorkingDays: isPastMonth ? daysInMonth : Math.min(daysInMonth, currentDay)
     };
     
-    console.log(`Attendance summary: ${JSON.stringify(attendanceSummary)}`);
+    console.log(`Attendance summary with missing days handled: ${JSON.stringify(attendanceSummary)}`);
     
     // Calculate overtime from actual attendance records only
     const overtimeRecords = attendanceRecords.filter(record => (record.overtimeHours || 0) > 0);
@@ -170,30 +300,34 @@ const syncPayrollWithAttendance = async (employeeId, month, year) => {
       overtimeRecords.reduce((sum, record) => sum + (record.overtimeRate || 1.5), 0) / overtimeRecords.length : 1.5;
     
     // Calculate salary based on attendance (only pay for days present)
-    let dailyRate = 0;
-    let absentDeduction = 0;
+    const dailyRate = employee.salary / daysInMonth;
+    let adjustedBasicSalary = 0;
+    let leaveDeduction = 0;
     let lateDeduction = 0;
-    let adjustedBasicSalary = 0; // Default to 0 salary if no attendance
     
-    // Get the total working days in the month
-    const daysInMonth = getDaysInMonth(parseInt(month), parseInt(year));
-    dailyRate = employee.salary / daysInMonth;
-    
-    // Special case: If it's a new month and we don't have any attendance records yet
-    if (presentDays === 0 && absentDays === 0 && lateDays === 0 && leaveDays === 0) {
-      console.log(`No attendance records found for the month. Setting salary to 0.`);
-      adjustedBasicSalary = 0; // No pay if no attendance recorded
-    } else {
-      // Normal case: Adjust base salary to only pay for days the employee was present
-      adjustedBasicSalary = employee.salary * (presentDays / daysInMonth);
-      console.log(`Adjusting salary: ${employee.salary} × (${presentDays}/${daysInMonth}) = ${adjustedBasicSalary}`);
+    // Special case for current month
+    if (parseInt(year) === currentYear && parseInt(month) === currentMonth) {
+      console.log(`Handling current month (${month}/${year}): Today is day ${currentDay} of the month`);
       
-      // Additional deduction for late days (25% of daily rate)
-      lateDeduction = lateDays * (dailyRate * 0.25);
+      // For current month, calculate based on days that have passed
+      const totalDaysElapsed = currentDay;
+      
+      // Calculate adjusted salary based on attendance - deduct for missing days and absences
+      adjustedBasicSalary = employee.salary * (presentDays / totalDaysElapsed);
+      console.log(`Adjusted salary for current month: ${adjustedBasicSalary} (based on ${presentDays}/${totalDaysElapsed} days)`);
+      
+      // Apply deductions
+      lateDeduction = lateDays * (dailyRate * 0.25); // 25% deduction for late arrivals
+      leaveDeduction = leaveDays * (dailyRate * 0.5); // 50% deduction for leave days
+    } else {
+      // For past months - adjust based on full month
+      adjustedBasicSalary = employee.salary * (presentDays / daysInMonth);
+      console.log(`Adjusted salary for past month: ${adjustedBasicSalary} (based on ${presentDays}/${daysInMonth} days)`);
+      
+      // Apply deductions
+      lateDeduction = lateDays * (dailyRate * 0.25); // 25% deduction for late arrivals
+      leaveDeduction = leaveDays * (dailyRate * 0.5); // 50% deduction for leave days
     }
-    
-    // No need for explicit absent deduction since we're only paying for present days
-    absentDeduction = 0;
     
     // Find existing payroll or create a new one
     let payroll = await Payroll.findOne({ employeeId, month, year });
@@ -211,10 +345,10 @@ const syncPayrollWithAttendance = async (employeeId, month, year) => {
           position: employee.position,
           joiningDate: employee.joiningDate,
           bankDetails: {
-            bankName: employee.bankName,
-            accountNumber: employee.accountNumber,
-            accountHolderName: employee.accountHolderName || employee.name,
-            ifscCode: employee.ifscCode
+            bankName: employee.bankDetails?.bankName || employee.bankName || '',
+            accountNumber: employee.bankDetails?.accountNumber || employee.accountNumber || '',
+            accountHolderName: employee.bankDetails?.accountHolderName || employee.accountHolderName || employee.name || '',
+            ifscCode: employee.bankDetails?.ifscCode || employee.ifscCode || ''
           }
         },
         attendanceSummary,
@@ -230,10 +364,10 @@ const syncPayrollWithAttendance = async (employeeId, month, year) => {
         position: employee.position,
         joiningDate: employee.joiningDate,
         bankDetails: {
-          bankName: employee.bankName,
-          accountNumber: employee.accountNumber,
-          accountHolderName: employee.accountHolderName || employee.name,
-          ifscCode: employee.ifscCode
+          bankName: employee.bankDetails?.bankName || employee.bankName || '',
+          accountNumber: employee.bankDetails?.accountNumber || employee.accountNumber || '',
+          accountHolderName: employee.bankDetails?.accountHolderName || employee.accountHolderName || employee.name || '',
+          ifscCode: employee.bankDetails?.ifscCode || employee.ifscCode || ''
         }
       };
       payroll.attendanceSummary = attendanceSummary;
@@ -255,16 +389,21 @@ const syncPayrollWithAttendance = async (employeeId, month, year) => {
     };
     
     // Set deductions based on the adjusted salary
+    const healthInsuranceAmount = Math.min(adjustedBasicSalary * 0.05, 1000); // 5% of salary up to 1000 max
+    
     payroll.deductions = {
       professionalTax: adjustedBasicSalary > 15000 ? 200 : 150, // Example tax rule
       incomeTax: calculateIncomeTax(adjustedBasicSalary), // Calculate income tax on adjusted salary
       providentFund: adjustedBasicSalary * 0.12, // 12% of adjusted basic salary
-      healthInsurance: 1000, // Fixed value, adjust as needed
+      healthInsurance: healthInsuranceAmount, // Proportional to salary
       loanRepayment: 0, // Can be updated manually if needed
-      absentDeduction: absentDeduction, // Already adjusted in the basic salary
+      absentDeduction: 0, // Already adjusted in the basic salary
       lateDeduction: lateDeduction,
       other: 0
     };
+    
+    // Set leave deduction separately
+    payroll.leaveDeduction = leaveDeduction;
     
     // Set overtime based on the adjusted salary
     payroll.overtime = {
@@ -272,6 +411,31 @@ const syncPayrollWithAttendance = async (employeeId, month, year) => {
       rate: avgOvertimeRate,
       amount: totalOvertimeHours * avgOvertimeRate * (adjustedBasicSalary / (22 * 8)) // Use adjusted salary
     };
+    
+    // Calculate gross salary and net salary
+    const allowanceTotal = 
+      (payroll.allowances.houseRent || 0) +
+      (payroll.allowances.medical || 0) +
+      (payroll.allowances.travel || 0) +
+      (payroll.allowances.food || 0) +
+      (payroll.allowances.special || 0) +
+      (payroll.allowances.other || 0);
+    
+    const deductionTotal = 
+      (payroll.deductions.professionalTax || 0) +
+      (payroll.deductions.incomeTax || 0) +
+      (payroll.deductions.providentFund || 0) +
+      (payroll.deductions.healthInsurance || 0) +
+      (payroll.deductions.loanRepayment || 0) +
+      (payroll.deductions.lateDeduction || 0) +
+      (payroll.deductions.other || 0) +
+      (payroll.leaveDeduction || 0);
+    
+    const overtimeAmount = payroll.overtime.amount || 0;
+    
+    payroll.grossSalary = adjustedBasicSalary + allowanceTotal + overtimeAmount;
+    payroll.totalDeductions = deductionTotal;
+    payroll.netSalary = payroll.grossSalary - payroll.totalDeductions;
     
     // Set the last calculation date
     payroll.lastCalculated = new Date();
@@ -316,10 +480,10 @@ const createDemoPayroll = async (employee, month, year, attendanceSummary) => {
           position: employee.position,
           joiningDate: employee.joiningDate,
           bankDetails: {
-            bankName: employee.bankName,
-            accountNumber: employee.accountNumber,
-            accountHolderName: employee.accountHolderName || employee.name,
-            ifscCode: employee.ifscCode
+            bankName: employee.bankDetails?.bankName || employee.bankName || '',
+            accountNumber: employee.bankDetails?.accountNumber || employee.accountNumber || '',
+            accountHolderName: employee.bankDetails?.accountHolderName || employee.accountHolderName || employee.name || '',
+            ifscCode: employee.bankDetails?.ifscCode || employee.ifscCode || ''
           }
         },
         attendanceSummary: attendanceSummary,
@@ -336,10 +500,10 @@ const createDemoPayroll = async (employee, month, year, attendanceSummary) => {
         position: employee.position,
         joiningDate: employee.joiningDate,
         bankDetails: {
-          bankName: employee.bankName,
-          accountNumber: employee.accountNumber,
-          accountHolderName: employee.accountHolderName || employee.name,
-          ifscCode: employee.ifscCode
+          bankName: employee.bankDetails?.bankName || employee.bankName || '',
+          accountNumber: employee.bankDetails?.accountNumber || employee.accountNumber || '',
+          accountHolderName: employee.bankDetails?.accountHolderName || employee.accountHolderName || employee.name || '',
+          ifscCode: employee.bankDetails?.ifscCode || employee.ifscCode || ''
         }
       };
       payroll.attendanceSummary = attendanceSummary;
@@ -361,11 +525,13 @@ const createDemoPayroll = async (employee, month, year, attendanceSummary) => {
     const overtimeHours = Math.floor(Math.random() * 5); // 0-4 hours of overtime
     
     // Set deductions
+    const healthInsuranceAmount = Math.min(employee.salary * 0.05, 1000); // 5% of salary up to 1000 max
+    
     payroll.deductions = {
       professionalTax: employee.salary > 15000 ? 200 : 150,
       incomeTax: calculateIncomeTax(employee.salary),
       providentFund: employee.salary * 0.12,
-      healthInsurance: 1000,
+      healthInsurance: healthInsuranceAmount,
       loanRepayment: 0,
       absentDeduction: (attendanceSummary.absent * (employee.salary / attendanceSummary.totalWorkingDays)),
       lateDeduction: (attendanceSummary.late * (employee.salary / attendanceSummary.totalWorkingDays) * 0.25),
@@ -418,6 +584,11 @@ const calculateIncomeTax = (monthlySalary) => {
   return tax / 12;
 };
 
+// Helper function for formatting decimal values
+const formatToDecimal = (amount) => {
+  return Math.round(amount * 100) / 100;
+};
+
 // Get all payrolls with filtering options and real-time generation
 export const getPayrolls = async (req, res) => {
   try {
@@ -437,11 +608,11 @@ export const getPayrolls = async (req, res) => {
       const employee = await Employee.findById(employeeId);
       if (employee) employees = [employee];
     } else {
-      // First, get all active employees
-      const allActiveEmployees = await Employee.find({ status: 'Active' });
+      // Get all employees, not just active ones
+      const allEmployees = await Employee.find({});
       
       // Then filter to only include employees who had joined by the requested month/year
-      employees = allActiveEmployees.filter(employee => {
+      employees = allEmployees.filter(employee => {
         const joiningDate = new Date(employee.joiningDate);
         const joiningYear = joiningDate.getFullYear();
         const joiningMonth = joiningDate.getMonth() + 1; // JS months are 0-indexed
@@ -451,7 +622,7 @@ export const getPayrolls = async (req, res) => {
                (joiningYear === payrollYear && joiningMonth <= payrollMonth);
       });
       
-      console.log(`Filtered ${allActiveEmployees.length} active employees to ${employees.length} who had joined by ${payrollMonth}/${payrollYear}`);
+      console.log(`Filtered ${allEmployees.length} total employees to ${employees.length} who had joined by ${payrollMonth}/${payrollYear}`);
     }
     
     // Sync payrolls for all retrieved employees
@@ -542,11 +713,12 @@ export const getPayrollById = async (req, res) => {
     // Sync payroll with current employee and attendance data
     const updatedPayroll = await syncPayrollWithAttendance(payroll.employeeId, payroll.month, payroll.year);
     
-    // Handle case where no payroll could be calculated (e.g., future month)
+    // Our updated syncPayrollWithAttendance now handles future months properly
+    // so this conditional is redundant but kept for safety
     if (!updatedPayroll) {
       return res.status(200).json({
         success: true,
-        message: "No attendance data available for this period",
+        message: "Could not process payroll for this period",
         data: payroll // Return original payroll without updates
       });
     }
@@ -587,7 +759,7 @@ export const generatePayroll = async (req, res) => {
     }
     
     // Check if employee exists
-    const employee = await User.findById(employeeId);
+    const employee = await Employee.findById(employeeId);
     if (!employee) {
       return res.status(404).json({
         success: false,
@@ -632,6 +804,9 @@ export const generatePayroll = async (req, res) => {
     const totalDeductions = deductionTotal + (leaveDeduction || 0);
     const netSalary = grossSalary - totalDeductions;
     
+    // Determine health insurance amount if not explicitly provided
+    const healthInsuranceAmount = deductions?.healthInsurance || Math.min(parseFloat(basicSalary) * 0.05, 1000);
+    
     // Create new payroll
     const newPayroll = new Payroll({
       employeeId,
@@ -650,14 +825,14 @@ export const generatePayroll = async (req, res) => {
         professionalTax: deductions?.professionalTax || 0,
         incomeTax: deductions?.incomeTax || 0,
         providentFund: deductions?.providentFund || 0,
-        healthInsurance: deductions?.healthInsurance || 0,
+        healthInsurance: deductions?.healthInsurance || healthInsuranceAmount,
         loanRepayment: deductions?.loanRepayment || 0,
         other: deductions?.other || 0
       },
       overtime: {
-        hours: overtime?.hours || 0,
-        rate: overtime?.rate || 0,
-        amount: overtimeAmount
+        hours: parseFloat(overtime?.hours || 0),
+        rate: parseFloat(overtime?.rate || 0),
+        amount: parseFloat(overtimeAmount.toFixed(2))
       },
       bonus: bonus || 0,
       leaveDeduction: leaveDeduction || 0,
@@ -665,7 +840,19 @@ export const generatePayroll = async (req, res) => {
       totalDeductions,
       netSalary,
       generatedBy: req.user.userId,
-      bankDetails: employee.bankDetails
+      employeeDetails: {
+        name: employee.name,
+        employeeID: employee.employeeID,
+        department: employee.department,
+        position: employee.position,
+        joiningDate: employee.joiningDate,
+        bankDetails: {
+          bankName: employee.bankDetails?.bankName || employee.bankName || '',
+          accountNumber: employee.bankDetails?.accountNumber || employee.accountNumber || '',
+          accountHolderName: employee.bankDetails?.accountHolderName || employee.accountHolderName || employee.name || '',
+          ifscCode: employee.bankDetails?.ifscCode || employee.ifscCode || ''
+        }
+      }
     });
     
     await newPayroll.save();
@@ -705,8 +892,8 @@ export const generateBulkPayroll = async (req, res) => {
       });
     }
     
-    // Get all employees
-    const employees = await User.find({ role: 'employee' });
+    // Get all employees, not just active ones
+    const employees = await Employee.find({});
     
     if (employees.length === 0) {
       return res.status(404).json({
@@ -741,15 +928,24 @@ export const generateBulkPayroll = async (req, res) => {
       const basicSalary = employee.baseSalary || 0;
       
       // Calculate auto values based on basic salary
-      // These are just examples, you can adjust the formulas
       const houseRent = basicSalary * 0.4; // 40% of basic
       const medical = basicSalary * 0.1; // 10% of basic
+      const travel = basicSalary * 0.05; // 5% of basic
+      const food = basicSalary * 0.05; // 5% of basic
       const professionalTax = basicSalary > 15000 ? 200 : 150; // Example tax rule
       const providentFund = basicSalary * 0.12; // 12% of basic
+      const healthInsuranceAmount = Math.min(basicSalary * 0.05, 1000); // 5% of salary up to 1000 max
+      const incomeTax = calculateIncomeTax(basicSalary);
       
-      const grossSalary = basicSalary + houseRent + medical;
-      const totalDeductions = professionalTax + providentFund;
-      const netSalary = grossSalary - totalDeductions;
+      // Calculate totals correctly
+      const allowanceTotal = houseRent + medical + travel + food;
+      const deductionTotal = professionalTax + providentFund + healthInsuranceAmount + incomeTax;
+      
+      const grossSalary = basicSalary + allowanceTotal;
+      const netSalary = grossSalary - deductionTotal;
+      
+      // Get the days in this month for attendance summary
+      const daysInMonth = getDaysInMonth(parseInt(month), parseInt(year));
       
       return {
         employeeId: employee._id,
@@ -758,17 +954,54 @@ export const generateBulkPayroll = async (req, res) => {
         basicSalary,
         allowances: {
           houseRent,
-          medical
+          medical,
+          travel,
+          food,
+          special: 0,
+          other: 0
         },
         deductions: {
           professionalTax,
-          providentFund
+          providentFund,
+          incomeTax,
+          healthInsurance: healthInsuranceAmount,
+          loanRepayment: 0,
+          absentDeduction: 0,
+          lateDeduction: 0,
+          other: 0
         },
+        overtime: {
+          hours: 0,
+          rate: 1.5,
+          amount: 0
+        },
+        bonus: 0,
+        leaveDeduction: 0,
         grossSalary,
-        totalDeductions,
+        totalDeductions: deductionTotal,
         netSalary,
+        attendanceSummary: {
+          present: daysInMonth,
+          absent: 0,
+          late: 0,
+          onLeave: 0,
+          workingDays: daysInMonth,
+          totalWorkingDays: daysInMonth
+        },
         generatedBy: req.user.userId,
-        bankDetails: employee.bankDetails
+        employeeDetails: {
+          name: employee.name,
+          employeeID: employee.employeeID,
+          department: employee.department,
+          position: employee.position,
+          joiningDate: employee.joiningDate,
+          bankDetails: {
+            bankName: employee.bankDetails?.bankName || employee.bankName || '',
+            accountNumber: employee.bankDetails?.accountNumber || employee.accountNumber || '',
+            accountHolderName: employee.bankDetails?.accountHolderName || employee.accountHolderName || employee.name || '',
+            ifscCode: employee.bankDetails?.ifscCode || employee.ifscCode || ''
+          }
+        }
       };
     });
     
@@ -1003,7 +1236,7 @@ export const updatePayroll = async (req, res) => {
       if (overtime.hours !== undefined) payroll.overtime.hours = parseFloat(overtime.hours);
       if (overtime.rate !== undefined) payroll.overtime.rate = parseFloat(overtime.rate);
       if (overtime.amount !== undefined) payroll.overtime.amount = parseFloat(overtime.amount);
-      else payroll.overtime.amount = payroll.overtime.hours * payroll.overtime.rate;
+      else payroll.overtime.amount = parseFloat((payroll.overtime.hours * payroll.overtime.rate).toFixed(2));
     }
     
     if (bonus !== undefined) payroll.bonus = parseFloat(bonus);
@@ -1021,25 +1254,29 @@ export const updatePayroll = async (req, res) => {
     }
     
     // Recalculate gross salary and net salary
-    const allowanceTotal = 
+    const allowanceTotal = formatToDecimal(
       (payroll.allowances.houseRent || 0) +
       (payroll.allowances.medical || 0) +
       (payroll.allowances.travel || 0) +
       (payroll.allowances.food || 0) +
       (payroll.allowances.special || 0) +
-      (payroll.allowances.other || 0);
+      (payroll.allowances.other || 0)
+    );
     
-    const deductionTotal = 
+    const deductionTotal = formatToDecimal(
       (payroll.deductions.professionalTax || 0) +
       (payroll.deductions.incomeTax || 0) +
       (payroll.deductions.providentFund || 0) +
       (payroll.deductions.healthInsurance || 0) +
       (payroll.deductions.loanRepayment || 0) +
-      (payroll.deductions.other || 0);
+      (payroll.deductions.other || 0)
+    );
     
-    payroll.grossSalary = (payroll.basicSalary || 0) + allowanceTotal + (payroll.bonus || 0) + (payroll.overtime?.amount || 0);
-    payroll.totalDeductions = deductionTotal + (payroll.leaveDeduction || 0);
-    payroll.netSalary = payroll.grossSalary - payroll.totalDeductions;
+    payroll.grossSalary = formatToDecimal(
+      (payroll.basicSalary || 0) + allowanceTotal + (payroll.bonus || 0) + (payroll.overtime?.amount || 0)
+    );
+    payroll.totalDeductions = formatToDecimal(deductionTotal + (payroll.leaveDeduction || 0));
+    payroll.netSalary = formatToDecimal(payroll.grossSalary - payroll.totalDeductions);
     
     await payroll.save();
     
@@ -1119,6 +1356,21 @@ export const getPayrollSummary = async (req, res) => {
     
     const payrollMonth = parseInt(month);
     const payrollYear = parseInt(year);
+    
+    // Validate month and year formats
+    if (isNaN(payrollMonth) || payrollMonth < 1 || payrollMonth > 12) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid month format. Month must be between 1-12."
+      });
+    }
+    
+    if (isNaN(payrollYear) || payrollYear < 2020 || payrollYear > 2100) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid year format. Year must be between 2020-2100."
+      });
+    }
     
     // Get employees count
     const totalEmployees = await Employee.countDocuments({ status: 'Active' });
@@ -1642,7 +1894,12 @@ export const bulkManageBonus = async (req, res) => {
               department: employee.department,
               position: employee.position,
               joiningDate: employee.joiningDate,
-              bankDetails: employee.bankDetails
+              bankDetails: {
+                bankName: employee.bankDetails?.bankName || employee.bankName || '',
+                accountNumber: employee.bankDetails?.accountNumber || employee.accountNumber || '',
+                accountHolderName: employee.bankDetails?.accountHolderName || employee.accountHolderName || employee.name || '',
+                ifscCode: employee.bankDetails?.ifscCode || employee.ifscCode || ''
+              }
             },
             basicSalary: employee.salary,
             paymentStatus: 'Pending'

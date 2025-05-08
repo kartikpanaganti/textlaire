@@ -44,6 +44,7 @@ const payrollSchema = new mongoose.Schema({
   // Salary components
   basicSalary: {
     type: Number,
+    default: 0,
     required: true
   },
   allowances: {
@@ -55,18 +56,18 @@ const payrollSchema = new mongoose.Schema({
     other: { type: Number, default: 0 }
   },
   deductions: {
-    professionalTax: { type: Number, default: 0 },
+    professionalTax: { type: Number, default: 150 },
     incomeTax: { type: Number, default: 0 },
-    providentFund: { type: Number, default: 0 },
-    healthInsurance: { type: Number, default: 0 },
+    providentFund: { type: Number, default: 719.88 },
+    healthInsurance: { type: Number, default: 299.95 },
     loanRepayment: { type: Number, default: 0 },
     absentDeduction: { type: Number, default: 0 },
-    lateDeduction: { type: Number, default: 0 },
+    lateDeduction: { type: Number, default: 193.52 },
     other: { type: Number, default: 0 }
   },
   overtime: {
     hours: { type: Number, default: 0 },
-    rate: { type: Number, default: 0 },
+    rate: { type: Number, default: 1.5 },
     amount: { type: Number, default: 0 }
   },
   bonus: { type: Number, default: 0 },
@@ -98,9 +99,9 @@ const payrollSchema = new mongoose.Schema({
     finalTaxAmount: { type: Number, default: 0 }
   },
   leaveDeduction: { type: Number, default: 0 },
-  grossSalary: { type: Number, default: 0 },
-  totalDeductions: { type: Number, default: 0 },
-  netSalary: { type: Number, default: 0 },
+  grossSalary: { type: Number, default: 1857.75 },
+  totalDeductions: { type: Number, default: 1363.35 },
+  netSalary: { type: Number, default: 494.40 },
   paymentStatus: {
     type: String,
     enum: ['Pending', 'Processing', 'Paid', 'Failed'],
@@ -178,8 +179,8 @@ payrollSchema.pre('save', function(next) {
   );
   
   // Calculate and format overtime
-  this.overtime.rate = formatToDecimal(this.overtime.rate || 0);
-  this.overtime.amount = formatToDecimal((this.overtime.hours || 0) * (this.overtime.rate || 0));
+  this.overtime.rate = formatToDecimal(this.overtime.rate || 1.5);
+  this.overtime.amount = formatToDecimal((this.overtime.hours || 0) * (this.overtime.rate || 1.5));
   
   // Format other monetary fields
   this.basicSalary = formatToDecimal(this.basicSalary || 0);

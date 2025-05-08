@@ -29,30 +29,49 @@ mongoose.connect(MONGODB_URI)
 const createAdminUser = async () => {
   try {
     // Check if admin already exists
-    const adminExists = await User.findOne({ email: 'admin' });
+    const adminExists = await User.findOne({ email: 'admin@textlaire.com' });
     
     if (adminExists) {
-      console.log('Admin user already exists');
+      console.log('Admin user already exists. Resetting password...');
+      
+      // Update the existing admin user with the specified credentials
+      adminExists.name = 'System Administrator';
+      adminExists.password = 'admin123'; // Will be hashed by the pre-save hook
+      adminExists.secretKey = 'admin';
+      
+      await adminExists.save();
+      
+      console.log('Admin user reset successfully');
+      console.log('=== ADMIN CREDENTIALS ===');
+      console.log('Email: admin@textlaire.com');
+      console.log('Password: admin123');
+      console.log('Secret Key: admin');
+      console.log('=========================');
+      
       process.exit(0);
     }
     
     // Create admin user
     const adminUser = new User({
       name: 'System Administrator',
-      email: 'admin',
+      email: 'admin@textlaire.com',
       password: 'admin123', // Will be hashed by the pre-save hook
-      role: 'admin'
+      role: 'admin',
+      secretKey: 'admin'
     });
     
     await adminUser.save();
     
     console.log('Admin user created successfully');
+    console.log('=== ADMIN CREDENTIALS ===');
     console.log('Email: admin@textlaire.com');
     console.log('Password: admin123');
+    console.log('Secret Key: admin');
+    console.log('=========================');
     
     process.exit(0);
   } catch (error) {
-    console.error('Error creating admin user:', error);
+    console.error('Error creating/resetting admin user:', error);
     process.exit(1);
   }
 };

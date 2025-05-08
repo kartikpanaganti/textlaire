@@ -5,6 +5,8 @@ import { Bar, Pie, Line } from 'react-chartjs-2';
 import { FaDownload, FaCalendarAlt, FaBuilding, FaChartPie, FaChartBar, FaChartLine, FaFileExcel, FaFilePdf } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 const PayrollReportsDashboard = () => {
   const [loading, setLoading] = useState(true);
@@ -15,6 +17,7 @@ const PayrollReportsDashboard = () => {
   });
   const [selectedDepartment, setSelectedDepartment] = useState('');
   const [activeTab, setActiveTab] = useState('summary');
+  const [exportLoading, setExportLoading] = useState(false);
 
   // List of departments (should be fetched from API in production)
   const departments = [
@@ -61,7 +64,8 @@ const PayrollReportsDashboard = () => {
     }
   };
 
-  const handleExportToExcel = () => {
+  // Simple Excel export using XLSX
+  const handleBasicExportToExcel = () => {
     if (!reportData) return;
 
     try {
@@ -93,6 +97,418 @@ const PayrollReportsDashboard = () => {
     } catch (error) {
       console.error('Error exporting to Excel:', error);
       toast.error('Failed to export report to Excel');
+    }
+  };
+
+  // Enhanced Excel export using ExcelJS
+  const handleExportToExcel = async () => {
+    if (!reportData) {
+      toast.error('No report data available for export');
+      return;
+    }
+    
+    try {
+      setExportLoading(true);
+      const toastId = toast.loading('Generating detailed Excel report...');
+      
+      // Create a new workbook and worksheet
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Textlaire Payroll System';
+      workbook.lastModifiedBy = 'Payroll Reports';
+      workbook.created = new Date();
+      workbook.modified = new Date();
+      
+      // Add a summary worksheet
+      const summarySheet = workbook.addWorksheet('Summary', {
+        properties: { tabColor: { argb: '6495ED' } }
+      });
+      
+      // Create title with merged cells
+      summarySheet.mergeCells('A1:H1');
+      const titleCell = summarySheet.getCell('A1');
+      titleCell.value = 'TEXTLAIRE TECHNOLOGIES - PAYROLL REPORT';
+      titleCell.font = {
+        name: 'Arial',
+        size: 16,
+        bold: true,
+        color: { argb: '0000FF' }
+      };
+      titleCell.alignment = { horizontal: 'center' };
+      titleCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'F2F2F2' }
+      };
+      
+      // Add report period
+      summarySheet.mergeCells('A2:H2');
+      const periodCell = summarySheet.getCell('A2');
+      periodCell.value = `Report Period: ${format(new Date(dateRange.startDate), 'dd MMM yyyy')} to ${format(new Date(dateRange.endDate), 'dd MMM yyyy')}`;
+      periodCell.font = {
+        name: 'Arial',
+        size: 12,
+        italic: true
+      };
+      periodCell.alignment = { horizontal: 'center' };
+      
+      // Add department filter if applied
+      if (selectedDepartment) {
+        summarySheet.mergeCells('A3:H3');
+        const deptCell = summarySheet.getCell('A3');
+        deptCell.value = `Department: ${departments.find(d => d.value === selectedDepartment)?.label || selectedDepartment}`;
+        deptCell.font = {
+          name: 'Arial',
+          size: 12,
+          italic: true
+        };
+        deptCell.alignment = { horizontal: 'center' };
+      }
+      
+      // Add summary information
+      summarySheet.addRow([]);
+      summarySheet.addRow(['SUMMARY STATISTICS']);
+      const statsRow = summarySheet.lastRow;
+      statsRow.font = { bold: true, size: 14 };
+      statsRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'DDEBF7' }
+      };
+      
+      // Ensure analytics exists before accessing its properties
+      const analytics = reportData.analytics || {};
+      
+      // Add summary rows with null checks to prevent errors
+      summarySheet.addRow(['Total Employees', analytics.totalEmployees || 0]);
+      summarySheet.addRow(['Total Payroll Amount', (analytics.totalPayroll || 0).toFixed(2)]);
+      summarySheet.addRow(['Average Salary', (analytics.avgSalary || 0).toFixed(2)]);
+      summarySheet.addRow(['Highest Salary', (analytics.highestSalary || 0).toFixed(2)]);
+      summarySheet.addRow(['Lowest Salary', (analytics.lowestSalary || 0).toFixed(2)]);
+      summarySheet.addRow(['Total Tax Deductions', (analytics.taxDeductions || 0).toFixed(2)]);
+      summarySheet.addRow(['Total Bonuses Paid', (analytics.bonusDistributed || 0).toFixed(2)]);
+      
+      // Format the numbers in the summary section
+      for (let i = 7; i <= 12; i++) {
+        if (i !== 6) { // Skip the employee count row
+          const cell = summarySheet.getCell(`B${i}`);
+          cell.numFmt = '₹#,##0.00';
+        }
+      }
+      
+      // Add payment status breakdown if available
+      summarySheet.addRow([]);
+      summarySheet.addRow(['PAYMENT STATUS BREAKDOWN']);
+      const statusHeaderRow = summarySheet.lastRow;
+      statusHeaderRow.font = { bold: true, size: 14 };
+      statusHeaderRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'DDEBF7' }
+      };
+      
+      // Safely add payment status data
+      try {
+        if (analytics.paymentStatusDistribution) {
+          Object.entries(analytics.paymentStatusDistribution).forEach(([status, count]) => {
+            summarySheet.addRow([status, count]);
+          });
+        }
+      } catch (error) {
+        console.warn('Error adding payment status data', error);
+        summarySheet.addRow(['Error', 'Failed to load payment status data']);
+      }
+      
+      // Set column widths
+      summarySheet.getColumn('A').width = 25;
+      summarySheet.getColumn('B').width = 20;
+      
+      // Add a detailed payroll worksheet
+      const payrollSheet = workbook.addWorksheet('Payroll Details', {
+        properties: { tabColor: { argb: '92D050' } }
+      });
+      
+      // Add headers with styling
+      const payrollHeaders = [
+        'Employee ID', 'Employee Name', 'Department', 'Position', 
+        'Month', 'Year', 'Basic Salary', 'House Rent', 'Medical', 
+        'Travel', 'Food', 'Other Allowances', 'Total Allowances',
+        'Professional Tax', 'Income Tax', 'PF', 'Health Insurance',
+        'Loan Repayment', 'Other Deductions', 'Total Deductions',
+        'Bonus', 'Net Salary', 'Payment Status', 'Payment Date'
+      ];
+      
+      payrollSheet.addRow(payrollHeaders);
+      
+      // Style the headers
+      const headerRow = payrollSheet.getRow(1);
+      headerRow.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFF' } };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: '4472C4' }
+        };
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      });
+      
+      // Add data rows
+      try {
+        if (reportData.payrolls && Array.isArray(reportData.payrolls)) {
+          reportData.payrolls.forEach(p => {
+            if (!p) return; // Skip if undefined
+            
+            // Safely extract employee details
+            const employeeDetails = p.employeeDetails || {};
+            const allowances = p.allowances || {};
+            const deductions = p.deductions || {};
+            
+            // Calculate totals safely
+            const totalAllowances = Object.values(allowances).reduce((sum, val) => sum + (val || 0), 0);
+            const totalDeductions = Object.values(deductions).reduce((sum, val) => sum + (val || 0), 0);
+            
+            payrollSheet.addRow([
+              employeeDetails.employeeID || 'N/A',
+              employeeDetails.name || 'N/A',
+              employeeDetails.department || 'N/A',
+              employeeDetails.position || 'N/A',
+              p.month || 'N/A',
+              p.year || 'N/A',
+              p.basicSalary || 0,
+              allowances.houseRent || 0,
+              allowances.medical || 0,
+              allowances.travel || 0,
+              allowances.food || 0,
+              (allowances.special || 0) + (allowances.other || 0),
+              totalAllowances,
+              deductions.professionalTax || 0,
+              deductions.incomeTax || 0,
+              deductions.providentFund || 0,
+              deductions.healthInsurance || 0,
+              deductions.loanRepayment || 0,
+              (deductions.absentDeduction || 0) + (deductions.lateDeduction || 0) + (deductions.other || 0),
+              totalDeductions,
+              p.bonus || 0,
+              p.netSalary || 0,
+              p.paymentStatus || 'N/A',
+              p.paymentDate ? format(new Date(p.paymentDate), 'dd/MM/yyyy') : 'N/A'
+            ]);
+          });
+        } else {
+          // Add a message row if no payroll data is available
+          payrollSheet.addRow(['No payroll data available'].concat(Array(payrollHeaders.length - 1).fill('')));
+        }
+      } catch (error) {
+        console.error('Error adding payroll data rows', error);
+        payrollSheet.addRow(['Error processing payroll data'].concat(Array(payrollHeaders.length - 1).fill('')));
+      }
+      
+      // Apply conditional formatting
+      try {
+        payrollSheet.eachRow((row, rowIndex) => {
+          if (rowIndex > 1) { // Skip header row
+            // Style alternating rows
+            const rowColor = rowIndex % 2 === 0 ? 'F2F2F2' : 'FFFFFF';
+            row.eachCell((cell, colIndex) => {
+              cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: rowColor }
+              };
+              
+              // Add borders to all cells
+              cell.border = {
+                top: { style: 'thin' },
+                left: { style: 'thin' },
+                bottom: { style: 'thin' },
+                right: { style: 'thin' }
+              };
+              
+              // Format currency cells
+              if (colIndex >= 7 && colIndex <= 22 && colIndex !== 19) {
+                cell.numFmt = '₹#,##0.00';
+              }
+              
+              // Color code payment status
+              if (colIndex === 23) {
+                const status = cell.value;
+                if (status === 'Paid') {
+                  cell.font = { color: { argb: '00B050' } }; // Green
+                } else if (status === 'Pending') {
+                  cell.font = { color: { argb: 'FF9900' } }; // Orange
+                } else if (status === 'Failed') {
+                  cell.font = { color: { argb: 'FF0000' } }; // Red
+                } else if (status === 'Processing') {
+                  cell.font = { color: { argb: '0070C0' } }; // Blue
+                }
+              }
+            });
+          }
+        });
+      } catch (error) {
+        console.warn('Error applying conditional formatting', error);
+      }
+      
+      // Adjust column widths
+      payrollSheet.columns.forEach(column => {
+        column.width = 15;
+      });
+      payrollSheet.getColumn('B').width = 25; // Employee Name
+      payrollSheet.getColumn('C').width = 20; // Department
+      payrollSheet.getColumn('D').width = 20; // Position
+      
+      // Add a department summary sheet
+      const deptSummarySheet = workbook.addWorksheet('Department Summary', {
+        properties: { tabColor: { argb: 'FF9900' } }
+      });
+      
+      // Add headers
+      deptSummarySheet.addRow(['Department', 'Employee Count', 'Total Salary', 'Average Salary', 'Min Salary', 'Max Salary']);
+      
+      // Style the headers
+      const deptHeaderRow = deptSummarySheet.getRow(1);
+      deptHeaderRow.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFF' } };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: '4472C4' }
+        };
+        cell.alignment = { horizontal: 'center' };
+      });
+      
+      // Add department data
+      try {
+        if (analytics.salaryByDepartment) {
+          Object.entries(analytics.salaryByDepartment).forEach(([dept, data]) => {
+            deptSummarySheet.addRow([
+              dept,
+              data.count || 0,
+              data.total || 0,
+              data.average || 0,
+              data.min || 0,
+              data.max || 0
+            ]);
+          });
+        } else {
+          deptSummarySheet.addRow(['No department data available', '', '', '', '', '']);
+        }
+      } catch (error) {
+        console.warn('Error adding department data', error);
+        deptSummarySheet.addRow(['Error', 'Failed to load department data', '', '', '', '']);
+      }
+      
+      // Format numbers
+      deptSummarySheet.eachRow((row, rowIndex) => {
+        if (rowIndex > 1) {
+          for (let i = 3; i <= 6; i++) {
+            const cell = row.getCell(i);
+            cell.numFmt = '₹#,##0.00';
+          }
+        }
+      });
+      
+      // Set column widths
+      deptSummarySheet.getColumn('A').width = 25;
+      deptSummarySheet.getColumn('B').width = 15;
+      deptSummarySheet.getColumn('C').width = 15;
+      deptSummarySheet.getColumn('D').width = 15;
+      deptSummarySheet.getColumn('E').width = 15;
+      deptSummarySheet.getColumn('F').width = 15;
+      
+      // Add monthly trend sheet
+      const trendSheet = workbook.addWorksheet('Monthly Trend', {
+        properties: { tabColor: { argb: 'A9D08E' } }
+      });
+      
+      // Add headers
+      trendSheet.addRow(['Month', 'Total Salary', 'Tax Deductions', 'Bonuses', 'Employee Count', 'Average Salary']);
+      
+      // Style the headers
+      const trendHeaderRow = trendSheet.getRow(1);
+      trendHeaderRow.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFF' } };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: '4472C4' }
+        };
+        cell.alignment = { horizontal: 'center' };
+      });
+      
+      // Add trend data
+      try {
+        if (analytics.salaryTrend && Array.isArray(analytics.salaryTrend)) {
+          analytics.salaryTrend.forEach(item => {
+            if (item) {
+              const employeeCount = item.employeeCount || 0;
+              const totalSalary = item.totalSalary || 0;
+              const avgSalary = employeeCount > 0 ? totalSalary / employeeCount : 0;
+              
+              trendSheet.addRow([
+                item.period || 'N/A',
+                totalSalary,
+                item.taxes || 0,
+                item.bonus || 0,
+                employeeCount,
+                avgSalary
+              ]);
+            }
+          });
+        } else {
+          trendSheet.addRow(['No trend data available', 0, 0, 0, 0, 0]);
+        }
+      } catch (error) {
+        console.warn('Error adding trend data', error);
+        trendSheet.addRow(['Error', 'Failed to load trend data', 0, 0, 0, 0]);
+      }
+      
+      // Format numbers
+      trendSheet.eachRow((row, rowIndex) => {
+        if (rowIndex > 1) {
+          for (let i = 2; i <= 4; i++) {
+            const cell = row.getCell(i);
+            cell.numFmt = '₹#,##0.00';
+          }
+          const avgCell = row.getCell(6);
+          avgCell.numFmt = '₹#,##0.00';
+        }
+      });
+      
+      // Set column widths
+      trendSheet.getColumn('A').width = 15;
+      trendSheet.getColumn('B').width = 15;
+      trendSheet.getColumn('C').width = 15;
+      trendSheet.getColumn('D').width = 15;
+      trendSheet.getColumn('E').width = 15;
+      trendSheet.getColumn('F').width = 15;
+      
+      // Generate file name with date range
+      const fileName = `Textlaire_Payroll_Report_${dateRange.startDate}_to_${dateRange.endDate}.xlsx`;
+      
+      try {
+        // Write the workbook to a buffer and save
+        const buffer = await workbook.xlsx.writeBuffer();
+        if (!buffer) {
+          throw new Error('Failed to generate Excel buffer');
+        }
+        
+        saveAs(new Blob([buffer]), fileName);
+        toast.success('Enhanced Excel report downloaded successfully', { id: toastId });
+      } catch (saveError) {
+        console.error('Error saving Excel file:', saveError);
+        toast.error('Failed to save Excel file: ' + saveError.message, { id: toastId });
+      }
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      toast.error('Failed to export detailed Excel report: ' + (error.message || 'Unknown error'));
+    } finally {
+      setExportLoading(false);
     }
   };
 
@@ -192,10 +608,20 @@ const PayrollReportsDashboard = () => {
         {/* Export button */}
         <button
           onClick={handleExportToExcel}
-          className="flex items-center px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors duration-200"
+          disabled={exportLoading}
+          className={`flex items-center px-4 py-2 ${exportLoading ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'} text-white rounded transition-colors duration-200`}
         >
-          <FaFileExcel className="mr-2" />
-          Export to Excel
+          {exportLoading ? (
+            <>
+              <div className="animate-spin h-4 w-4 border-t-2 border-b-2 border-white rounded-full mr-2"></div>
+              Exporting...
+            </>
+          ) : (
+            <>
+              <FaFileExcel className="mr-2" />
+              Enhanced Excel Export
+            </>
+          )}
         </button>
       </div>
 

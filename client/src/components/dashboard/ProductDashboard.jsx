@@ -167,6 +167,15 @@ const ProductDashboard = () => {
       }
     });
 
+    // Category values (inventory value by product type)
+    const categoryValues = {};
+    products.forEach(prod => {
+      if (prod.type) {
+        const price = getNumericPrice(prod.price);
+        categoryValues[prod.type] = (categoryValues[prod.type] || 0) + price;
+      }
+    });
+
     // Material distribution
     const materialCounts = {};
     products.forEach(prod => {
@@ -188,6 +197,24 @@ const ProductDashboard = () => {
     products.forEach(prod => {
       if (prod.qualityGrade) {
         qualityCounts[prod.qualityGrade] = (qualityCounts[prod.qualityGrade] || 0) + 1;
+      }
+    });
+
+    // Stock status (based on availability)
+    const stockStatus = {
+      'In Stock': 0,
+      'Low Stock': 0,
+      'Out of Stock': 0
+    };
+    
+    products.forEach(prod => {
+      // Simple mock logic - in a real app, would be based on inventory data
+      if (prod.availability === 'out_of_stock' || prod.stock === 0) {
+        stockStatus['Out of Stock']++;
+      } else if (prod.availability === 'low_stock' || (prod.stock && prod.stock < 10)) {
+        stockStatus['Low Stock']++;
+      } else {
+        stockStatus['In Stock']++;
       }
     });
 
@@ -229,9 +256,10 @@ const ProductDashboard = () => {
         imageUrl: prod.imageUrl,
         createdAt: prod.createdAt ? format(new Date(prod.createdAt), 'MMM dd, yyyy') : 'Unknown'
       }));
-
+    
     // Premium products (highest priced)
     const premiumProducts = [...products]
+      .filter(p => p.qualityGrade === 'premium' || getNumericPrice(p.price) > 2000)
       .sort((a, b) => getNumericPrice(b.price) - getNumericPrice(a.price))
       .slice(0, 5)
       .map(prod => ({
@@ -258,6 +286,8 @@ const ProductDashboard = () => {
       materialCounts,
       colorCounts,
       qualityCounts,
+      stockStatus,
+      categoryValues,
       priceRanges,
       recentlyAdded,
       premiumProducts
@@ -298,6 +328,18 @@ const ProductDashboard = () => {
         'premium': 40,
         'standard': 60,
         'economy': 20
+      },
+      stockStatus: {
+        'In Stock': 80,
+        'Low Stock': 25,
+        'Out of Stock': 15
+      },
+      categoryValues: {
+        'Towel': 350000,
+        'Sheet': 300000,
+        'Blanket': 250000,
+        'Curtain': 200000,
+        'Robe': 150000
       },
       priceRanges: {
         'Under ₹500': 20,
@@ -412,9 +454,13 @@ const ProductDashboard = () => {
       summarySheet.getCell('A9').font = { bold: true };
       summarySheet.getCell('B9').font = { bold: true };
       
-      Object.entries(productData.stockStatus).forEach(([status, count]) => {
-        summarySheet.addRow([status, count]);
-      });
+      if (productData.stockStatus) {
+        Object.entries(productData.stockStatus).forEach(([status, count]) => {
+          summarySheet.addRow([status, count]);
+        });
+      } else {
+        summarySheet.addRow(['No stock status data available', '']);
+      }
 
       // Add empty row
       summarySheet.addRow([]);
@@ -690,7 +736,7 @@ const ProductDashboard = () => {
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">Product Types</p>
               <p className="text-xl font-bold text-gray-800 dark:text-white">
-                {productData ? Object.keys(productData.categoryCounts).length : 0}
+                {productData ? Object.keys(productData.typeCounts || {}).length : 0}
               </p>
             </div>
             <div className="p-3 bg-yellow-100 dark:bg-yellow-900 rounded-full">
@@ -704,7 +750,7 @@ const ProductDashboard = () => {
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">Materials</p>
               <p className="text-xl font-bold text-gray-800 dark:text-white">
-                {productData ? Object.keys(productData.materialCounts).length : 0}
+                {productData ? Object.keys(productData.materialCounts || {}).length : 0}
               </p>
             </div>
             <div className="p-3 bg-purple-100 dark:bg-purple-900 rounded-full">
@@ -722,9 +768,9 @@ const ProductDashboard = () => {
             {productData ? (
               <Doughnut 
                 data={{
-                  labels: Object.keys(productData.categoryCounts),
+                  labels: Object.keys(productData.typeCounts || {}),
                   datasets: [{
-                    data: Object.values(productData.categoryCounts),
+                    data: Object.values(productData.typeCounts || {}),
                     backgroundColor: [
                       '#3B82F6', // blue
                       '#10B981', // green
@@ -760,10 +806,10 @@ const ProductDashboard = () => {
             {productData ? (
               <Bar 
                 data={{
-                  labels: Object.keys(productData.categoryValues),
+                  labels: Object.keys(productData.categoryValues || {}),
                   datasets: [{
                     label: 'Inventory Value',
-                    data: Object.values(productData.categoryValues),
+                    data: Object.values(productData.categoryValues || {}),
                     backgroundColor: 'rgba(59, 130, 246, 0.7)',
                     borderColor: 'rgba(59, 130, 246, 1)',
                     borderWidth: 1

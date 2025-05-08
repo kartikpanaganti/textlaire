@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { FaChartBar, FaCalculator, FaGift, FaChevronLeft } from 'react-icons/fa';
+import { FaChartBar, FaCalculator, FaChevronLeft } from 'react-icons/fa';
 import PayrollReportsDashboard from './PayrollReportsDashboard';
 import TaxCalculator from './TaxCalculator';
-import BonusManagement from './BonusManagement';
 
 const PayrollFeatures = ({ onBack, payrollId, employeeId }) => {
-  const [activeFeature, setActiveFeature] = useState('reports'); // reports, tax, bonus
+  const [activeFeature, setActiveFeature] = useState('reports'); // reports, tax
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden w-full">
@@ -37,20 +36,12 @@ const PayrollFeatures = ({ onBack, payrollId, employeeId }) => {
           <FaCalculator className="inline-block mr-2" />
           Tax Calculator
         </button>
-        <button
-          className={`flex-1 py-4 text-center font-medium text-sm ${activeFeature === 'bonus' ? 'text-blue-600 border-b-2 border-blue-500' : 'text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-500'}`}
-          onClick={() => setActiveFeature('bonus')}
-        >
-          <FaGift className="inline-block mr-2" />
-          Bonus Management
-        </button>
       </div>
 
       {/* Feature Content */}
       <div className="p-4">
         {activeFeature === 'reports' && <PayrollReportsDashboard />}
         {activeFeature === 'tax' && <TaxCalculator employeeId={employeeId} />}
-        {activeFeature === 'bonus' && <BonusManagement payrollId={payrollId} employeeId={employeeId} />}
       </div>
     </div>
   );
