@@ -411,7 +411,6 @@ const ChatMessages = () => {
                   <MessageItem 
                     key={message._id} 
                     message={message} 
-                    isOwnMessage={message.sender?._id === user?._id}
                     showSender={chatInfo.isGroup}
                     onMessageDeleted={handleMessageDeleted}
                   />

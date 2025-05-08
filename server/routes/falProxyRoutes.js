@@ -316,9 +316,16 @@ router.post('/save-generated-image', async (req, res) => {
           // If product data was provided, save it to the database
           if (productData) {
             try {
+              // Generate a unique code if one is provided
+              let uniqueCode = productData.code;
+              if (uniqueCode) {
+                uniqueCode = `${uniqueCode}-${Date.now().toString().slice(-6)}`;
+              }
+              
               // Prepare product data
               const productToSave = {
                 ...productData,
+                code: uniqueCode, // Use the generated unique code
                 imageUrl: serverImagePath, // Use the local server path for the image
                 id: productData.id || `PROD_${Date.now()}`,
                 createdAt: new Date(),

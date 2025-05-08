@@ -42,8 +42,24 @@ export const getPatternById = async (id) => {
  */
 export const savePattern = async (data, imageUrl) => {
   try {
+    // Handle potential duplicate code
+    let code = data.code;
+    
+    // If a code is provided, ensure it's unique by adding a timestamp suffix if needed
+    if (code) {
+      // Check if a pattern with this code already exists
+      const existingPattern = await Product.findOne({ code });
+      
+      if (existingPattern) {
+        // If duplicate found, create a unique code by adding timestamp
+        code = `${code}-${Date.now().toString().slice(-6)}`;
+        console.log(`Duplicate code detected. Generated unique code: ${code}`);
+      }
+    }
+    
     const patternData = {
       ...data,
+      code, // Use the potentially modified code
       imageUrl,
       id: data.id || uuidv4(),
       createdAt: new Date()

@@ -1,4 +1,4 @@
-import { useState, useContext } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import { Avatar, Box, IconButton, Menu, MenuItem, Typography, Paper } from '@mui/material';
 import { 
   MoreVert as MoreVertIcon, 
@@ -12,10 +12,17 @@ import { deleteMessage } from '../../api/messageApi';
 import AttachmentPreview from './AttachmentPreview';
 import { ChatContext } from '../../context/ChatContext';
 
-const MessageItem = ({ message, isOwnMessage, showSender, onMessageDeleted }) => {
+const MessageItem = ({ message, showSender, onMessageDeleted }) => {
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const { user } = useContext(ChatContext);
+  
+  // Debug: Add logging to verify user and message data
+  useEffect(() => {
+    console.log("MessageItem - User ID:", user?._id);
+    console.log("MessageItem - Message Sender ID:", message.sender?._id);
+    console.log("MessageItem - Message:", message);
+  }, [message, user]);
   
   // Format message time
   const formatMessageTime = (timestamp) => {
@@ -52,8 +59,9 @@ const MessageItem = ({ message, isOwnMessage, showSender, onMessageDeleted }) =>
     }
   };
   
-  // Determine if message is from current user - prioritize the prop if provided
-  const isSentByCurrentUser = isOwnMessage !== undefined ? isOwnMessage : message.sender?._id === user?._id;
+  // Determine if message is from current user
+  const isSentByCurrentUser = user && message.sender && user._id === message.sender._id;
+  console.log("isSentByCurrentUser:", isSentByCurrentUser, user?._id, message.sender?._id);
   
   return (
     <Box
@@ -62,18 +70,10 @@ const MessageItem = ({ message, isOwnMessage, showSender, onMessageDeleted }) =>
         flexDirection: isSentByCurrentUser ? 'row-reverse' : 'row',
         mb: 1.5,
         maxWidth: '80%',
-        width: 'auto',
+        width: 'fit-content',
         alignSelf: isSentByCurrentUser ? 'flex-end' : 'flex-start',
-        // Adjusted styles to position messages correctly
-        ...(isSentByCurrentUser ? {
-          marginLeft: 'auto', // Push to right side
-          marginRight: '0px',
-          justifyContent: 'flex-end'
-        } : {
-          marginLeft: '0px', // Push to left side
-          marginRight: 'auto',
-          justifyContent: 'flex-start'
-        })
+        marginLeft: isSentByCurrentUser ? 'auto' : '0px',
+        marginRight: isSentByCurrentUser ? '0px' : 'auto'
       }}
     >
       {showSender && !isSentByCurrentUser && (
@@ -106,11 +106,8 @@ const MessageItem = ({ message, isOwnMessage, showSender, onMessageDeleted }) =>
             wordBreak: 'break-word',
             maxWidth: '100%',
             minWidth: '120px',
-            ...(isSentByCurrentUser ? {
-              borderTopRightRadius: 0, // Makes sender bubbles connect to right side
-            } : {
-              borderTopLeftRadius: 0, // Makes received bubbles connect to left side
-            })
+            borderTopRightRadius: isSentByCurrentUser ? 0 : 2,
+            borderTopLeftRadius: isSentByCurrentUser ? 2 : 0
           }}
         >
           {message.content && (
@@ -130,7 +127,7 @@ const MessageItem = ({ message, isOwnMessage, showSender, onMessageDeleted }) =>
               display: 'flex',
               justifyContent: 'flex-end',
               mt: 0.5,
-              gap: 0.5, // Reduced gap for tighter layout
+              gap: 0.5,
               alignItems: 'center'
             }}
           >
