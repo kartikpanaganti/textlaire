@@ -49,6 +49,11 @@ const payrollSchema = new mongoose.Schema({
     workingDays: { type: Number, default: 0 },
     totalWorkingDays: { type: Number, default: 0 }
   },
+  // Original salary (full amount before proration)
+  originalSalary: {
+    type: Number,
+    default: 1, // Default full month salary
+  },
   // Salary components
   basicSalary: {
     type: Number,
@@ -185,7 +190,7 @@ payrollSchema.pre('save', function(next) {
     Object.values(this.allowances).reduce((sum, val) => sum + (val || 0), 0)
   );
   
-  // Calculate total deductions
+  // Calculate total deductions (excluding leave deduction which is handled separately)
   const deductionTotal = formatToDecimal(
     Object.values(this.deductions).reduce((sum, val) => sum + (val || 0), 0)
   );
@@ -194,7 +199,8 @@ payrollSchema.pre('save', function(next) {
   this.overtime.rate = formatToDecimal(this.overtime.rate || 1.5);
   this.overtime.amount = formatToDecimal((this.overtime.hours || 0) * (this.overtime.rate || 1.5));
   
-  // Format other monetary fields
+  // Format basic salary values
+  this.originalSalary = formatToDecimal(this.originalSalary || 15300);
   this.basicSalary = formatToDecimal(this.basicSalary || 0);
   this.bonus = formatToDecimal(this.bonus || 0);
   this.leaveDeduction = formatToDecimal(this.leaveDeduction || 0);
@@ -204,7 +210,7 @@ payrollSchema.pre('save', function(next) {
     this.basicSalary + allowanceTotal + this.bonus + this.overtime.amount
   );
   
-  // Calculate total deductions
+  // Calculate total deductions (including leave deduction)
   this.totalDeductions = formatToDecimal(deductionTotal + this.leaveDeduction);
   
   // Calculate net salary

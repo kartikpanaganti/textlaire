@@ -30,6 +30,10 @@ const getCurrentYear = () => {
   return new Date().getFullYear();
 };
 
+const getDaysInMonth = (month, year) => {
+  return new Date(year, month, 0).getDate();
+};
+
 const PayrollManagementPage = () => {
   // Use toast directly instead of showNotification
   const [payrolls, setPayrolls] = useState([]);
@@ -465,76 +469,91 @@ useEffect(() => {
     }
   };
   
-  // Function to recalculate/fix payroll values to match the detail view
+  // Format function for displaying salary values consistently
+  const formatSalary = (amount) => {
+    if (amount === undefined || amount === null) return '₹0.00';
+    const numericValue = parseFloat(amount);
+    return `₹${numericValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  // Function to recalculate payroll values
   const recalculatePayrollValues = (payroll) => {
-    // Get actual days in the month
-    const daysInMonth = new Date(payroll.year, payroll.month, 0).getDate();
+    // If payroll is missing data, prevent calculation errors
+    if (!payroll || !payroll.attendanceSummary) {
+      return payroll;
+    }
     
-    // Calculate working days (present + late)
-    const present = payroll.attendanceSummary?.present || 0;
-    const late = payroll.attendanceSummary?.late || 0;
-    const workingDays = present + late;
+    // Get the original full salary (before proration)
+    const originalSalary = payroll.originalSalary || 15300; // Default to 15300 if not available
     
-    // Calculate proration factor
-    const prorationFactor = workingDays / daysInMonth;
+    // Get total days in month and working days for proration
+    const daysInMonth = payroll.attendanceSummary.totalWorkingDays || 31;
+    const workingDays = (payroll.attendanceSummary.present || 0) + (payroll.attendanceSummary.late || 0);
     
-    // Calculate base salary components
-    const basicSalary = parseFloat(payroll.basicSalary || 5999);
+    // Calculate proration factor (minimum 10% to avoid extremely small values)
+    const proratedFactor = Math.max(workingDays / daysInMonth, 0.1);
     
-    // Calculate allowances
-    let totalAllowances = 0;
+    // Calculate prorated basic salary
+    const proratedBasic = originalSalary * proratedFactor;
+    
+    // Calculate prorated allowances
+    let proratedAllowances = 0;
     if (payroll.allowances) {
       Object.values(payroll.allowances).forEach(value => {
-        totalAllowances += parseFloat(value || 0);
+        proratedAllowances += parseFloat(value || 0);
       });
     }
     
-    // Calculate additional earnings
-    const bonus = parseFloat(payroll.bonus || 0);
-    const overtime = parseFloat(payroll.overtime?.amount || 0);
+    // Add other components to gross salary
+    const overtimeAmount = parseFloat(payroll.overtime?.amount || 0);
+    const bonusAmount = parseFloat(payroll.bonus || 0);
     
-    // Calculate full month gross salary
-    const fullMonthGross = basicSalary + totalAllowances + bonus + overtime;
-    
-    // Calculate prorated gross salary
-    const proratedGross = (fullMonthGross * prorationFactor).toFixed(2);
-    
-    // Set default values for deductions if they don't exist
-    const deductions = {
-      professionalTax: 150,
-      incomeTax: 0,
-      providentFund: 719.88,
-      healthInsurance: 299.95,
-      loanRepayment: 0,
-      absentDeduction: 0,
-      lateDeduction: 193.52,
-      other: 0,
-      ...(payroll.deductions || {})
-    };
+    // Calculate gross salary (prorated components + non-prorated extras)
+    const grossSalary = proratedBasic + proratedAllowances + overtimeAmount + bonusAmount;
     
     // Calculate total deductions
     let totalDeductions = 0;
-    Object.values(deductions).forEach(value => {
-      totalDeductions += parseFloat(value || 0);
-    });
-    totalDeductions += parseFloat(payroll.leaveDeduction || 0);
+    if (payroll.deductions) {
+      Object.values(payroll.deductions).forEach(value => {
+        totalDeductions += parseFloat(value || 0);
+      });
+    }
+    
+    // Add leave deduction
+    const leaveDeduction = parseFloat(payroll.leaveDeduction || 0);
+    totalDeductions += leaveDeduction;
     
     // Calculate net salary
-    const netSalary = (parseFloat(proratedGross) - totalDeductions).toFixed(2);
+    const netSalary = grossSalary - totalDeductions;
     
-    // Return updated payroll with correct values
+    // Return the updated payroll with accurate calculations
     return {
       ...payroll,
-      attendanceSummary: {
-        ...payroll.attendanceSummary,
-        workingDays: workingDays,
-        totalWorkingDays: daysInMonth
-      },
-      grossSalary: proratedGross,
-      totalDeductions: totalDeductions.toFixed(2),
-      netSalary: netSalary,
-      deductions: deductions
+      originalSalary,
+      basicSalary: proratedBasic,
+      grossSalary,
+      totalDeductions,
+      netSalary
     };
+  };
+
+  // Wrapper method for rendering the compact payroll card view
+  const renderPayrollCard = (payroll) => {
+    // Recalculate values to ensure consistency
+    const calculatedPayroll = recalculatePayrollValues(payroll);
+    
+    return (
+      <PayrollCard
+        key={calculatedPayroll._id}
+        payroll={calculatedPayroll}
+        onSelect={handleViewPayroll}
+        onGenerate={handleGeneratePayslip}
+        onUpdateStatus={handleUpdateStatus}
+        onDelete={handleDeletePayroll}
+        selected={selectedPayrolls.includes(calculatedPayroll._id)}
+        handleSelectItem={handleSelectItem}
+      />
+    );
   };
 
   // Add a useEffect to refresh data when modal closes
@@ -765,33 +784,49 @@ useEffect(() => {
       // Add attendance summary
       const attendanceStartY = doc.lastAutoTable.finalY + 5;
       
+      // Calculate attendance rate percentage
+      const presentDays = currentPayroll.attendanceSummary?.present || 0;
+      const totalDays = currentPayroll.attendanceSummary?.totalWorkingDays || getDaysInMonth(currentPayroll.month, currentPayroll.year);
+      const attendanceRate = Math.round((presentDays / totalDays) * 100);
+      
+      // Get the working days (present + late) - consistent with detail modal
+      const presentCount = currentPayroll.attendanceSummary?.present || 0;
+      const lateCount = currentPayroll.attendanceSummary?.late || 0;
+      const workingDays = presentCount + lateCount;
+      
+      // Use 31 as default for total days in month if not provided
+      const daysInMonth = getDaysInMonth(currentPayroll.month, currentPayroll.year);
+      
       autoTable(doc, {
         startY: attendanceStartY,
         head: [[
-          { content: 'Attendance Summary', colSpan: 5, styles: { halign: 'center', fillColor: [0, 102, 204], fontSize: 10 } }
+          { content: 'Attendance Summary', colSpan: 6, styles: { halign: 'center', fillColor: [0, 102, 204], fontSize: 10 } }
         ]],
         body: [[
           { content: 'Present', styles: { fontStyle: 'bold', fontSize: 9 } },
           { content: 'Absent', styles: { fontStyle: 'bold', fontSize: 9 } },
           { content: 'Late', styles: { fontStyle: 'bold', fontSize: 9 } },
           { content: 'On Leave', styles: { fontStyle: 'bold', fontSize: 9 } },
-          { content: 'Working Days', styles: { fontStyle: 'bold', fontSize: 9 } }
+          { content: 'Working Days', styles: { fontStyle: 'bold', fontSize: 9 } },
+          { content: 'Attendance Rate', styles: { fontStyle: 'bold', fontSize: 9 } }
         ],
         [
-          { content: currentPayroll.attendanceSummary?.present || 0, styles: { fontSize: 9 } },
+          { content: presentCount, styles: { fontSize: 9 } },
           { content: currentPayroll.attendanceSummary?.absent || 0, styles: { fontSize: 9 } },
-          { content: currentPayroll.attendanceSummary?.late || 0, styles: { fontSize: 9 } },
+          { content: lateCount, styles: { fontSize: 9 } },
           { content: currentPayroll.attendanceSummary?.onLeave || 0, styles: { fontSize: 9 } },
-          { content: `${currentPayroll.attendanceSummary?.workingDays || 0}/${isCurrentMonth ? currentDay : currentPayroll.attendanceSummary?.totalWorkingDays || 0}`, styles: { fontSize: 9 } }
+          { content: `${workingDays}/${daysInMonth}`, styles: { fontSize: 9 } },
+          { content: `${attendanceRate}%`, styles: { fontSize: 9 } }
         ]],
         theme: 'grid',
         styles: { halign: 'center', cellPadding: 2 },
         columnStyles: { 
-          0: { cellWidth: 30 }, 
-          1: { cellWidth: 30 }, 
-          2: { cellWidth: 30 }, 
-          3: { cellWidth: 30 }, 
-          4: { cellWidth: 40 } 
+          0: { cellWidth: 25 }, 
+          1: { cellWidth: 25 }, 
+          2: { cellWidth: 25 }, 
+          3: { cellWidth: 25 }, 
+          4: { cellWidth: 30 },
+          5: { cellWidth: 30 }
         },
         tableWidth: 160,
         margin: { left: 25, right: 25 }
@@ -1064,6 +1099,28 @@ useEffect(() => {
     
     setSelectedPayroll(currentPayroll);
     setShowFeaturesModal(true);
+  };
+
+  // Add a function to recalculate a payroll record
+  const handleRecalculatePayroll = async (payrollId) => {
+    try {
+      setLoading(true);
+      
+      const response = await axios.put(`/api/payroll/recalculate/${payrollId}`);
+      
+      if (response.data.success) {
+        toast.success('Payroll recalculated successfully');
+        // Refresh the payroll list to show updated values
+        await fetchPayrolls();
+      } else {
+        toast.error('Failed to recalculate payroll');
+      }
+    } catch (error) {
+      console.error('Error recalculating payroll:', error);
+      toast.error(error.response?.data?.message || 'An error occurred while recalculating payroll');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -1575,159 +1632,155 @@ useEffect(() => {
             
             {/* Table View */}
             {viewMode === 'table' && (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto shadow-md rounded-lg">
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gray-50 dark:bg-gray-800">
+                  <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
                     <tr>
-                      <th scope="col" className="px-4 py-3 text-left">
+                      <th scope="col" className="p-4">
                         <div className="flex items-center">
                           <input
+                            id="checkbox-all"
                             type="checkbox"
-                            checked={selectedPayrolls.length === filteredPayrolls.length}
+                            className="w-4 h-4 text-blue-600 bg-gray-100 rounded border-gray-300 focus:ring-blue-500"
+                            checked={selectedPayrolls.length === filteredPayrolls.length && filteredPayrolls.length > 0}
                             onChange={handleSelectAll}
-                            className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
                           />
+                          <label htmlFor="checkbox-all" className="sr-only">checkbox</label>
                         </div>
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left">
-                        <div className="flex items-center group cursor-pointer" onClick={() => handleSort('employeeDetails.name')}>
-                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Employee</span>
-                          <svg className={`ml-1 h-4 w-4 ${getSortIconClass('employeeDetails.name')}`} viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
-                          </svg>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer"
+                        onClick={() => handleSort('employeeDetails.name')}
+                      >
+                        <div className="flex items-center">
+                          Employee
+                          <FaSortAmountUpAlt className={getSortIconClass('employeeDetails.name')} size={14} />
                         </div>
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left">
-                        <div className="flex items-center group cursor-pointer" onClick={() => handleSort('employeeDetails.department')}>
-                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Department</span>
-                          <svg className={`ml-1 h-4 w-4 ${getSortIconClass('employeeDetails.department')}`} viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
-                          </svg>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Department
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Period
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer"
+                        onClick={() => handleSort('basicSalary')}
+                      >
+                        <div className="flex items-center">
+                          Basic Salary
+                          <FaSortAmountUpAlt className={getSortIconClass('basicSalary')} size={14} />
                         </div>
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left">
-                        <div className="flex items-center group cursor-pointer" onClick={() => handleSort('month')}>
-                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Period</span>
-                          <svg className={`ml-1 h-4 w-4 ${getSortIconClass('month')}`} viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
-                          </svg>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer"
+                        onClick={() => handleSort('netSalary')}
+                      >
+                        <div className="flex items-center">
+                          Net Salary
+                          <FaSortAmountUpAlt className={getSortIconClass('netSalary')} size={14} />
                         </div>
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left">
-                        <div className="flex items-center group cursor-pointer" onClick={() => handleSort('basicSalary')}>
-                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Basic Salary</span>
-                          <svg className={`ml-1 h-4 w-4 ${getSortIconClass('basicSalary')}`} viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
-                          </svg>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer"
+                        onClick={() => handleSort('paymentStatus')}
+                      >
+                        <div className="flex items-center">
+                          Status
+                          <FaSortAmountUpAlt className={getSortIconClass('paymentStatus')} size={14} />
                         </div>
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left">
-                        <div className="flex items-center group cursor-pointer" onClick={() => handleSort('netSalary')}>
-                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Net Salary</span>
-                          <svg className={`ml-1 h-4 w-4 ${getSortIconClass('netSalary')}`} viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-left">
-                        <div className="flex items-center group cursor-pointer" onClick={() => handleSort('paymentStatus')}>
-                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</span>
-                          <svg className={`ml-1 h-4 w-4 ${getSortIconClass('paymentStatus')}`} viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-right">
-                        <span className="text-xs font-medium text-gray-500 text-right">Actions</span>
+                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                        Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                    {filteredPayrolls.map((payroll) => (
-                      <tr key={payroll._id} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-150">
-                        <td className="px-4 py-2 whitespace-nowrap">
-                          <input
-                            type="checkbox"
-                            checked={selectedPayrolls.includes(payroll._id)}
-                            onChange={() => handleSelectItem(payroll._id)}
-                            className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                          />
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="h-7 w-7 flex items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 mr-2 text-xs">
-                              {payroll.employeeDetails?.name?.charAt(0) || '?'}
+                  <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-700 dark:divide-gray-600">
+                    {filteredPayrolls.map((payroll) => {
+                      // Recalculate values for consistency
+                      const calculatedPayroll = recalculatePayrollValues(payroll);
+                      
+                      return (
+                        <tr key={calculatedPayroll._id} className="hover:bg-gray-50 dark:hover:bg-gray-600">
+                          <td className="w-4 p-4">
+                            <div className="flex items-center">
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 text-blue-600 bg-gray-100 rounded border-gray-300 focus:ring-blue-500"
+                                checked={selectedPayrolls.includes(calculatedPayroll._id)}
+                                onChange={() => handleSelectItem(calculatedPayroll._id)}
+                              />
+                              <label className="sr-only">checkbox</label>
                             </div>
-                            <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                {payroll.employeeDetails?.name || 'N/A'}
-                              </div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400">
-                                ID: {payroll.employeeDetails?.employeeID || 'No ID'}
-                              </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">
+                              {calculatedPayroll.employeeDetails?.name || 'Unknown'}
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                          {payroll.employeeDetails?.department || 'N/A'}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                          {getMonthName(payroll.month)} {payroll.year}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                          {formatCurrency(payroll.basicSalary)}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-indigo-600 dark:text-indigo-400">
-                          {formatCurrency(payroll.netSalary)}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(payroll.paymentStatus)}`}>
-                            {payroll.paymentStatus}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500 text-right">
-                          <div className="flex space-x-1 justify-end">
-                            <button
-                              onClick={() => handleViewPayroll(payroll)}
-                              className="p-1.5 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-                              title="View Details"
-                            >
-                              <FaFileInvoiceDollar size={14} />
-                            </button>
-                            {payroll.paymentStatus !== 'Paid' && (
+                            <div className="text-sm text-gray-500 dark:text-gray-400">
+                              ID: {calculatedPayroll.employeeDetails?.employeeID || 'N/A'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900 dark:text-white">
+                              {calculatedPayroll.employeeDetails?.department || 'N/A'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900 dark:text-white">
+                              {getMonthName(calculatedPayroll.month)} {calculatedPayroll.year}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900 dark:text-white">
+                              {formatSalary(calculatedPayroll.originalSalary)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900 dark:text-white">
+                              {formatSalary(calculatedPayroll.netSalary)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(calculatedPayroll.paymentStatus)}`}>
+                              {calculatedPayroll.paymentStatus}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right whitespace-nowrap">
+                            <div className="flex justify-end space-x-2">
                               <button
-                                onClick={() => handleDeletePayroll(payroll._id)}
-                                className="p-1.5 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-                                title="Recalculate Payroll"
+                                onClick={() => handleViewPayroll(calculatedPayroll)}
+                                className={getActionButtonStyle('view')}
                               >
-                                <FaSync size={14} />
+                                <FaEye />
                               </button>
-                            )}
-                            <button
-                              onClick={() => handleUpdateStatus(payroll)}
-                              className="p-1.5 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-                              title="Update Payment Status"
-                            >
-                              <FaMoneyBillWave size={14} />
-                            </button>
-                            <button
-                              onClick={() => handleGeneratePayslip(payroll)}
-                              className="p-1.5 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-                              title="Download Payslip"
-                            >
-                              <FaFileDownload size={14} />
-                            </button>
-                            <button
-                              onClick={() => openAdvancedFeatures(payroll)}
-                              className="p-1.5 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-                              title="Advanced Features"
-                            >
-                              <FaCogs size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              <button
+                                onClick={() => handleGeneratePayslip(calculatedPayroll)}
+                                className={getActionButtonStyle('download')}
+                              >
+                                <FaFileDownload />
+                              </button>
+                              <button
+                                onClick={() => handleUpdateStatus(calculatedPayroll)}
+                                className={getActionButtonStyle('update')}
+                              >
+                                <FaMoneyBillWave />
+                              </button>
+                              <button
+                                onClick={() => handleDeletePayroll(calculatedPayroll._id)}
+                                className={getActionButtonStyle('delete')}
+                              >
+                                <FaTrash />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

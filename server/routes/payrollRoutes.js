@@ -12,7 +12,8 @@ import {
   generatePayrollReports,
   calculateTaxBreakdown,
   manageBonusIncentives,
-  bulkManageBonus
+  bulkManageBonus,
+  recalculatePayroll
 } from '../controllers/payrollController.js';
 import { authMiddleware, adminMiddleware } from '../middleware/authMiddleware.js';
 
@@ -38,5 +39,8 @@ router.patch('/:id/payment-status', authMiddleware, adminMiddleware, updatePayme
 router.post('/batch-update-status', authMiddleware, adminMiddleware, batchUpdatePaymentStatus);
 router.put('/:id', authMiddleware, adminMiddleware, updatePayroll);
 router.delete('/:id', authMiddleware, adminMiddleware, deletePayroll);
+
+// Recalculate payroll to fix any discrepancies
+router.put('/recalculate/:id', authMiddleware, adminMiddleware, recalculatePayroll);
 
 export default router;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaFileDownload, FaMoneyBillWave, FaCalendarAlt, FaClock, FaSave, FaLock, FaUnlock } from 'react-icons/fa';
+import { FaFileDownload, FaMoneyBillWave, FaCalendarAlt, FaClock, FaSave, FaLock, FaUnlock, FaSync } from 'react-icons/fa';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
@@ -9,19 +9,74 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
     return new Date(year, month, 0).getDate();
   };
   
-  // Apply initial fixes to attendance data
+  // Function to fix attendance summary and calculate fixed deductions
+  const fixAttendanceSummary = (payrollData) => {
+    // Calculate total days in month
+    const daysInMonth = getDaysInMonth(payrollData.month, payrollData.year);
+    
+    // Get current attendance data
+    const present = payrollData.attendanceSummary?.present || 0;
+    const absent = payrollData.attendanceSummary?.absent || 0;
+    const late = payrollData.attendanceSummary?.late || 0;
+    const onLeave = payrollData.attendanceSummary?.onLeave || 0;
+    
+    // Get the working days (present + late)
+    const workingDays = present + late;
+    
+    // Get the total days in month for proration
+    const workingDaysFactor = Math.max(workingDays / daysInMonth, 0.1); // At least 10% to avoid zero deductions
+    
+    // fixed deduction rates
+    const absentDeduction = absent * 100;  // 100 rupees per day
+    const lateDeduction = late * 25;       // 25 rupees per day
+    const leaveDeduction = onLeave * 45;   // 45 rupees per day
+    
+    // Set statutory deductions with new values (prorated based on working days)
+    const professionalTax = Math.round(15 * workingDaysFactor);    // 15 rupees (prorated)
+    const incomeTax = 0;                                            // 0 rupees (not prorated)
+    const providentFund = Math.round(48 * workingDaysFactor);      // 48 rupees (prorated)
+    const healthInsurance = Math.round(20 * workingDaysFactor);    // 20 rupees (prorated)
+    
+    // Update deductions in payroll data
+    if (!payrollData.deductions) payrollData.deductions = {};
+    payrollData.deductions.absentDeduction = absentDeduction;
+    payrollData.deductions.lateDeduction = lateDeduction;
+    payrollData.deductions.professionalTax = professionalTax;
+    payrollData.deductions.incomeTax = incomeTax;
+    payrollData.deductions.providentFund = providentFund;
+    payrollData.deductions.healthInsurance = healthInsurance;
+    payrollData.leaveDeduction = leaveDeduction;
+    
+    // Return updated attendance summary
+    return {
+      ...payrollData.attendanceSummary,
+      workingDays: workingDays,
+      totalWorkingDays: daysInMonth
+    };
+  };
+  
+  // Function to validate statutory deductions
+  const validateStatutoryDeductions = () => {
+    // No need for strict validation on prorated statutory deductions
+    // Just check if they exist and are non-negative
+    const deductions = editedPayroll.deductions || {};
+    const validProfessionalTax = deductions.professionalTax >= 0;
+    const validProvidentFund = deductions.providentFund >= 0;
+    const validHealthInsurance = deductions.healthInsurance >= 0;
+    
+    return validProfessionalTax && validProvidentFund && validHealthInsurance;
+  };
+  
+  // Apply initial fixes to attendance data and calculate fixed deductions
   const fixedPayroll = payroll ? {
     ...payroll,
-    attendanceSummary: {
-      ...payroll.attendanceSummary,
-      totalWorkingDays: getDaysInMonth(payroll.month, payroll.year)
-    }
+    attendanceSummary: fixAttendanceSummary(payroll)
   } : {};
   
   // Ensure payroll has all necessary properties initialized
   const initializedPayroll = {
     ...fixedPayroll,
-    basicSalary: fixedPayroll?.basicSalary || 5999,
+    basicSalary: fixedPayroll?.basicSalary || 15300, // Default monthly salary package if not provided
     grossSalary: fixedPayroll?.grossSalary || 1857.75,
     netSalary: fixedPayroll?.netSalary || 494.40,
     allowances: {
@@ -34,13 +89,13 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
       ...(fixedPayroll?.allowances || {})
     },
     deductions: {
-      professionalTax: 150,
-      incomeTax: 0, 
-      providentFund: 719.88,
-      healthInsurance: 299.95,
+      professionalTax: 15,  // 15 rupees
+      incomeTax: 0,        // 0 rupees
+      providentFund: 48,   // 48 rupees
+      healthInsurance: 20, // 20 rupees
       loanRepayment: 0,
       absentDeduction: 0,
-      lateDeduction: 193.52,
+      lateDeduction: 0,
       other: 0,
       ...(fixedPayroll?.deductions || {})
     },
@@ -174,28 +229,56 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
 
   // Handle leave deduction change
   const handleLeaveDeductionChange = (value) => {
-    // Allow all changes regardless of status
+    if (!isEditable()) {
+      toast.error('This payroll is locked for editing');
+      return;
+    }
+    
+    // Calculate fixed leave deduction based on attendance
+    const leaveCount = editedPayroll.attendanceSummary?.onLeave || 0;
+    const fixedLeaveDeduction = leaveCount * 45; // 45 rupees per leave day
+    
+    // Use admin override or fixed calculation
+    const leaveDeductionValue = adminOverride ? parseFloat(value || 0) : fixedLeaveDeduction;
+    
+    // Set the deduction value
     setEditedPayroll({
       ...editedPayroll,
-      leaveDeduction: parseFloat(value)
+      leaveDeduction: leaveDeductionValue
     });
   };
-
+  
   // Handle Late Deduction specifically
   const handleLateDeductionChange = (value) => {
+    // For manual overrides by admin when needed
+    if (!isEditable()) {
+      toast.error('This payroll is locked for editing');
+      return;
+    }
+    
     console.log(`Directly updating lateDeduction to: ${value}`);
+    
+    // Calculate fixed late deduction based on attendance
+    const lateCount = editedPayroll.attendanceSummary?.late || 0;
+    const fixedLateDeduction = lateCount * 25; // 25 rupees per late day
+    
+    // Use admin override or fixed calculation
+    const lateDeductionValue = adminOverride ? parseFloat(value || 0) : fixedLateDeduction;
     
     // Create a new object with updated late deduction
     const updatedPayroll = { 
       ...editedPayroll,
       deductions: {
         ...(editedPayroll.deductions || {}),
-        lateDeduction: parseFloat(value || 0)
+        lateDeduction: lateDeductionValue
       }
     };
     
     // Set state with new object
     setEditedPayroll(updatedPayroll);
+    
+    // Update the net salary after changing the deduction
+    setTimeout(() => calculateAndUpdateSalary(), 100);
     
     // Log the change
     console.log("Payroll updated with new lateDeduction:", updatedPayroll.deductions);
@@ -209,16 +292,19 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
     if (editedPayroll.deductions) {
       console.log("Calculating deductions from:", editedPayroll.deductions);
       Object.entries(editedPayroll.deductions).forEach(([key, value]) => {
-        console.log(`Adding deduction: ${key} = ${value}`);
-        total += parseFloat(value || 0);
+        let deductionValue = parseFloat(value || 0);
+        console.log(`Adding deduction: ${key} = ${deductionValue}`);
+        total += deductionValue;
       });
     }
     
     // Add leave deduction
-    total += parseFloat(editedPayroll.leaveDeduction || 0);
+    const leaveDeduction = parseFloat(editedPayroll.leaveDeduction || 0);
+    console.log(`Adding leave deduction: ${leaveDeduction}`);
+    total += leaveDeduction;
     
     console.log("Total deductions calculated:", total.toFixed(2));
-    return total.toFixed(2);
+    return parseFloat(total.toFixed(2));
   };
 
   // Calculate net salary
@@ -227,22 +313,32 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
     const totalDeductions = parseFloat(calculateTotalDeductions());
     return (grossSalary - totalDeductions).toFixed(2);
   };
-
+  
   // Calculate prorated salary based on days worked
   const calculateProratedSalary = (payrollData = editedPayroll) => {
     // Get actual days in the month
     const daysInMonth = getDaysInMonth(payrollData.month, payrollData.year);
     
-    // Get the working days
-    const workingDays = payrollData.attendanceSummary?.workingDays || 0;
+    // Get the working days (present + late) - make sure they're counted correctly
+    const workingDays = (payrollData.attendanceSummary?.present || 0) + (payrollData.attendanceSummary?.late || 0);
     
-    // Calculate the prorated factor
-    const proratedFactor = workingDays / daysInMonth;
+    // Make sure attendanceSummary.workingDays is updated
+    if (payrollData.attendanceSummary) {
+      payrollData.attendanceSummary.workingDays = workingDays;
+    }
     
-    // Calculate the prorated gross salary
-    const fullMonthSalary = parseFloat(payrollData.basicSalary || 0);
+    // Calculate the prorated factor with a minimum value to avoid extreme deductions
+    const proratedFactor = Math.max(workingDays / daysInMonth, 0.1); // At least 10% to avoid zero salary
     
-    // Add allowances
+    // Get the full month basic salary (ensure it's not 0)
+    // Use originalSalary from the backend, or fall back to basicSalary if needed
+    const originalSalary = parseFloat(payrollData.originalSalary || 0);
+    const effectiveBasicSalary = originalSalary > 0 ? originalSalary : 15300;
+    
+    // Calculate prorated basic salary
+    const proratedBasicSalary = effectiveBasicSalary * proratedFactor;
+    
+    // Add allowances - also prorated
     let totalAllowances = 0;
     if (payrollData.allowances) {
       Object.values(payrollData.allowances).forEach(value => {
@@ -250,24 +346,43 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
       });
     }
     
-    // Add bonus and overtime
+    // Add bonus and overtime (these are not prorated)
     const bonus = parseFloat(payrollData.bonus || 0);
     const overtime = parseFloat(payrollData.overtime?.amount || 0);
     
-    // Calculate total full month gross
-    const fullMonthGross = fullMonthSalary + totalAllowances + bonus + overtime;
+    // Calculate total gross
+    const proratedGross = proratedBasicSalary + totalAllowances + bonus + overtime;
     
-    // Apply proration if needed
-    if (workingDays < daysInMonth) {
-      const proratedGross = fullMonthGross * proratedFactor;
-      return proratedGross.toFixed(2);
-    } else {
-      return fullMonthGross.toFixed(2);
-    }
+    // Store the original full salary for reference
+    payrollData.originalSalary = effectiveBasicSalary;
+    
+    return proratedGross.toFixed(2);
   };
-
-  // Update gross salary based on prorated calculation
-  const updateGrossSalary = () => {
+  
+  // Function to calculate and update all salary values
+  const calculateAndUpdateSalary = () => {
+    // First, check if we have backend values already calculated
+    // If we do, we'll use those values to ensure consistency across views
+    if (originalPayroll && originalPayroll.basicSalary && originalPayroll.grossSalary && originalPayroll.netSalary) {
+      console.log("Using backend-provided values for consistency:", {
+        basicSalary: originalPayroll.basicSalary,
+        grossSalary: originalPayroll.grossSalary,
+        netSalary: originalPayroll.netSalary
+      });
+      
+      // Update the edited payroll with these values to ensure consistency
+      setEditedPayroll(prev => ({
+        ...prev,
+        basicSalary: originalPayroll.basicSalary,
+        grossSalary: originalPayroll.grossSalary,
+        netSalary: originalPayroll.netSalary,
+        totalDeductions: originalPayroll.totalDeductions || (originalPayroll.grossSalary - originalPayroll.netSalary)
+      }));
+      
+      return; // Skip the calculation since we're using backend values
+    }
+    
+    // If we don't have backend values, perform the calculation
     // Make sure we're using attendance data with the correct total days
     const fixedAttendanceData = fixAttendanceSummary(editedPayroll);
     const updatedPayroll = {
@@ -275,65 +390,172 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
       attendanceSummary: fixedAttendanceData
     };
     
-    // Calculate prorated salary using the fixed data
-    const proratedGross = calculateProratedSalary(updatedPayroll);
-    
-    // Update state with both the fixed attendance and new gross salary
-    setEditedPayroll(prev => ({
-      ...prev,
-      attendanceSummary: fixedAttendanceData,
-      grossSalary: proratedGross
-    }));
-  };
-
-  // Function to fix attendance summary
-  const fixAttendanceSummary = (payrollData) => {
-    // Calculate total days in month
-    const daysInMonth = getDaysInMonth(payrollData.month, payrollData.year);
-    
-    // Get current attendance data
-    const present = payrollData.attendanceSummary?.present || 0;
-    const absent = payrollData.attendanceSummary?.absent || 0;
-    const late = payrollData.attendanceSummary?.late || 0;
-    const onLeave = payrollData.attendanceSummary?.onLeave || 0;
-    
-    // Calculate working days (present + late)
-    const workingDays = present + late;
-    
-    // Return updated attendance summary
-    return {
-      ...payrollData.attendanceSummary,
-      workingDays: workingDays,
-      totalWorkingDays: daysInMonth
-    };
-  };
-
-  // Initialize payroll with correct attendance data when component loads
-  useEffect(() => {
-    // Fix attendance summary if needed
-    const fixedAttendanceSummary = fixAttendanceSummary(editedPayroll);
-    
-    // Only update if totalWorkingDays is different from actual days in month
-    const daysInMonth = getDaysInMonth(editedPayroll.month, editedPayroll.year);
-    if (editedPayroll.attendanceSummary?.totalWorkingDays !== daysInMonth) {
-      setEditedPayroll(prev => ({
-        ...prev,
-        attendanceSummary: fixedAttendanceSummary
-      }));
+    // Make sure originalSalary exists and is correct
+    if (!updatedPayroll.originalSalary || updatedPayroll.originalSalary <= 0) {
+      updatedPayroll.originalSalary = 15300; // Default if not set correctly
     }
-  }, []);  // Empty dependency array ensures this runs only once on mount
-
-  // On component mount and when basic details change, update gross salary
+    
+    // Get the working days and total days
+    const workingDays = (updatedPayroll.attendanceSummary?.present || 0) + (updatedPayroll.attendanceSummary?.late || 0);
+    const daysInMonth = getDaysInMonth(updatedPayroll.month, updatedPayroll.year);
+    
+    // Calculate proration factor (min 10% to avoid extreme reductions)
+    const proratedFactor = Math.max(workingDays / daysInMonth, 0.1);
+    
+    // Calculate prorated basic salary from original salary
+    const proratedBasic = Math.round(updatedPayroll.originalSalary * proratedFactor * 100) / 100;
+    
+    // Store the prorated basic salary
+    updatedPayroll.basicSalary = proratedBasic;
+    
+    // Update allowances to be prorated from original values
+    let totalAllowances = 0;
+    if (updatedPayroll.allowances) {
+      const allowanceKeys = Object.keys(updatedPayroll.allowances);
+      for (const key of allowanceKeys) {
+        // Only prorate standard allowances (not special or other which might be fixed bonuses)
+        if (['houseRent', 'medical', 'travel', 'food'].includes(key)) {
+          // Calculate original allowance values based on percentages of original salary
+          let originalValue = 0;
+          if (key === 'houseRent') originalValue = updatedPayroll.originalSalary * 0.4; // 40% of original
+          else if (key === 'medical') originalValue = updatedPayroll.originalSalary * 0.1; // 10% of original
+          else if (key === 'travel') originalValue = updatedPayroll.originalSalary * 0.05; // 5% of original
+          else if (key === 'food') originalValue = updatedPayroll.originalSalary * 0.05; // 5% of original
+          
+          // Prorate the allowance and format to 2 decimal places
+          const proratedAllowance = Math.round(originalValue * proratedFactor * 100) / 100;
+          updatedPayroll.allowances[key] = proratedAllowance;
+          totalAllowances += proratedAllowance;
+        } else {
+          // Non-standard allowances are not prorated
+          totalAllowances += parseFloat(updatedPayroll.allowances[key] || 0);
+        }
+      }
+    }
+    
+    // Calculate bonus and overtime
+    const bonus = parseFloat(updatedPayroll.bonus || 0);
+    const overtime = parseFloat(updatedPayroll.overtime?.amount || 0);
+    
+    // Calculate gross salary as the sum of prorated basic and allowances plus non-prorated components
+    const grossSalary = proratedBasic + totalAllowances + bonus + overtime;
+    updatedPayroll.grossSalary = Math.round(grossSalary * 100) / 100;
+    
+    // Calculate leave deduction (₹45/day)
+    const leaveCount = updatedPayroll.attendanceSummary?.onLeave || 0;
+    updatedPayroll.leaveDeduction = leaveCount * 45;
+    
+    // Calculate late deduction (₹25/day)
+    const lateCount = updatedPayroll.attendanceSummary?.late || 0;
+    if (updatedPayroll.deductions) {
+      updatedPayroll.deductions.lateDeduction = lateCount * 25;
+    }
+    
+    // Calculate total deductions
+    const totalDeductions = parseFloat(calculateTotalDeductions());
+    updatedPayroll.totalDeductions = Math.round(totalDeductions * 100) / 100;
+    
+    // Calculate net salary
+    const netSalary = grossSalary - totalDeductions;
+    updatedPayroll.netSalary = Math.round(netSalary * 100) / 100;
+    
+    // Update state with the complete updated payroll
+    setEditedPayroll(updatedPayroll);
+    
+    console.log("Updated salary calculations:", {
+      originalSalary: updatedPayroll.originalSalary,
+      proratedBasic: proratedBasic,
+      totalAllowances: totalAllowances,
+      grossSalary: updatedPayroll.grossSalary,
+      totalDeductions: updatedPayroll.totalDeductions,
+      netSalary: updatedPayroll.netSalary
+    });
+  };
+  
+  // Reset edited payroll whenever the original payroll changes
   useEffect(() => {
-    updateGrossSalary();
-  }, [
-    editedPayroll.basicSalary, 
-    editedPayroll.allowances, 
-    editedPayroll.bonus, 
-    editedPayroll.overtime?.amount,
-    editedPayroll.attendanceSummary?.workingDays
-  ]);
-
+    if (payroll) {
+      console.log("Received original payroll data:", payroll);
+      
+      // Directly use the backend values if available
+      const useBackendValues = true; // Set to true to always use backend values
+      
+      if (useBackendValues && payroll.basicSalary && payroll.grossSalary && payroll.netSalary) {
+        // Apply the attendance summary fix to the payroll
+        const fixedAttendance = fixAttendanceSummary(payroll);
+        
+        // Use all values exactly as they come from the backend
+        setEditedPayroll({
+          ...payroll,
+          attendanceSummary: fixedAttendance
+        });
+        
+        setOriginalPayroll({
+          ...payroll,
+          attendanceSummary: fixedAttendance
+        });
+        
+        console.log("Using backend values without recalculation:", {
+          basicSalary: payroll.basicSalary,
+          grossSalary: payroll.grossSalary,
+          netSalary: payroll.netSalary
+        });
+        
+        return; // Skip further processing
+      }
+      
+      // If we're not using backend values directly, perform the calculation
+      // Apply the attendance summary fix to the payroll and calculate fixed deductions
+      const fixedAttendance = fixAttendanceSummary(payroll);
+      
+      // Use the original salary value provided by the backend, or fall back to basicSalary
+      const originalSalary = parseFloat(payroll.originalSalary || 0);
+      const effectiveOriginalSalary = originalSalary > 0 ? originalSalary : 15300;
+      
+      // Calculate fixed deductions based on attendance
+      const absentCount = payroll.attendanceSummary?.absent || 0;
+      const lateCount = payroll.attendanceSummary?.late || 0;
+      const leaveCount = payroll.attendanceSummary?.onLeave || 0;
+      
+      const absentDeduction = absentCount * 100; // 100 rupees per day
+      const lateDeduction = lateCount * 25;     // 25 rupees per day
+      const leaveDeduction = leaveCount * 45;   // 45 rupees per day
+      
+      // Get working days and calculate proration factor
+      const workingDays = (payroll.attendanceSummary?.present || 0) + (payroll.attendanceSummary?.late || 0);
+      const daysInMonth = getDaysInMonth(payroll.month, payroll.year);
+      const workingDaysFactor = Math.max(workingDays / daysInMonth, 0.1); // At least 10% to avoid zero deductions
+      
+      // Statutory deductions with new values (prorated based on working days)
+      const professionalTax = Math.round(15 * workingDaysFactor);    // 15 rupees (prorated)
+      const incomeTax = payroll.deductions?.incomeTax || 0;          // Use backend value or 0
+      const providentFund = Math.round(48 * workingDaysFactor);      // 48 rupees (prorated)
+      const healthInsurance = Math.round(20 * workingDaysFactor);    // 20 rupees (prorated)
+      
+      const updatedPayroll = {
+        ...payroll,
+        attendanceSummary: fixedAttendance,
+        originalSalary: effectiveOriginalSalary,
+        deductions: {
+          ...(payroll.deductions || {}),
+          absentDeduction: absentDeduction,
+          lateDeduction: lateDeduction,
+          professionalTax: professionalTax,
+          incomeTax: incomeTax,
+          providentFund: providentFund,
+          healthInsurance: healthInsurance
+        },
+        leaveDeduction: leaveDeduction
+      };
+      
+      setEditedPayroll(updatedPayroll);
+      setOriginalPayroll(updatedPayroll);
+      
+      // Calculate and update all salary values
+      setTimeout(() => calculateAndUpdateSalary(), 100);
+    }
+  }, [payroll]);
+  
   // Check if payment info has been changed
   const hasPaymentInfoChanged = () => {
     return (
@@ -348,14 +570,45 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
   const saveChanges = async () => {
     setIsSaving(true);
     try {
-      // Create payroll object with corrected attendance data
+      // Update the salary calculations before saving
+      calculateAndUpdateSalary();
+      
+      // Make sure we have the fixed attendance data
+      const fixedAttendanceData = fixAttendanceSummary(editedPayroll);
+      
+      // Format all numbers to 2 decimal places for consistency
+      const formattedAllowances = {};
+      if (editedPayroll.allowances) {
+        Object.entries(editedPayroll.allowances).forEach(([key, value]) => {
+          formattedAllowances[key] = Math.round(parseFloat(value || 0) * 100) / 100;
+        });
+      }
+      
+      const formattedDeductions = {};
+      if (editedPayroll.deductions) {
+        Object.entries(editedPayroll.deductions).forEach(([key, value]) => {
+          formattedDeductions[key] = Math.round(parseFloat(value || 0) * 100) / 100;
+        });
+      }
+      
+      // Create payroll object with corrected and formatted data
       const payrollToSave = { 
         ...editedPayroll,
-        attendanceSummary: fixAttendanceSummary(editedPayroll)
+        attendanceSummary: fixedAttendanceData,
+        allowances: formattedAllowances,
+        deductions: formattedDeductions,
+        leaveDeduction: Math.round(parseFloat(editedPayroll.leaveDeduction || 0) * 100) / 100,
+        basicSalary: Math.round(parseFloat(editedPayroll.basicSalary || 0) * 100) / 100,
+        originalSalary: Math.round(parseFloat(editedPayroll.originalSalary || 0) * 100) / 100,
+        grossSalary: Math.round(parseFloat(editedPayroll.grossSalary || 0) * 100) / 100,
+        netSalary: Math.round(parseFloat(editedPayroll.netSalary || 0) * 100) / 100,
+        totalDeductions: Math.round(parseFloat(editedPayroll.totalDeductions || 0) * 100) / 100
       };
       
       console.log("Saving payroll with deductions:", JSON.stringify(payrollToSave.deductions));
       console.log("Saving payroll with fixed attendance:", JSON.stringify(payrollToSave.attendanceSummary));
+      console.log("Saving gross salary:", payrollToSave.grossSalary);
+      console.log("Saving net salary:", payrollToSave.netSalary);
       
       // If admin is using override to save a Processing/Paid payroll, log this action
       if (adminOverride && isAdmin && ['Processing', 'Paid'].includes(payrollToSave.paymentStatus)) {
@@ -389,10 +642,105 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
     }
   };
 
+  // Add a function to recalculate payroll from the server
+  const handleRecalculate = async () => {
+    // Only allow recalculation for pending or processing payrolls
+    if (!adminOverride && ['Paid'].includes(editedPayroll.paymentStatus)) {
+      toast.error('Cannot recalculate a paid payroll');
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      // Call the recalculate API endpoint
+      const response = await axios.put(`/api/payroll/recalculate/${editedPayroll._id}`);
+      
+      if (response.data.success) {
+        toast.success('Payroll recalculated successfully');
+        
+        // Update the payroll with the recalculated data
+        const recalculatedPayroll = response.data.data;
+        
+        // Apply the attendance summary fix to the recalculated data
+        const fixedAttendance = fixAttendanceSummary(recalculatedPayroll);
+        
+        // Make sure we have the original salary set correctly
+        const updatedPayroll = {
+          ...recalculatedPayroll,
+          attendanceSummary: fixedAttendance,
+          // Make sure original salary is carried over
+          originalSalary: recalculatedPayroll.originalSalary || 15300
+        };
+        
+        // Update local state
+        setEditedPayroll(updatedPayroll);
+        setOriginalPayroll(updatedPayroll);
+        
+        // Notify parent component
+        if (onUpdate) onUpdate(updatedPayroll);
+        
+        console.log("Recalculated payroll:", updatedPayroll);
+      } else {
+        toast.error('Failed to recalculate payroll');
+      }
+    } catch (error) {
+      console.error('Error recalculating payroll:', error);
+      toast.error(error.response?.data?.message || 'An error occurred while recalculating');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Format for displaying allowance values with 2 decimal places
+  const formatAllowance = (value) => {
+    return parseFloat(value || 0).toFixed(2);
+  };
+
+  // Make sure we initialize with correct values after component mounts
+  useEffect(() => {
+    // Only when the component first mounts
+    // Make sure we have the correct attendance data and salary calculations
+    if (editedPayroll && Object.keys(editedPayroll).length > 0) {
+      // Log current values
+      console.log("Component mounted with initial values:", {
+        originalSalary: editedPayroll.originalSalary,
+        basicSalary: editedPayroll.basicSalary,
+        grossSalary: editedPayroll.grossSalary,
+        netSalary: editedPayroll.netSalary
+      });
+    }
+  }, []);
+  
+  // Add back salary recalculation effect when specific values change
+  useEffect(() => {
+    // Only run after initial render
+    if (editedPayroll._id) {
+      // Don't recalculate if we're using backend values
+      const shouldSkipRecalculation = originalPayroll && 
+        originalPayroll.basicSalary && 
+        originalPayroll.grossSalary && 
+        originalPayroll.netSalary;
+        
+      if (shouldSkipRecalculation) {
+        console.log("Skipping recalculation because we're using backend values");
+        return;
+      }
+      
+      // Recalculate when allowances, deductions, or attendance values change
+      calculateAndUpdateSalary();
+    }
+  }, [
+    editedPayroll.attendanceSummary?.present,
+    editedPayroll.attendanceSummary?.late,
+    editedPayroll.allowances,
+    editedPayroll.deductions,
+    editedPayroll.leaveDeduction
+  ]);
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
+  <div className="space-y-6">
+    {/* Header */}
+    <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
         <div>
           <h3 className="text-lg font-bold text-gray-900">
             Payslip: {getMonthName(payroll.month)} {payroll.year}
@@ -408,7 +756,10 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
           {isAdmin && ['Processing', 'Paid'].includes(editedPayroll.paymentStatus) && (
             <button
               onClick={toggleAdminOverride}
-              className={`px-3 py-1.5 ${adminOverride ? 'bg-red-600' : 'bg-yellow-600'} text-white rounded-md flex items-center gap-1 text-sm hover:${adminOverride ? 'bg-red-700' : 'bg-yellow-700'}`}
+              className={adminOverride 
+                ? "px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md flex items-center gap-1 text-sm"
+                : "px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded-md flex items-center gap-1 text-sm"
+              }
             >
               {adminOverride ? <FaUnlock /> : <FaLock />} {adminOverride ? 'Disable Override' : 'Admin Override'}
             </button>
@@ -416,53 +767,26 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
           <button
             onClick={saveChanges}
             disabled={isSaving}
-            className="px-3 py-1.5 bg-green-600 text-white rounded-md flex items-center gap-1 text-sm hover:bg-green-700 disabled:bg-gray-400"
+            className="px-3 py-1.5 bg-blue-600 text-white rounded-md flex items-center gap-1 text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <FaSave /> {isSaving ? 'Saving...' : 'Save Changes'}
+            <FaSave className="mr-1" /> {isSaving ? 'Saving...' : 'Save Changes'}
           </button>
           <button
             onClick={handleGeneratePayslip}
-            className="px-3 py-1.5 bg-blue-600 text-white rounded-md flex items-center gap-1 text-sm hover:bg-blue-700"
+            className="px-3 py-1.5 bg-indigo-600 text-white rounded-md flex items-center gap-1 text-sm hover:bg-indigo-700"
           >
-            <FaFileDownload /> Download Payslip
+            <FaFileDownload className="mr-1" /> Download Payslip
+          </button>
+          <button
+            onClick={handleRecalculate}
+            disabled={isSaving}
+            className="px-3 py-1.5 bg-yellow-600 text-white rounded-md flex items-center gap-1 text-sm hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FaSync className="mr-1" /> Recalculate
           </button>
         </div>
       </div>
       
-      {!isEditable() && !adminOverride && (
-        <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-md">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-blue-700">
-                This payroll is in <strong>{editedPayroll.paymentStatus}</strong> status. All changes will be saved when you click "Save Changes".
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {adminOverride && isAdmin && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-md">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-red-700">
-                <strong>Admin Override Active</strong> - You can now edit this {editedPayroll.paymentStatus} payroll. Please use with caution.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Attendance Summary */}
       <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md border border-gray-200 dark:border-gray-700">
         <h4 className="text-md font-semibold text-gray-800 dark:text-white mb-3">Attendance Summary</h4>
@@ -603,20 +927,39 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
           <h4 className="text-md font-semibold text-gray-800 dark:text-white mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">Earnings</h4>
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600 dark:text-gray-300">Basic Salary</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">Basic Salary</span>
               <div className="flex items-center">
                 <input 
                   type="number" 
                   name="basicSalary"
                   className="w-24 text-right text-sm font-medium border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
-                  value={editedPayroll.basicSalary}
-                  onChange={handleInputChange}
+                  value={editedPayroll.originalSalary > 0 ? editedPayroll.originalSalary : 15300}
+                  onChange={(e) => {
+                    // Update the original salary (ensure it's not 0)
+                    const newValue = parseFloat(e.target.value) || 15300;
+                    setEditedPayroll({
+                      ...editedPayroll,
+                      originalSalary: newValue,
+                      basicSalary: newValue // Set both fields for consistency
+                    });
+                    // Then update the gross salary based on the new basic salary
+                    setTimeout(() => calculateAndUpdateSalary(), 100);
+                  }}
+                  min="1000"
                   step="0.01"
+                  disabled={!adminOverride} // Only allow editing with admin override
                 />
               </div>
             </div>
+            {/* Show the prorated basic salary based on attendance */}
+            <div className="flex justify-between items-center pt-1">
+              <span className="text-xs text-gray-500 dark:text-gray-400">Prorated Basic (Working Days: {editedPayroll.attendanceSummary?.workingDays || 0}/{editedPayroll.attendanceSummary?.totalWorkingDays || 31})</span>
+              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                {formatCurrency(editedPayroll.basicSalary || 0)}
+              </span>
+            </div>
             
-            <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-4">Allowances</h5>
+            <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-4">Allowances (Prorated)</h5>
             {Object.entries(editedPayroll.allowances || {}).map(([key, value]) => (
               <div key={key} className="flex justify-between items-center pl-4">
                 <span className="text-sm text-gray-600 dark:text-gray-400">{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</span>
@@ -624,7 +967,7 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
                   <input 
                     type="number" 
                     className="w-24 text-right text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
-                    value={value}
+                    value={formatAllowance(value)}
                     onChange={(e) => handleAllowanceChange(key, e.target.value)}
                     step="0.01"
                   />
@@ -717,21 +1060,21 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
             <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300">Statutory Deductions</h5>
             {/* List all standard deductions separately */}
             <div className="flex justify-between items-center pl-4">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Professional Tax</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">Professional Tax (Prorated)</span>
               <input 
                 type="number" 
                 className="w-24 text-right text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
-                value={editedPayroll.deductions?.professionalTax || 0}
+                value={editedPayroll.deductions?.professionalTax || 15}
                 onChange={(e) => {
-                  setEditedPayroll({
-                    ...editedPayroll,
-                    deductions: {
-                      ...(editedPayroll.deductions || {}),
-                      professionalTax: parseFloat(e.target.value || 0)
-                    }
-                  });
+                  // Validate the input to ensure it's within the range (100-280)
+                  let value = parseFloat(e.target.value || 0);
+                  if (value < 100) value = 100;
+                  if (value > 280) value = 280;
+                  handleDeductionChange('professionalTax', value);
                 }}
-                step="0.01"
+                min="100"
+                max="280"
+                step="1"
               />
             </div>
             
@@ -742,55 +1085,55 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
                 className="w-24 text-right text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
                 value={editedPayroll.deductions?.incomeTax || 0}
                 onChange={(e) => {
-                  setEditedPayroll({
-                    ...editedPayroll,
-                    deductions: {
-                      ...(editedPayroll.deductions || {}),
-                      incomeTax: parseFloat(e.target.value || 0)
-                    }
-                  });
+                  // Validate the input to ensure it's within the range (0-280)
+                  let value = parseFloat(e.target.value || 0);
+                  if (value < 0) value = 0;
+                  if (value > 280) value = 280;
+                  handleDeductionChange('incomeTax', value);
                 }}
-                step="0.01"
+                min="0"
+                max="280"
+                step="1"
               />
             </div>
             
             <div className="flex justify-between items-center pl-4">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Provident Fund</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">Provident Fund (Prorated)</span>
               <input 
                 type="number" 
                 className="w-24 text-right text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
-                value={editedPayroll.deductions?.providentFund || 0}
+                value={editedPayroll.deductions?.providentFund || 48}
                 onChange={(e) => {
-                  setEditedPayroll({
-                    ...editedPayroll,
-                    deductions: {
-                      ...(editedPayroll.deductions || {}),
-                      providentFund: parseFloat(e.target.value || 0)
-                    }
-                  });
+                  // Validate the input to ensure it's within the range (100-280)
+                  let value = parseFloat(e.target.value || 0);
+                  if (value < 100) value = 100;
+                  if (value > 280) value = 280;
+                  handleDeductionChange('providentFund', value);
                 }}
-                step="0.01"
+                min="100"
+                max="280"
+                step="1"
               />
             </div>
             
             <div className="flex justify-between items-center pl-4">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Health Insurance</span>
-                <input 
-                  type="number" 
-                  className="w-24 text-right text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
-                value={editedPayroll.deductions?.healthInsurance || 0}
+              <span className="text-sm text-gray-600 dark:text-gray-400">Health Insurance (Prorated)</span>
+              <input 
+                type="number" 
+                className="w-24 text-right text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
+                value={editedPayroll.deductions?.healthInsurance || 20}
                 onChange={(e) => {
-                  setEditedPayroll({
-                    ...editedPayroll,
-                    deductions: {
-                      ...(editedPayroll.deductions || {}),
-                      healthInsurance: parseFloat(e.target.value || 0)
-                    }
-                  });
+                  // Validate the input to ensure it's within the range (100-280)
+                  let value = parseFloat(e.target.value || 0);
+                  if (value < 100) value = 100;
+                  if (value > 280) value = 280;
+                  handleDeductionChange('healthInsurance', value);
                 }}
-                  step="0.01"
-                />
-              </div>
+                min="100"
+                max="280"
+                step="1"
+              />
+            </div>
             
             <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-4">Other Deductions</h5>
             <div className="flex justify-between items-center pl-4">
@@ -813,32 +1156,46 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
             </div>
             
             <div className="flex justify-between items-center pl-4">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Absent Deduction</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">Absent Deduction (₹100/day)</span>
               <input 
                 type="number" 
                 className="w-24 text-right text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
                 value={editedPayroll.deductions?.absentDeduction || 0}
                 onChange={(e) => {
+                  if (!isEditable()) {
+                    toast.error('This payroll is locked for editing');
+                    return;
+                  }
+                  
+                  // Calculate fixed absent deduction based on attendance
+                  const absentCount = editedPayroll.attendanceSummary?.absent || 0;
+                  const fixedAbsentDeduction = absentCount * 100; // 100 rupees per absent day
+                  
+                  // Use admin override or fixed calculation
+                  const absentDeductionValue = adminOverride ? parseFloat(e.target.value || 0) : fixedAbsentDeduction;
+                  
                   setEditedPayroll({
                     ...editedPayroll,
                     deductions: {
                       ...(editedPayroll.deductions || {}),
-                      absentDeduction: parseFloat(e.target.value || 0)
+                      absentDeduction: absentDeductionValue
                     }
                   });
                 }}
                 step="0.01"
+                disabled={!adminOverride}
               />
             </div>
             
             <div className="flex justify-between items-center pl-4">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Late Deduction</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">Late Deduction (₹25/day)</span>
               <input 
                 type="number" 
                 className="w-24 text-right text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
                 value={editedPayroll.deductions?.lateDeduction || 0}
                 onChange={(e) => handleLateDeductionChange(e.target.value)}
                 step="0.01"
+                disabled={!adminOverride}
               />
             </div>
             
@@ -862,13 +1219,14 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
             </div>
             
             <div className="flex justify-between items-center pl-4">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Leave Deduction</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">Leave Deduction (₹45/day)</span>
                 <input 
                   type="number" 
                   className="w-24 text-right text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200"
                 value={editedPayroll.leaveDeduction || 0}
                 onChange={(e) => handleLeaveDeductionChange(e.target.value)}
                   step="0.01"
+                  disabled={!adminOverride}
                 />
               </div>
             
@@ -879,7 +1237,7 @@ const PayrollDetail = ({ payroll, onGeneratePayslip, onUpdate, isAdmin = false }
             
             <div className="mt-5 pt-3 border-t-2 border-gray-300 dark:border-gray-600 flex justify-between items-center">
               <span className="text-base font-medium text-gray-800 dark:text-gray-200">Net Salary</span>
-              <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{formatCurrency(calculateNetSalary())}</span>
+              <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{formatCurrency(editedPayroll.netSalary)}</span>
             </div>
           </div>
         </div>

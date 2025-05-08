@@ -90,7 +90,7 @@ const PayrollCard = ({
         <div className="mt-3 space-y-2">
           <div className="flex justify-between items-center">
             <span className="text-xs text-gray-500 dark:text-gray-400">Basic Salary</span>
-            <span className="text-sm font-medium text-gray-900 dark:text-white">{formatCurrency(payroll.basicSalary)}</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-white">{formatCurrency(payroll.originalSalary || payroll.basicSalary)}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-xs text-gray-500 dark:text-gray-400">Allowances</span>
