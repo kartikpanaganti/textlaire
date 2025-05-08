@@ -25,15 +25,23 @@ const PageViewTracker = () => {
       const title = document.title;
       const referrer = document.referrer;
 
-      console.log('Tracking page view:', { path, title });
+      console.log('📊 TRACKING PAGE VIEW:', { path, title, timestamp: new Date().toISOString() });
       
-      // Store page view in localStorage for analytics
+      // Always enable tracking by default
+      localStorage.setItem('textlaire_enable_tracking', 'true');
+      
+      // Store page view in localStorage for analytics and counting
       try {
+        // Get existing page views
         const pageViews = JSON.parse(localStorage.getItem('textlaire_page_views') || '[]');
+        
+        // Add new page view with more detailed info
         pageViews.push({
           path,
           title,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          userId: user?.id || user?._id,
+          sessionActive: true
         });
         
         // Keep only the last 20 page views to prevent storage issues
@@ -41,30 +49,43 @@ const PageViewTracker = () => {
           pageViews.shift();
         }
         
+        // Update local counter for UI display purposes
+        const currentCount = parseInt(localStorage.getItem('textlaire_page_view_count') || '0');
+        localStorage.setItem('textlaire_page_view_count', (currentCount + 1).toString());
+        
+        // Store updated page views
         localStorage.setItem('textlaire_page_views', JSON.stringify(pageViews));
+        
+        console.log(`📊 Local page view count updated: ${currentCount + 1}`);
       } catch (storageError) {
         console.warn('Could not store page view in localStorage:', storageError);
       }
 
-      // Only try to send to server if explicitly enabled
-      // This is a fallback mechanism to avoid 500 errors
-      const shouldSendToServer = localStorage.getItem('textlaire_enable_tracking') === 'true';
-      
-      if (!shouldSendToServer) {
-        console.log('Page view tracking disabled, skipping server update');
-        return;
-      }
-
+      // IMPORTANT: Always try to send tracking data to server
       // Send page view data to server with timeout to prevent long-running requests
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
       
       try {
-        const response = await axios.post('/api/auth/track/pageview', {
+        console.log('📊 Sending page view to server...');
+        
+        // Include more detailed information in the tracking request
+        const trackingData = {
           path,
           title,
-          referrer
-        }, {
+          referrer,
+          timestamp: new Date().toISOString(),
+          viewId: Math.random().toString(36).substring(2, 15),
+          userAgent: navigator.userAgent,
+          screenSize: `${window.innerWidth}x${window.innerHeight}`,
+          trackingEnabled: true // Include as part of data instead of header
+        };
+        
+        // Add debug information to request
+        console.log('📊 Tracking data:', trackingData);
+        console.log('📊 Auth token available:', !!user?.token);
+        
+        const response = await axios.post('/api/auth/track/pageview', trackingData, {
           headers: {
             'Authorization': `Bearer ${user.token}`
           },
@@ -72,13 +93,29 @@ const PageViewTracker = () => {
         });
         
         clearTimeout(timeoutId);
-        console.log('Page view tracked successfully');
+        
+        if (response.data.success) {
+          console.log('📊 Page view tracked successfully:', response.data);
+          
+          // Update session data in localStorage if available
+          if (response.data.sessionId) {
+            localStorage.setItem('textlaire_current_session_id', response.data.sessionId);
+          }
+          
+          if (response.data.pageViewCount) {
+            localStorage.setItem('textlaire_server_page_view_count', response.data.pageViewCount.toString());
+            console.log(`📊 Server page view count: ${response.data.pageViewCount}`);
+          }
+        } else {
+          console.warn('📊 Page view tracking response not successful:', response.data);
+        }
       } catch (fetchError) {
         clearTimeout(timeoutId);
         if (fetchError.name === 'AbortError' || fetchError.code === 'ECONNABORTED') {
-          console.warn('Page view tracking request timed out');
+          console.warn('📊 Page view tracking request timed out');
         } else {
-          console.error('Error sending page view to server:', fetchError.message);
+          console.error('📊 Error sending page view to server:', fetchError);
+          console.error('📊 Error details:', fetchError.response?.data || fetchError.message);
         }
       }
     } catch (error) {

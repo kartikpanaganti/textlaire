@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const ProductDetails = ({
@@ -316,8 +316,8 @@ const ProductDetails = ({
                     <label className="text-xs font-medium text-white block mb-1">Color</label>
                     <input
                       type="text"
-                      value={color}
-                      onChange={(e) => setColor?.(e.target.value)}
+                      defaultValue={color || ''}
+                      onBlur={(e) => setColor?.(e.target.value)}
                       className="w-full px-3 py-2 bg-[#2A2F38] border border-[#3A4149] rounded-lg text-white text-xs focus:ring-1 focus:ring-blue-500 transition-all"
                       placeholder="e.g. white, blue"
                       data-field="color"

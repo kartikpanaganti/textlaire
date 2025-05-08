@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
@@ -16,6 +16,9 @@ const ProductAdder = ({ onProductAdded }) => {
   const [currency, setCurrency] = useState('INR');
   const [material, setMaterial] = useState('cotton');
   const [qualityGrade, setQualityGrade] = useState('premium');
+  
+  // Use ref for the color field - fully uncontrolled approach
+  const colorInputRef = useRef(null);
   const [weight, setWeight] = useState('400');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
@@ -98,7 +101,8 @@ const ProductAdder = ({ onProductAdded }) => {
       // Get all form values using data attributes
       const type = getFieldValue('type');
       const material = getFieldValue('material');
-      const color = getFieldValue('color');
+      // Use the current value from the DOM input directly
+      const color = colorInputRef.current ? colorInputRef.current.value : '';
       const width = getFieldValue('width');
       const height = getFieldValue('height');
       const unit = getFieldValue('unit');
@@ -365,8 +369,8 @@ const ProductAdder = ({ onProductAdded }) => {
                   <input
                     type="text"
                     name="name"
-                    value={productName}
-                    onChange={(e) => setProductName(e.target.value)}
+                    defaultValue={productName}
+                    onBlur={(e) => setProductName(e.target.value)}
                     className="w-full px-4 py-2.5 bg-[#232830] rounded-lg border border-[#3A4149] text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                     data-field="name"
                   />
@@ -376,8 +380,8 @@ const ProductAdder = ({ onProductAdded }) => {
                   <input
                     type="text"
                     name="code"
-                    value={productCode}
-                    onChange={(e) => setProductCode(e.target.value)}
+                    defaultValue={productCode}
+                    onBlur={(e) => setProductCode(e.target.value)}
                     className="w-full px-4 py-2.5 bg-[#232830] rounded-lg border border-[#3A4149] text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                     data-field="code"
                   />
@@ -471,10 +475,21 @@ const ProductAdder = ({ onProductAdded }) => {
                   <input
                     type="text"
                     name="material"
-                    value={material}
-                    onChange={(e) => setMaterial(e.target.value)}
+                    defaultValue={material}
+                    onBlur={(e) => setMaterial(e.target.value)}
                     className="w-full px-4 py-2.5 bg-[#232830] rounded-lg border border-[#3A4149] text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                     data-field="material"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-300 block mb-1">Color</label>
+                  <input
+                    type="text"
+                    name="color"
+                    ref={colorInputRef}
+                    placeholder="Enter product color"
+                    className="w-full px-4 py-2.5 bg-[#232830] rounded-lg border border-[#3A4149] text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    data-field="color"
                   />
                 </div>
                 <div>
@@ -515,8 +530,8 @@ const ProductAdder = ({ onProductAdded }) => {
                   <label className="text-xs font-medium text-gray-300 block mb-1">Description</label>
                   <textarea
                     name="description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
+                    defaultValue={description}
+                    onBlur={(e) => setDescription(e.target.value)}
                     className="w-full px-4 py-2.5 bg-[#232830] rounded-lg border border-[#3A4149] text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all h-20 resize-none"
                     placeholder="Enter product description"
                     data-field="description"
@@ -530,8 +545,8 @@ const ProductAdder = ({ onProductAdded }) => {
                 <input
                   type="text"
                   name="tags"
-                  value={tags}
-                  onChange={(e) => setTags(e.target.value)}
+                  defaultValue={tags}
+                  onBlur={(e) => setTags(e.target.value)}
                   className="w-full px-4 py-2.5 bg-[#232830] rounded-lg border border-[#3A4149] text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   placeholder="Enter tags separated by commas"
                   data-field="tags"

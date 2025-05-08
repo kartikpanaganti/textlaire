@@ -325,32 +325,50 @@ const ActivityLogSection = ({ activityLog = [], isLoading, error, onRefresh, ses
 
   // Get action icon based on action type
   const getActionIcon = (action) => {
-    if (!action) return null;
-    
-    if (action.toLowerCase().includes('page')) {
-      return <FaEye className="text-blue-500" />;
-    } else if (action.toLowerCase().includes('api')) {
-      return <FaServer className="text-purple-500" />;
-    } else if (action.toLowerCase().includes('error')) {
-      return <FaExclamationTriangle className="text-red-500" />;
+    switch (action) {
+      case 'Login':
+        return <FaGlobe className="text-green-500" />;
+      case 'Logout':
+        return <FaGlobe className="text-red-500" />;
+      case 'API Call':
+        return <FaServer className="text-blue-500" />;
+      case 'Error':
+        return <FaExclamationTriangle className="text-yellow-500" />;
+      case 'Page View':
+        return <FaEye className="text-blue-400" />;
+      default:
+        return <FaEye className="text-gray-500" />;
     }
-    
-    return null;
   };
 
   // Get action class based on action type
   const getActionClass = (action) => {
-    if (!action) return '';
+    if (!action) return 'text-gray-500';
     
-    if (action.toLowerCase().includes('page')) {
-      return 'text-blue-600';
-    } else if (action.toLowerCase().includes('api')) {
-      return 'text-purple-600';
-    } else if (action.toLowerCase().includes('error')) {
-      return 'text-red-600';
+    switch (action) {
+      case 'Login':
+        return 'text-green-500 font-medium';
+      case 'Logout':
+        return 'text-red-500 font-medium';
+      case 'API Call':
+        return 'text-purple-500';
+      case 'Error':
+        return 'text-red-500 font-medium';
+      case 'Page View':
+        return 'text-blue-500';
+      default:
+        // Handle partial matches for fallback
+        if (action.toLowerCase().includes('page')) {
+          return 'text-blue-500';
+        } else if (action.toLowerCase().includes('api')) {
+          return 'text-purple-500';
+        } else if (action.toLowerCase().includes('error')) {
+          return 'text-red-500';
+        } else if (action.toLowerCase().includes('login')) {
+          return 'text-green-500';
+        }
+        return 'text-gray-500';
     }
-    
-    return '';
   };
 
   // Get search suggestions

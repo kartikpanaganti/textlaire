@@ -87,14 +87,31 @@ export const trackApiActivity = async (req, res, next) => {
  */
 export const recordPageView = async (req, res) => {
   try {
-    const { path, title, referrer } = req.body;
+    // Extract data from request body with more comprehensive fallbacks
+    const { 
+      path, 
+      title, 
+      referrer, 
+      timestamp, 
+      viewId,
+      userAgent: clientUserAgent,
+      screenSize
+    } = req.body;
+    
+    // Extract user info with better error handling
     const userId = req.user?.userId;
     const sessionId = req.user?.sessionId;
+    
+    // Log detailed info for debugging
+    console.log(`📊 PAGE VIEW REQUEST: ${path} | Session: ${sessionId} | User: ${userId}`);
+    console.log('📊 Page view details:', { path, title, timestamp, viewId });
+    console.log('📊 Headers:', req.headers['user-agent'], req.headers['x-tracking-enabled']);
     
     if (!userId || !sessionId) {
       return res.status(400).json({
         success: false,
-        message: 'User ID and session ID are required'
+        message: 'User ID and session ID are required',
+        debug: { userId, sessionId, auth: !!req.user }
       });
     }
     
@@ -105,23 +122,27 @@ export const recordPageView = async (req, res) => {
       });
     }
     
-    // Create page view record
+    // Create page view record with enhanced data
     const pageView = new PageView({
       userId,
       sessionId,
       path,
       title,
       referrer,
-      timestamp: new Date(),
-      userAgent: req.headers['user-agent'],
-      ipAddress: req.ip || req.connection.remoteAddress
+      timestamp: timestamp ? new Date(timestamp) : new Date(),
+      userAgent: clientUserAgent || req.headers['user-agent'],
+      ipAddress: req.ip || req.connection.remoteAddress,
+      viewId: viewId || `pv_${Math.random().toString(36).substring(2, 15)}`,
+      screenSize,
+      tracked: true
     });
     
     // Save page view to database
-    await pageView.save();
+    const savedPageView = await pageView.save();
+    console.log(`📊 Page view saved with ID: ${savedPageView._id}`);
     
     // Update session with page view count and last active time
-    await UserSession.findOneAndUpdate(
+    const updatedSession = await UserSession.findOneAndUpdate(
       { sessionId, userId },
       { 
         $inc: { pageViews: 1 },
@@ -131,23 +152,42 @@ export const recordPageView = async (req, res) => {
             action: 'Page View',
             timestamp: new Date(),
             details: title || 'Page viewed',
-            path
+            path,
+            viewId: savedPageView.viewId || viewId
           }
         }
       },
       { new: true }
     );
     
+    // Verify the update worked
+    if (!updatedSession) {
+      console.warn(`📊 Session ${sessionId} not found or not updated`);
+    } else {
+      console.log(`📊 Updated session ${sessionId} page views: ${updatedSession.pageViews}`);
+    }
+    
+    // Get the current page view count for this session
+    const pageViewCount = await PageView.countDocuments({ sessionId });
+    console.log(`📊 Total page views for session ${sessionId}: ${pageViewCount}`);
+    
+    // Return detailed response with current counts
     res.status(200).json({
       success: true,
-      message: 'Page view recorded successfully'
+      message: 'Page view recorded successfully',
+      sessionId,
+      viewId: savedPageView.viewId || viewId,
+      pageViewCount,
+      timestamp: new Date().toISOString(),
+      sessionPageViews: updatedSession?.pageViews || pageViewCount
     });
   } catch (error) {
     console.error('Error recording page view:', error);
     res.status(500).json({
       success: false,
       message: 'Server error',
-      error: error.message
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };

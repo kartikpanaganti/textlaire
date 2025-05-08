@@ -63,7 +63,7 @@ app.use(cors({
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-fal-target-url', 'Accept', 'Origin', 'x-requested-with', 'X-Background-Request'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-fal-target-url', 'Accept', 'Origin', 'x-requested-with', 'X-Background-Request', 'X-Tracking-Enabled'],
   credentials: true,
   optionsSuccessStatus: 200, // For legacy browser support
   maxAge: 86400 // Cache preflight requests for 24 hours
@@ -75,7 +75,7 @@ app.use((req, res, next) => {
   // Set the specific origin instead of wildcard '*' when using credentials
   res.header('Access-Control-Allow-Origin', origin || 'http://localhost:5173');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Background-Request');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Background-Request, X-Tracking-Enabled');
   res.header('Access-Control-Allow-Credentials', true);
   next();
 });

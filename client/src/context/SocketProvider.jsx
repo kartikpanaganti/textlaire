@@ -11,6 +11,8 @@ export const SocketProvider = ({ children }) => {
   const { user, logout } = useContext(UserContext);
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+  // Add flag to prevent multiple force logout toasts
+  const [forceLogoutInProgress, setForceLogoutInProgress] = useState(false);
 
   // Function to handle network changes
   const setupNetworkListeners = (socketInstance) => {
@@ -277,6 +279,71 @@ export const SocketProvider = ({ children }) => {
       if (update) {
         const event = new CustomEvent('textlaire_user_status_update', { detail: update });
         window.dispatchEvent(event);
+      }
+    });
+    
+    // Handle force logout from admin
+    newSocket.on('force_logout', (data) => {
+      console.log('Force logout received:', data);
+      
+      // Prevent multiple logout flows
+      if (forceLogoutInProgress) {
+        console.log('Force logout already in progress, ignoring duplicate event');
+        return;
+      }
+      
+      setForceLogoutInProgress(true);
+      toast.error(data.message || 'Your session has been terminated by an administrator');
+      
+      // Wait briefly so user can see the message before refresh
+      setTimeout(() => {
+        // Perform logout
+        if (logout) {
+          logout();
+        } else {
+          // Fallback logout method if context method unavailable
+          localStorage.removeItem('token');
+          sessionStorage.removeItem('token');
+          localStorage.removeItem('user');
+        }
+        
+        // Force page refresh
+        window.location.reload();
+      }, 1500);
+    });
+    
+    // Handle global force logout broadcast
+    newSocket.on('global_force_logout', (data) => {
+      console.log('Global force logout received:', data);
+      
+      // Check if this message is meant for current user
+      const currentUserId = user?.id || user?._id;
+      if (currentUserId && data.userId === currentUserId.toString()) {
+        // Prevent multiple logout flows
+        if (forceLogoutInProgress) {
+          console.log('Force logout already in progress, ignoring duplicate event');
+          return;
+        }
+        
+        console.log('This global force logout applies to current user, logging out...');
+        setForceLogoutInProgress(true);
+        toast.error(data.message || 'Your session has been terminated by an administrator');
+        
+        // Wait briefly so user can see the message before refresh
+        setTimeout(() => {
+          // Perform logout
+          if (logout) {
+            logout();
+          } else {
+            // Fallback logout method if context method unavailable
+            localStorage.removeItem('token');
+            sessionStorage.removeItem('token');
+            localStorage.removeItem('user');
+          }
+          
+          // Force page refresh
+          window.location.reload();
+        }, 1500);
       }
     });
     
