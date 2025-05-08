@@ -241,7 +241,7 @@ ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 
                 hour: '2-digit',
                 minute: '2-digit'
               })}</p>
-            </div>
+          </div>
           </div>
 
           <div style="display: flex; gap: 20px; margin-bottom: 20px; padding: 20px; background: #f8fafc; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
@@ -277,23 +277,23 @@ ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Employee ID</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.employeeID || 'N/A'}</div>
-              </div>
+                </div>
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Phone Number</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.phoneNumber || 'N/A'}</div>
-              </div>
+                </div>
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Email</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.email || 'N/A'}</div>
-              </div>
+                </div>
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Address</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.address || 'N/A'}</div>
-              </div>
+                </div>
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Emergency Contact</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.emergencyContact || 'N/A'}</div>
-              </div>
+                </div>
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Date of Birth</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.dateOfBirth ? formatDate(employee.dateOfBirth) : 'N/A'}</div>
@@ -310,23 +310,23 @@ ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Department</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.department || 'N/A'}</div>
-              </div>
+                </div>
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Position</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.position || 'N/A'}</div>
-              </div>
+                </div>
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Work Type</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.workType || 'N/A'}</div>
-              </div>
+                </div>
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Status</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.status || 'N/A'}</div>
-              </div>
+                </div>
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Joining Date</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.joiningDate ? formatDate(employee.joiningDate) : 'N/A'}</div>
-              </div>
+                </div>
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Salary (CTC)</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">₹${employee.salary ? employee.salary.toLocaleString() : 'N/A'}</div>
@@ -343,21 +343,21 @@ ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Bank Name</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.bankName || 'N/A'}</div>
-              </div>
+                </div>
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Account Number</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.accountNumber || 'N/A'}</div>
-              </div>
+                </div>
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Account Holder</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.accountHolderName || employee.name}</div>
-              </div>
+                </div>
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">IFSC Code</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.ifscCode || 'N/A'}</div>
+                </div>
               </div>
             </div>
-          </div>
 
           <!-- Home Details Section -->
           <div style="margin-bottom: 25px;">
@@ -368,17 +368,17 @@ ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Home Address</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.homeAddress || 'N/A'}</div>
-              </div>
+                </div>
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Home Phone</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.homePhone || 'N/A'}</div>
-              </div>
+                </div>
               <div style="background: #f9fafb; padding: 10px 15px; border-radius: 8px; border-left: 3px solid #1a56db;">
                 <div style="font-weight: bold; color: #6b7280; font-size: 12px; text-transform: uppercase;">Home Email</div>
                 <div style="color: #111827; font-size: 14px; font-weight: 500;">${employee.homeEmail || 'N/A'}</div>
+                </div>
               </div>
             </div>
-          </div>
 
           <!-- Footer -->
           <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 12px;">
@@ -392,10 +392,10 @@ ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 
           </div>
         </div>
       `;
-      
+
       // Append to the body temporarily
       document.body.appendChild(contentDiv);
-      
+
       // Function to handle image loading and PDF generation
       const generatePDF = async () => {
         try {
@@ -404,9 +404,9 @@ ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 
           
           // Capture using html2canvas
           const canvas = await html2canvas(contentDiv.querySelector('.export-container'), {
-            scale: 2, // Higher scale for better quality
-            useCORS: true,
-            logging: false,
+        scale: 2, // Higher scale for better quality
+        useCORS: true,
+        logging: false,
             backgroundColor: '#ffffff',
             allowTaint: true
           });
@@ -415,47 +415,47 @@ ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 
           const imgData = canvas.toDataURL('image/jpeg', 1.0);
           
           // Calculate dimensions for the PDF
-          const pdfWidth = pdf.internal.pageSize.getWidth();
-          const pdfHeight = pdf.internal.pageSize.getHeight();
-          const imgWidth = canvas.width;
-          const imgHeight = canvas.height;
-          const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
           
           // Center the image horizontally
-          const imgX = (pdfWidth - imgWidth * ratio) / 2;
+      const imgX = (pdfWidth - imgWidth * ratio) / 2;
           let imgY = 0;
           
           // Add the image to the PDF
           pdf.addImage(imgData, 'JPEG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-          
-          // Create a sanitized filename with Textlaire branding
-          const sanitizedName = employee.name.replace(/[^a-zA-Z0-9]/g, '_');
-          const filename = `Textlaire_${sanitizedName}_Employee_Details.pdf`;
-          
+
+      // Create a sanitized filename with Textlaire branding
+      const sanitizedName = employee.name.replace(/[^a-zA-Z0-9]/g, '_');
+      const filename = `Textlaire_${sanitizedName}_Employee_Details.pdf`;
+
           // Clean up - remove the temporary div
           if (document.body.contains(contentDiv)) {
-            document.body.removeChild(contentDiv);
+      document.body.removeChild(contentDiv);
           }
-          
-          if (mode === 'download') {
-            // Save the PDF
-            pdf.save(filename);
-            
-            // Show success message
-            toast.dismiss();
+      
+      if (mode === 'download') {
+        // Save the PDF
+        pdf.save(filename);
+        
+        // Show success message
+        toast.dismiss();
             toast.success('Employee details exported as PDF!');
-          } else if (mode === 'whatsapp') {
+      } else if (mode === 'whatsapp') {
             // For WhatsApp, we'll just share text directly
             openWhatsAppWithMessage(employee);
           }
         } catch (err) {
           console.error('HTML2Canvas or PDF generation error:', err);
           // Clean up the temporary element
-          if (document.body.contains(contentDiv)) {
-            document.body.removeChild(contentDiv);
-          }
-          throw err;
+        if (document.body.contains(contentDiv)) {
+          document.body.removeChild(contentDiv);
         }
+          throw err;
+      }
       };
       
       // Generate the PDF
