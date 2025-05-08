@@ -6,6 +6,14 @@ const payrollSchema = new mongoose.Schema({
     ref: 'Employee',
     required: true
   },
+  referenceId: {
+    type: String,
+    unique: true, // Ensures uniqueness
+    default: function() {
+      // Generate a unique reference ID combining employee, month and year with a timestamp
+      return `${this.employeeId}-${this.month}-${this.year}-${Date.now()}`;
+    }
+  },
   month: {
     type: Number,
     required: true,
