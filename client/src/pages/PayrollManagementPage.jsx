@@ -612,6 +612,9 @@ useEffect(() => {
         // Apply recalculation
         const recalculatedPayroll = recalculatePayrollValues(response.data.data);
         
+        // Reset the manually edited flag to allow automatic calculations again
+        recalculatedPayroll.manuallyEdited = false;
+        
         // If this is the same as our currently selected payroll, update that too
         if (selectedPayroll && selectedPayroll._id === payrollId) {
           setSelectedPayroll(recalculatedPayroll);

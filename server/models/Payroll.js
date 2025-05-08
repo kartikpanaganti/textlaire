@@ -135,6 +135,10 @@ const payrollSchema = new mongoose.Schema({
   lastCalculated: {
     type: Date,
     default: Date.now
+  },
+  manuallyEdited: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

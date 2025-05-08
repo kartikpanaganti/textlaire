@@ -9,7 +9,7 @@ import {
   deletePayroll,
   getPayrollSummary,
   batchUpdatePaymentStatus,
-  getPayrollReports,
+  generatePayrollReports,
   calculateTaxBreakdown,
   manageBonusIncentives,
   bulkManageBonus
@@ -21,7 +21,7 @@ const router = express.Router();
 // Protected routes (require authentication)
 router.get('/', authMiddleware, getPayrolls);
 router.get('/summary', authMiddleware, adminMiddleware, getPayrollSummary);
-router.get('/reports', authMiddleware, adminMiddleware, getPayrollReports);
+router.get('/reports', authMiddleware, adminMiddleware, generatePayrollReports);
 router.get('/:id', authMiddleware, getPayrollById);
 
 // Tax and reporting routes

@@ -412,30 +412,34 @@ const syncPayrollWithAttendance = async (employeeId, month, year) => {
       amount: totalOvertimeHours * avgOvertimeRate * (adjustedBasicSalary / (22 * 8)) // Use adjusted salary
     };
     
-    // Calculate gross salary and net salary
-    const allowanceTotal = 
-      (payroll.allowances.houseRent || 0) +
-      (payroll.allowances.medical || 0) +
-      (payroll.allowances.travel || 0) +
-      (payroll.allowances.food || 0) +
-      (payroll.allowances.special || 0) +
-      (payroll.allowances.other || 0);
-    
-    const deductionTotal = 
-      (payroll.deductions.professionalTax || 0) +
-      (payroll.deductions.incomeTax || 0) +
-      (payroll.deductions.providentFund || 0) +
-      (payroll.deductions.healthInsurance || 0) +
-      (payroll.deductions.loanRepayment || 0) +
-      (payroll.deductions.lateDeduction || 0) +
-      (payroll.deductions.other || 0) +
-      (payroll.leaveDeduction || 0);
-    
-    const overtimeAmount = payroll.overtime.amount || 0;
-    
-    payroll.grossSalary = adjustedBasicSalary + allowanceTotal + overtimeAmount;
-    payroll.totalDeductions = deductionTotal;
-    payroll.netSalary = payroll.grossSalary - payroll.totalDeductions;
+    // Calculate gross salary and net salary but preserve manual edits if needed
+    if (!payroll.manuallyEdited) {
+      const allowanceTotal = 
+        (payroll.allowances.houseRent || 0) +
+        (payroll.allowances.medical || 0) +
+        (payroll.allowances.travel || 0) +
+        (payroll.allowances.food || 0) +
+        (payroll.allowances.special || 0) +
+        (payroll.allowances.other || 0);
+      
+      const deductionTotal = 
+        (payroll.deductions.professionalTax || 0) +
+        (payroll.deductions.incomeTax || 0) +
+        (payroll.deductions.providentFund || 0) +
+        (payroll.deductions.healthInsurance || 0) +
+        (payroll.deductions.loanRepayment || 0) +
+        (payroll.deductions.lateDeduction || 0) +
+        (payroll.deductions.other || 0) +
+        (payroll.leaveDeduction || 0);
+      
+      const overtimeAmount = payroll.overtime.amount || 0;
+      
+      payroll.grossSalary = adjustedBasicSalary + allowanceTotal + overtimeAmount;
+      payroll.totalDeductions = deductionTotal;
+      payroll.netSalary = payroll.grossSalary - payroll.totalDeductions;
+    } else {
+      console.log(`Preserving manually edited values for payroll ${payroll._id}`);
+    }
     
     // Set the last calculation date
     payroll.lastCalculated = new Date();
@@ -647,7 +651,36 @@ export const getPayrolls = async (req, res) => {
     
     // Only allow admin to see all payrolls, employees can only see their own
     if (req.user && req.user.role !== 'admin') {
-      filter.employeeId = req.user.userId;
+      // For managers, show all payrolls for employees in their departments
+      if (req.user.role === 'manager') {
+        // If we had department info, we'd use it here
+        // For now, just allow managers to see all
+        console.log('Manager accessing payrolls');
+      } else {
+        // Regular users can only see their own payrolls
+        // But we need to find their employee record first (by email)
+        try {
+          // Find employee record matching the user's email
+          const userEmail = req.user.email;
+          console.log(`Finding employee record for user email: ${userEmail}`);
+          
+          const employeeRecord = await Employee.findOne({ email: userEmail });
+          
+          if (employeeRecord) {
+            console.log(`Found matching employee record: ${employeeRecord._id} for user`);
+            filter['employeeId'] = employeeRecord._id;
+          } else {
+            console.log(`No matching employee record found for user email: ${userEmail}`);
+            // If no match found, use an impossible ID to ensure no records are returned
+            // rather than showing other people's payrolls
+            filter['employeeId'] = new mongoose.Types.ObjectId();
+          }
+        } catch (error) {
+          console.error('Error matching user to employee:', error);
+          // Use impossible ID if error occurs
+          filter['employeeId'] = new mongoose.Types.ObjectId();
+        }
+      }
     }
     
     // Fetch all payrolls that match the filter
@@ -706,6 +739,33 @@ export const getPayrollById = async (req, res) => {
         success: false,
         message: "Payroll not found"
       });
+    }
+    
+    // Check permission: only admin, the employee themselves, or a manager can view a payroll
+    if (req.user && req.user.role !== 'admin') {
+      // For regular users, verify this is their own payroll by comparing emails
+      if (req.user.role === 'user') {
+        try {
+          // Find the employee record that matches the user's email
+          const userEmail = req.user.email;
+          const employeeRecord = await Employee.findOne({ email: userEmail });
+          
+          // If we found a matching employee record, verify it's their payroll
+          if (employeeRecord && payroll.employeeId.toString() !== employeeRecord._id.toString()) {
+            return res.status(403).json({
+              success: false,
+              message: "Access denied: You can only view your own payroll records"
+            });
+          }
+        } catch (error) {
+          console.error('Error matching user to employee:', error);
+          return res.status(500).json({
+            success: false,
+            message: "Error verifying user permissions"
+          });
+        }
+      }
+      // For managers, we allow access to all (could be restricted to department in a future update)
     }
     
     console.log(`Fetching detailed payroll for ID: ${id}, Employee: ${payroll.employeeId}, Period: ${payroll.month}/${payroll.year}`);
@@ -1178,14 +1238,6 @@ export const batchUpdatePaymentStatus = async (req, res) => {
 // Update payroll details
 export const updatePayroll = async (req, res) => {
   try {
-    // Only admin can update payroll
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied: Admin privileges required"
-      });
-    }
-    
     const { id } = req.params;
     const {
       basicSalary,
@@ -1200,13 +1252,43 @@ export const updatePayroll = async (req, res) => {
       remarks
     } = req.body;
     
+    // Find the payroll first
     const payroll = await Payroll.findById(id);
-    
     if (!payroll) {
       return res.status(404).json({
         success: false,
         message: "Payroll not found"
       });
+    }
+    
+    // Check permissions for updating payroll
+    if (req.user) {
+      // Admin can update any payroll
+      if (req.user.role === 'admin') {
+        // Admin has full access, continue
+      } 
+      // Managers can update payrolls for their team
+      else if (req.user.role === 'manager') {
+        // For now, allow managers to update all payrolls
+        // In the future, restrict to their department
+      } 
+      // Regular users can only update their own payroll if it's not paid
+      else if (req.user.role === 'user') {
+        if (payroll.employeeId.toString() !== req.user.userId) {
+          return res.status(403).json({
+            success: false,
+            message: "Access denied: You can only update your own payroll records"
+          });
+        }
+        
+        // Users can't change payment status
+        if (paymentStatus && paymentStatus !== payroll.paymentStatus) {
+          return res.status(403).json({
+            success: false,
+            message: "Access denied: You cannot change payment status"
+          });
+        }
+      }
     }
     
     // Allow updates for any status - removed the paid status restriction
@@ -1252,6 +1334,9 @@ export const updatePayroll = async (req, res) => {
     if (paymentStatus !== 'Paid' && paymentDate === '') {
       payroll.paymentDate = null;
     }
+    
+    // Mark payroll as manually edited to prevent automatic recalculation
+    payroll.manuallyEdited = true;
     
     // Recalculate gross salary and net salary
     const allowanceTotal = formatToDecimal(
@@ -1455,16 +1540,46 @@ export const getPayrollSummary = async (req, res) => {
   }
 };
 
-// Get payroll reports with analytics data
-export const getPayrollReports = async (req, res) => {
+// Generate payroll reports with enhanced analytics for charts and visualizations
+export const generatePayrollReports = async (req, res) => {
   try {
-    const { startDate, endDate, department, format } = req.query;
+    const { startDate, endDate, departments, format } = req.query;
     
-    // Parse dates
+    console.log('Generating payroll reports with params:', req.query);
+    
+    // Build filter query
+    const filter = {};
+    
+    // Date range filtering
+    if (startDate || endDate) {
+      // Parse dates
+      const start = startDate ? new Date(startDate) : null;
+      const end = endDate ? new Date(endDate) : null;
+      
+      console.log(`Date filtering: ${start ? start.toISOString() : 'none'} to ${end ? end.toISOString() : 'none'}`);
+      
+      if (start && end) {
+        // Filter by date range
+        filter.createdAt = { $gte: start, $lte: end };
+      } else if (start) {
+        filter.createdAt = { $gte: start };
+      } else if (end) {
+        filter.createdAt = { $lte: end };
+      }
+    }
+    
+    // Department filtering
+    if (departments) {
+      const deptArray = departments.split(',');
+      filter['employeeDetails.department'] = { $in: deptArray };
+      console.log(`Department filtering: ${deptArray.join(', ')}`);
+    }
+    
+    // Parse dates for month/year based filtering
     const parsedStartDate = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1); // Default to Jan 1 of current year
     const parsedEndDate = endDate ? new Date(endDate) : new Date(); // Default to current date
     
-    // Build base query
+    // Build base query for month/year filtering
     let query = {};
     
     // Add date range using month and year fields
@@ -1487,77 +1602,296 @@ export const getPayrollReports = async (req, res) => {
     }
     
     // Add department filter if provided
-    if (department) {
-      query['employeeDetails.department'] = department;
+    if (departments) {
+      // Already created deptArray above, reuse that
+      query['employeeDetails.department'] = { $in: departments.split(',') };
     }
     
     // Fetch payrolls
     const payrolls = await Payroll.find(query).sort({ year: 1, month: 1 });
     
-    // Calculate analytics
+    // Enhanced analytics for dashboard and visualization
     const analytics = {
+      // Basic metrics
       totalEmployees: new Set(payrolls.map(p => p.employeeId.toString())).size,
       totalPayroll: payrolls.reduce((sum, p) => sum + p.netSalary, 0),
       avgSalary: payrolls.length > 0 ? payrolls.reduce((sum, p) => sum + p.netSalary, 0) / payrolls.length : 0,
-      salaryByDepartment: {},
-      salaryTrend: [],
-      taxDeductions: payrolls.reduce((sum, p) => sum + (p.deductions.incomeTax || 0), 0),
+      
+      // Financial metrics
+      totalGrossSalary: payrolls.reduce((sum, p) => sum + (p.grossSalary || 0), 0),
+      totalNetSalary: payrolls.reduce((sum, p) => sum + (p.netSalary || 0), 0),
+      totalBasicSalary: payrolls.reduce((sum, p) => sum + (p.basicSalary || 0), 0),
+      
+      // Deduction metrics
+      totalDeductions: payrolls.reduce((sum, p) => sum + (p.totalDeductions || 0), 0),
+      taxDeductions: payrolls.reduce((sum, p) => sum + (p.deductions?.incomeTax || 0), 0),
+      pfDeductions: payrolls.reduce((sum, p) => sum + (p.deductions?.providentFund || 0), 0),
+      otherDeductions: payrolls.reduce((sum, p) => sum + (
+        (p.deductions?.healthInsurance || 0) + 
+        (p.deductions?.professionalTax || 0) + 
+        (p.deductions?.loanRepayment || 0) + 
+        (p.deductions?.other || 0)
+      ), 0),
+      
+      // Bonus and incentive metrics
       bonusDistributed: payrolls.reduce((sum, p) => sum + (p.bonus || 0), 0),
+      incentivesDistributed: payrolls.reduce((sum, p) => sum + ((p.bonusDetails?.incentives || 0) + (p.bonusDetails?.commission || 0)), 0),
+      
+      // Overtime metrics
+      overtimeHoursTotal: payrolls.reduce((sum, p) => sum + (p.overtime?.hours || 0), 0),
+      overtimeAmountTotal: payrolls.reduce((sum, p) => sum + (p.overtime?.amount || 0), 0),
+      
+      // Collections for detailed reporting
+      salaryByDepartment: {},
+      salaryByPosition: {},
+      salaryTrend: [],
+      allocationByComponent: {},
+      deductionBreakdown: {},
+      employeePerformance: []
     };
     
     // Calculate department-wise salary distribution
-    const departments = {};
+    const departmentStats = {};
+    const positionStats = {};
+    
     payrolls.forEach(payroll => {
-      const dept = payroll.employeeDetails.department || 'Unknown';
-      if (!departments[dept]) {
-        departments[dept] = { count: 0, total: 0 };
+      // Department analysis
+      const dept = payroll.employeeDetails?.department || 'Unknown';
+      if (!departmentStats[dept]) {
+        departmentStats[dept] = { 
+          count: 0, 
+          total: 0, 
+          grossSalary: 0, 
+          basicSalary: 0,
+          deductions: 0, 
+          bonuses: 0,
+          employees: new Set()
+        };
       }
-      departments[dept].count++;
-      departments[dept].total += payroll.netSalary;
+      departmentStats[dept].count++;
+      departmentStats[dept].total += (payroll.netSalary || 0);
+      departmentStats[dept].grossSalary += (payroll.grossSalary || 0);
+      departmentStats[dept].basicSalary += (payroll.basicSalary || 0);
+      departmentStats[dept].deductions += (payroll.totalDeductions || 0);
+      departmentStats[dept].bonuses += (payroll.bonus || 0);
+      departmentStats[dept].employees.add(payroll.employeeId.toString());
+      
+      // Position/role analysis
+      const position = payroll.employeeDetails?.position || 'Unknown';
+      if (!positionStats[position]) {
+        positionStats[position] = { count: 0, total: 0, employees: new Set() };
+      }
+      positionStats[position].count++;
+      positionStats[position].total += (payroll.netSalary || 0);
+      positionStats[position].employees.add(payroll.employeeId.toString());
     });
     
-    // Calculate average by department
-    for (const [dept, data] of Object.entries(departments)) {
+    // Calculate advanced department-wise metrics
+    for (const [dept, data] of Object.entries(departmentStats)) {
       analytics.salaryByDepartment[dept] = {
         total: data.total,
         average: data.total / data.count,
-        employees: data.count
+        employees: data.employees.size,
+        records: data.count,
+        grossSalary: data.grossSalary,
+        basicSalary: data.basicSalary,
+        deductions: data.deductions,
+        bonuses: data.bonuses,
+        costShare: data.total / analytics.totalNetSalary * 100 // Percentage of total payroll
       };
     }
     
-    // Calculate month-wise salary trend
+    // Calculate position/role-wise salary metrics
+    for (const [position, data] of Object.entries(positionStats)) {
+      analytics.salaryByPosition[position] = {
+        total: data.total,
+        average: data.total / data.count,
+        employees: data.employees.size,
+        records: data.count,
+        costShare: data.total / analytics.totalNetSalary * 100
+      };
+    }
+    
+    // Calculate salary component allocation
+    const totalAllocation = analytics.totalBasicSalary + analytics.totalDeductions + analytics.bonusDistributed + analytics.overtimeAmountTotal;
+    analytics.allocationByComponent = {
+      basicSalary: {
+        amount: analytics.totalBasicSalary,
+        percentage: (analytics.totalBasicSalary / totalAllocation) * 100
+      },
+      deductions: {
+        amount: analytics.totalDeductions,
+        percentage: (analytics.totalDeductions / totalAllocation) * 100,
+        breakdown: {
+          tax: analytics.taxDeductions,
+          pf: analytics.pfDeductions,
+          other: analytics.otherDeductions
+        }
+      },
+      bonus: {
+        amount: analytics.bonusDistributed,
+        percentage: (analytics.bonusDistributed / totalAllocation) * 100
+      },
+      overtime: {
+        amount: analytics.overtimeAmountTotal,
+        percentage: (analytics.overtimeAmountTotal / totalAllocation) * 100
+      }
+    };
+    
+    // Calculate deduction breakdown percentages
+    analytics.deductionBreakdown = {
+      tax: analytics.taxDeductions / analytics.totalDeductions * 100,
+      pf: analytics.pfDeductions / analytics.totalDeductions * 100,
+      others: analytics.otherDeductions / analytics.totalDeductions * 100
+    };
+    
+    // Calculate month-wise salary trend with enhanced metrics
     const monthlyTrend = {};
     payrolls.forEach(payroll => {
       const key = `${payroll.year}-${payroll.month.toString().padStart(2, '0')}`;
+      const monthName = new Date(payroll.year, payroll.month-1, 1).toLocaleString('default', { month: 'long' });
+      
       if (!monthlyTrend[key]) {
-        monthlyTrend[key] = { total: 0, count: 0, taxes: 0, bonus: 0 };
+        monthlyTrend[key] = { 
+          total: 0, 
+          count: 0, 
+          taxes: 0, 
+          bonus: 0,
+          deductions: 0,
+          grossSalary: 0,
+          overtime: 0,
+          employees: new Set(),
+          monthName,
+          month: payroll.month,
+          year: payroll.year,
+          quarterNumber: Math.ceil(payroll.month / 3)
+        };
       }
-      monthlyTrend[key].total += payroll.netSalary;
+      monthlyTrend[key].total += (payroll.netSalary || 0);
       monthlyTrend[key].count++;
-      monthlyTrend[key].taxes += (payroll.deductions.incomeTax || 0);
+      monthlyTrend[key].taxes += (payroll.deductions?.incomeTax || 0);
       monthlyTrend[key].bonus += (payroll.bonus || 0);
+      monthlyTrend[key].deductions += (payroll.totalDeductions || 0);
+      monthlyTrend[key].grossSalary += (payroll.grossSalary || 0);
+      monthlyTrend[key].overtime += (payroll.overtime?.amount || 0);
+      monthlyTrend[key].employees.add(payroll.employeeId.toString());
     });
     
-    // Sort and format the trend data
-    analytics.salaryTrend = Object.keys(monthlyTrend)
-      .sort()
-      .map(key => ({
+    // Sort and format the trend data with YoY and MoM changes
+    const sortedKeys = Object.keys(monthlyTrend).sort();
+    
+    analytics.salaryTrend = sortedKeys.map((key, index) => {
+      const current = monthlyTrend[key];
+      const previousMonthKey = index > 0 ? sortedKeys[index - 1] : null;
+      const previousMonth = previousMonthKey ? monthlyTrend[previousMonthKey] : null;
+      
+      // Find same month last year for YoY comparison
+      const yearAgoKey = sortedKeys.find(k => {
+        const parts = k.split('-');
+        const year = parseInt(parts[0]);
+        const month = parseInt(parts[1]);
+        return year === current.year - 1 && month === current.month;
+      });
+      const yearAgo = yearAgoKey ? monthlyTrend[yearAgoKey] : null;
+      
+      return {
         period: key,
-        totalSalary: monthlyTrend[key].total,
-        averageSalary: monthlyTrend[key].total / monthlyTrend[key].count,
-        employees: monthlyTrend[key].count,
-        taxes: monthlyTrend[key].taxes,
-        bonus: monthlyTrend[key].bonus
-      }));
+        monthName: current.monthName,
+        month: current.month,
+        year: current.year,
+        quarter: `Q${current.quarterNumber} ${current.year}`,
+        totalSalary: current.total,
+        grossSalary: current.grossSalary,
+        averageSalary: current.total / current.count,
+        headcount: current.employees.size,
+        records: current.count,
+        taxes: current.taxes,
+        bonus: current.bonus,
+        deductions: current.deductions,
+        overtime: current.overtime,
+        // Month-over-Month and Year-over-Year changes
+        mom: previousMonth ? {
+          totalSalary: ((current.total - previousMonth.total) / previousMonth.total) * 100,
+          headcount: ((current.employees.size - previousMonth.employees.size) / previousMonth.employees.size) * 100
+        } : null,
+        yoy: yearAgo ? {
+          totalSalary: ((current.total - yearAgo.total) / yearAgo.total) * 100,
+          headcount: ((current.employees.size - yearAgo.employees.size) / yearAgo.employees.size) * 100
+        } : null
+      };
+    });
 
-    // Payment Status Distribution
+    // Payment Status Distribution with percentages
+    const totalRecords = payrolls.length;
     const paymentStatusCount = {
       Paid: payrolls.filter(p => p.paymentStatus === 'Paid').length,
       Pending: payrolls.filter(p => p.paymentStatus === 'Pending').length,
       Failed: payrolls.filter(p => p.paymentStatus === 'Failed').length,
       Processing: payrolls.filter(p => p.paymentStatus === 'Processing').length
     };
-    analytics.paymentStatusDistribution = paymentStatusCount;
+    
+    analytics.paymentStatusDistribution = {
+      counts: paymentStatusCount,
+      percentages: {
+        Paid: totalRecords > 0 ? (paymentStatusCount.Paid / totalRecords) * 100 : 0,
+        Pending: totalRecords > 0 ? (paymentStatusCount.Pending / totalRecords) * 100 : 0,
+        Failed: totalRecords > 0 ? (paymentStatusCount.Failed / totalRecords) * 100 : 0,
+        Processing: totalRecords > 0 ? (paymentStatusCount.Processing / totalRecords) * 100 : 0
+      }
+    };
+    
+    // Generate employee performance metrics
+    const employeePerformance = new Map();
+    
+    // Get unique employees
+    const uniqueEmployees = new Set(payrolls.map(p => p.employeeId.toString()));
+    
+    // Analyze each employee's performance metrics
+    uniqueEmployees.forEach(empId => {
+      const empPayrolls = payrolls.filter(p => p.employeeId.toString() === empId);
+      if (empPayrolls.length > 0) {
+        const latestPayroll = empPayrolls.sort((a, b) => {
+          return (b.year * 12 + b.month) - (a.year * 12 + a.month);
+        })[0];
+        
+        employeePerformance.set(empId, {
+          id: empId,
+          name: latestPayroll.employeeDetails?.name || 'Unknown',
+          department: latestPayroll.employeeDetails?.department || 'Unknown',
+          position: latestPayroll.employeeDetails?.position || 'Unknown',
+          latestSalary: latestPayroll.netSalary,
+          averageSalary: empPayrolls.reduce((sum, p) => sum + p.netSalary, 0) / empPayrolls.length,
+          overtimeHours: empPayrolls.reduce((sum, p) => sum + (p.overtime?.hours || 0), 0),
+          bonusTotal: empPayrolls.reduce((sum, p) => sum + (p.bonus || 0), 0),
+          records: empPayrolls.length
+        });
+      }
+    });
+    
+    analytics.employeePerformance = Array.from(employeePerformance.values());
+    
+    // Calculate visualization data for charts
+    analytics.chartData = {
+      salaryDistribution: Object.entries(analytics.salaryByDepartment).map(([dept, data]) => ({
+        department: dept,
+        total: data.total,
+        percentage: data.total / analytics.totalNetSalary * 100
+      })),
+      paymentStatus: Object.entries(analytics.paymentStatusDistribution.percentages).map(([status, percentage]) => ({
+        status,
+        percentage
+      })),
+      salaryTrends: analytics.salaryTrend.map(trend => ({
+        period: trend.period,
+        salary: trend.totalSalary,
+        employees: trend.headcount
+      })),
+      deductionRatio: [
+        { type: 'Tax', percentage: analytics.deductionBreakdown.tax },
+        { type: 'Provident Fund', percentage: analytics.deductionBreakdown.pf },
+        { type: 'Other', percentage: analytics.deductionBreakdown.others }
+      ]
+    };
     
     // If format is 'excel', we'll just return the data
     // Frontend will handle the Excel generation
@@ -1566,7 +1900,15 @@ export const getPayrollReports = async (req, res) => {
       success: true,
       data: {
         analytics,
-        payrolls
+        payrolls: format === 'detailed' ? payrolls : payrolls.map(p => ({
+          id: p._id,
+          employeeId: p.employeeId,
+          name: p.employeeDetails?.name,
+          month: p.month,
+          year: p.year,
+          netSalary: p.netSalary,
+          paymentStatus: p.paymentStatus
+        }))
       }
     });
   } catch (error) {
@@ -1579,10 +1921,85 @@ export const getPayrollReports = async (req, res) => {
   }
 };
 
+// Helper function to calculate tax for comparison between regimes
+const calculateTaxForRegime = (annualSalary, deductions, regime) => {
+  // Define tax slabs for both regimes
+  const taxSlabs = {
+    old: [
+      { start: 0, end: 250000, rate: 0, description: 'Nil (0-2.5L)' },
+      { start: 250000, end: 500000, rate: 0.05, description: '5% (2.5L-5L)' },
+      { start: 500000, end: 750000, rate: 0.10, description: '10% (5L-7.5L)' },
+      { start: 750000, end: 1000000, rate: 0.15, description: '15% (7.5L-10L)' },
+      { start: 1000000, end: 1250000, rate: 0.20, description: '20% (10L-12.5L)' },
+      { start: 1250000, end: 1500000, rate: 0.25, description: '25% (12.5L-15L)' },
+      { start: 1500000, end: Infinity, rate: 0.30, description: '30% (>15L)' }
+    ],
+    new: [
+      { start: 0, end: 300000, rate: 0, description: 'Nil (0-3L)' },
+      { start: 300000, end: 600000, rate: 0.05, description: '5% (3L-6L)' },
+      { start: 600000, end: 900000, rate: 0.10, description: '10% (6L-9L)' },
+      { start: 900000, end: 1200000, rate: 0.15, description: '15% (9L-12L)' },
+      { start: 1200000, end: 1500000, rate: 0.20, description: '20% (12L-15L)' },
+      { start: 1500000, end: Infinity, rate: 0.30, description: '30% (>15L)' }
+    ]
+  };
+
+  // Apply deductions for old regime only
+  let taxableIncome = annualSalary;
+  if (regime === 'old' && deductions) {
+    // Add standard deductions as per tax laws
+    const totalDeductions = Math.min(
+      (deductions.section80C || 0) + 
+      (deductions.section80D || 0) + 
+      (deductions.housingLoanInterest || 0) + 
+      (deductions.educationLoanInterest || 0) + 
+      (deductions.other || 0),
+      500000 // Cap total deductions at 5L for simplicity
+    );
+    taxableIncome = Math.max(0, annualSalary - totalDeductions);
+  }
+
+  // Choose applicable slabs
+  const applicableSlabs = taxSlabs[regime] || taxSlabs.old;
+  
+  // Calculate tax
+  let totalTax = 0;
+  for (const slab of applicableSlabs) {
+    if (taxableIncome > slab.start) {
+      const slabAmount = Math.min(taxableIncome - slab.start, slab.end - slab.start);
+      const slabTax = slabAmount * slab.rate;
+      totalTax += slabTax;
+      if (taxableIncome <= slab.end) break;
+    }
+  }
+
+  // Add surcharge and cess
+  let surcharge = 0;
+  if (regime === 'old' && taxableIncome > 5000000) {
+    const surchargeRate = taxableIncome > 10000000 ? 0.15 : 0.10;
+    surcharge = totalTax * surchargeRate;
+  }
+
+  const cess = (totalTax + surcharge) * 0.04;
+  const finalTax = totalTax + surcharge + cess;
+
+  return {
+    taxableIncome,
+    baseTax: totalTax,
+    surcharge,
+    cess,
+    totalTax: finalTax,
+    effectiveRate: (finalTax / annualSalary) * 100,
+    regime
+  };
+};
+
 // Calculate tax for an employee's salary
 export const calculateTaxBreakdown = async (req, res) => {
   try {
-    const { employeeId, financialYear, month, income, deductions } = req.body;
+    const { employeeId, financialYear, month, income, deductions, taxRegime = 'old' } = req.body;
+    
+    console.log('Tax calculation request received:', req.body);
     
     // Validation
     if (!employeeId || !financialYear) {
@@ -1600,6 +2017,8 @@ export const calculateTaxBreakdown = async (req, res) => {
         message: 'Employee not found',
       });
     }
+    
+    console.log(`Calculating tax for employee: ${employee.name}, ID: ${employee._id}, using ${taxRegime} tax regime`);
     
     // Parse the financial year (format: 2023-2024)
     const [startYear, endYear] = financialYear.split('-').map(year => parseInt(year));
@@ -1634,23 +2053,37 @@ export const calculateTaxBreakdown = async (req, res) => {
     // Calculate taxable income
     const taxableIncome = Math.max(0, annualSalary - totalDeductions);
     
-    // Define tax slabs (Indian tax slabs for FY 2023-24, for example)
+    // Define tax slabs for both old and new regimes (FY 2024-25)
     // These should be stored in config and updated yearly
-    const taxSlabs = [
-      { start: 0, end: 250000, rate: 0 },
-      { start: 250000, end: 500000, rate: 0.05 },
-      { start: 500000, end: 750000, rate: 0.10 },
-      { start: 750000, end: 1000000, rate: 0.15 },
-      { start: 1000000, end: 1250000, rate: 0.20 },
-      { start: 1250000, end: 1500000, rate: 0.25 },
-      { start: 1500000, end: Infinity, rate: 0.30 }
-    ];
+    const taxSlabs = {
+      old: [
+        { start: 0, end: 250000, rate: 0, description: 'Nil (0-2.5L)' },
+        { start: 250000, end: 500000, rate: 0.05, description: '5% (2.5L-5L)' },
+        { start: 500000, end: 750000, rate: 0.10, description: '10% (5L-7.5L)' },
+        { start: 750000, end: 1000000, rate: 0.15, description: '15% (7.5L-10L)' },
+        { start: 1000000, end: 1250000, rate: 0.20, description: '20% (10L-12.5L)' },
+        { start: 1250000, end: 1500000, rate: 0.25, description: '25% (12.5L-15L)' },
+        { start: 1500000, end: Infinity, rate: 0.30, description: '30% (>15L)' }
+      ],
+      new: [
+        { start: 0, end: 300000, rate: 0, description: 'Nil (0-3L)' },
+        { start: 300000, end: 600000, rate: 0.05, description: '5% (3L-6L)' },
+        { start: 600000, end: 900000, rate: 0.10, description: '10% (6L-9L)' },
+        { start: 900000, end: 1200000, rate: 0.15, description: '15% (9L-12L)' },
+        { start: 1200000, end: 1500000, rate: 0.20, description: '20% (12L-15L)' },
+        { start: 1500000, end: Infinity, rate: 0.30, description: '30% (>15L)' }
+      ]
+    };
+
+    // Choose tax regime slabs
+    const applicableSlabs = taxSlabs[taxRegime] || taxSlabs.old;
+    console.log(`Using ${taxRegime} tax regime with ${applicableSlabs.length} slabs`);
     
     // Calculate tax for each slab
     let totalTax = 0;
     const taxBreakdown = [];
     
-    for (const slab of taxSlabs) {
+    for (const slab of applicableSlabs) {
       if (taxableIncome > slab.start) {
         const slabAmount = Math.min(taxableIncome - slab.start, slab.end - slab.start);
         const slabTax = slabAmount * slab.rate;
@@ -1661,6 +2094,7 @@ export const calculateTaxBreakdown = async (req, res) => {
           bracketStart: slab.start,
           bracketEnd: slab.end,
           taxRate: slab.rate,
+          description: slab.description,
           taxableAmount: slabAmount,
           taxAmount: slabTax
         });
@@ -1669,12 +2103,29 @@ export const calculateTaxBreakdown = async (req, res) => {
       }
     }
     
-    // Add cess (4% of tax)
-    const cess = totalTax * 0.04;
-    const finalTaxAmount = totalTax + cess;
+    // Calculate surcharge (only applicable for income above 50L in old regime)
+    let surcharge = 0;
+    let surchargeRate = 0;
+    
+    if (taxRegime === 'old' && taxableIncome > 5000000) {
+      if (taxableIncome > 10000000) {
+        surchargeRate = 0.15; // 15% for income > 1Cr
+      } else if (taxableIncome > 7500000) {
+        surchargeRate = 0.10; // 10% for income > 75L
+      } else if (taxableIncome > 5000000) {
+        surchargeRate = 0.05; // 5% for income > 50L
+      }
+      surcharge = totalTax * surchargeRate;
+    }
+    
+    // Add health & education cess (4% of tax + surcharge)
+    const cess = (totalTax + surcharge) * 0.04;
+    const finalTaxAmount = totalTax + surcharge + cess;
     
     // Calculate monthly tax contribution
     const monthlyTax = finalTaxAmount / 12;
+    
+    console.log(`Tax calculation completed: Taxable income: ${taxableIncome}, Total tax: ${totalTax}, Final tax: ${finalTaxAmount}`);
     
     // Return tax calculation
     res.status(200).json({
@@ -1687,25 +2138,64 @@ export const calculateTaxBreakdown = async (req, res) => {
           position: employee.position
         },
         financialYear,
-        income: {
-          annualSalary,
-          deductions: {
-            section80C: section80CDeduction,
-            section80D: section80DDeduction,
-            housingLoanInterest: housingLoanDeduction,
-            educationLoanInterest: educationLoanDeduction,
-            other: otherDeductions,
-            totalDeductions
-          },
-          taxableIncome
+        regime: {
+          name: taxRegime,
+          description: taxRegime === 'old' ? 'Old Regime (with deductions)' : 'New Regime (without most deductions)'
         },
+        annualSalary,
+        deductions: {
+          ...taxDeductions,
+          section80C: {
+            amount: taxDeductions.section80C,
+            allowed: section80CDeduction,
+            maxLimit: 150000,
+            description: 'Investments (PF, ELSS, LIC, etc)'
+          },
+          section80D: {
+            amount: taxDeductions.section80D,
+            allowed: section80DDeduction,
+            maxLimit: 25000,
+            description: 'Medical Insurance Premium'
+          },
+          housingLoan: {
+            amount: taxDeductions.housingLoanInterest,
+            allowed: housingLoanDeduction,
+            maxLimit: 200000,
+            description: 'Interest on Housing Loan'
+          },
+          educationLoan: {
+            amount: taxDeductions.educationLoanInterest,
+            allowed: educationLoanDeduction,
+            description: 'Interest on Education Loan'
+          },
+          other: {
+            amount: taxDeductions.other,
+            allowed: otherDeductions,
+            description: 'Other Deductions'
+          }
+        },
+        totalDeductions,
+        taxableIncome,
         taxBreakdown,
-        taxSummary: {
-          totalTax,
-          cess,
-          finalTaxAmount,
-          monthlyTax
-        }
+        tax: {
+          baseTax: totalTax,
+          surcharge: {
+            rate: surchargeRate * 100,
+            amount: surcharge,
+            applicable: surcharge > 0
+          },
+          cess: {
+            rate: 4,
+            amount: cess,
+            description: 'Health & Education Cess'
+          },
+          total: finalTaxAmount,
+          monthly: monthlyTax
+        },
+        taxSavings: taxRegime === 'old' ? {
+          withoutDeductions: (annualSalary * 0.3) - finalTaxAmount, // Simplified calculation 
+          withNewRegime: 0 // To be calculated comparing with new regime
+        } : null
       }
     });
   } catch (error) {

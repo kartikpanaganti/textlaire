@@ -33,7 +33,7 @@ const PROTECTED_PATHS = {
   'image-generation': 'image-generation',
   'image-to-image': 'image-generation', // Consider this part of image-generation
   'products': 'products',
-  'payroll': 'payroll',
+  'payroll': null, // No specific permission required, accessible to all authenticated users
   'messages': 'messages',
   'communication': 'messages', // Maps to messages permission
   'user-management': 'admin',
@@ -173,6 +173,11 @@ function ProtectedRoute({ component, noContainer = false }) {
   
   // Admin users have access to all pages
   if (user?.role === 'admin') {
+    return <LayoutWrapper noContainer={noContainer}>{component}</LayoutWrapper>;
+  }
+  
+  // If requiredPermission is null, the route is accessible to all authenticated users
+  if (requiredPermission === null) {
     return <LayoutWrapper noContainer={noContainer}>{component}</LayoutWrapper>;
   }
   
