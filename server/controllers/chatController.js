@@ -104,21 +104,37 @@ export const createGroupChat = async (req, res) => {
     return res.status(400).json({ message: "A group chat requires at least 3 users" });
   }
 
-  // Add current user to the group
-  users.push(req.user._id);
-
   try {
+    // Get the current user ID (handling both formats)
+    const currentUserId = req.user.userId || req.user._id;
+    console.log(`Creating group chat as user: ${currentUserId}`);
+    
+    // Check if current user is already included in the users array
+    const userAlreadyIncluded = users.some(userId => 
+      userId.toString() === currentUserId.toString());
+    
+    // Only add current user if they're not already included
+    if (!userAlreadyIncluded) {
+      console.log('Adding current user to the group');
+      users.push(currentUserId);
+    }
+    
+    // Log the final users list for debugging
+    console.log(`Final group members: ${users.join(', ')}`);
+    
     const groupChatData = {
       chatName: req.body.name,
       isGroupChat: true,
       users: users,
-      groupAdmin: req.user._id,
+      groupAdmin: currentUserId,
     };
 
     const createdGroupChat = await Chat.create(groupChatData);
     const fullGroupChat = await Chat.findOne({ _id: createdGroupChat._id })
       .populate("users", "-password")
       .populate("groupAdmin", "-password");
+    
+    console.log(`Group chat created: ${fullGroupChat._id} with ${fullGroupChat.users.length} users`);
 
     // Notify all users about the new group chat
     users.forEach(userId => {
@@ -127,6 +143,7 @@ export const createGroupChat = async (req, res) => {
 
     res.status(200).json(fullGroupChat);
   } catch (error) {
+    console.error('Error creating group chat:', error);
     res.status(500).json({ message: "Error creating group chat", error: error.message });
   }
 };

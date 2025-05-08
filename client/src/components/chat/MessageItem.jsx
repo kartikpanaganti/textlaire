@@ -1,11 +1,17 @@
 import { useState } from 'react';
 import { Avatar, Box, IconButton, Menu, MenuItem, Typography, Paper } from '@mui/material';
-import { MoreVert as MoreVertIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { 
+  MoreVert as MoreVertIcon, 
+  Delete as DeleteIcon,
+  DoneAll as DoneAllIcon,
+  Done as DoneIcon,
+  AccessTime as AccessTimeIcon 
+} from '@mui/icons-material';
 import { format } from 'date-fns';
 import { deleteMessage } from '../../api/messageApi';
 import AttachmentPreview from './AttachmentPreview';
 
-const MessageItem = ({ message, isOwnMessage, showSender }) => {
+const MessageItem = ({ message, isOwnMessage, showSender, onMessageDeleted }) => {
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const [deleting, setDeleting] = useState(false);
   
@@ -29,6 +35,12 @@ const MessageItem = ({ message, isOwnMessage, showSender }) => {
     try {
       setDeleting(true);
       await deleteMessage(message._id);
+      
+      // Notify parent component about the deleted message
+      if (typeof onMessageDeleted === 'function') {
+        onMessageDeleted(message._id);
+      }
+      
       handleMenuClose();
     } catch (error) {
       console.error('Error deleting message:', error);
@@ -46,6 +58,15 @@ const MessageItem = ({ message, isOwnMessage, showSender }) => {
         mb: 1.5,
         maxWidth: '80%',
         alignSelf: isOwnMessage ? 'flex-end' : 'flex-start',
+        // Fixed styles to remove the right gap for sender's messages
+        ...(isOwnMessage && {
+          mr: 0,  // No right margin for own messages
+          pr: 0,  // No right padding
+          '& > div': {
+            mr: 0, // No margin on children
+            pr: 0  // No padding on children
+          }
+        })
       }}
     >
       {showSender && !isOwnMessage && (
@@ -76,6 +97,11 @@ const MessageItem = ({ message, isOwnMessage, showSender }) => {
             color: isOwnMessage ? 'primary.contrastText' : 'text.primary',
             position: 'relative',
             wordBreak: 'break-word',
+            ...(isOwnMessage && {
+              mr: 0,  // No right margin for sender messages
+              pr: 1.5, // Proper padding on the right
+              width: '100%' // Use full width of container
+            })
           }}
         >
           {message.content && (
@@ -95,10 +121,28 @@ const MessageItem = ({ message, isOwnMessage, showSender }) => {
               display: 'flex',
               justifyContent: 'flex-end',
               mt: 0.5,
-              gap: 1,
+              gap: 0.5, // Reduced gap for tighter layout
               alignItems: 'center'
             }}
           >
+            {/* Message status indicators (only for own messages) */}
+            {isOwnMessage && (
+              <Box 
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: message.readBy?.length > 0 ? 'primary.main' : 'text.secondary'
+                }}
+              >
+                {/* Determine which receipt icon to show */}
+                {message.readBy?.length > 0 ? (
+                  <DoneAllIcon fontSize="small" sx={{ fontSize: 14, color: 'primary.main' }} />
+                ) : (
+                  <DoneIcon fontSize="small" sx={{ fontSize: 14, opacity: 0.7 }} />
+                )}
+              </Box>
+            )}
+            
             <Typography 
               variant="caption" 
               sx={{ opacity: 0.8 }}

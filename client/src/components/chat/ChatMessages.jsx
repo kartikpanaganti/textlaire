@@ -19,6 +19,15 @@ const ChatMessages = () => {
   const messagesEndRef = useRef(null);
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   
+  // Handle message deletion from child component
+  const handleMessageDeleted = (messageId) => {
+    if (!messageId) return;
+    
+    // Remove the deleted message from state
+    setMessages(prevMessages => prevMessages.filter(msg => msg._id !== messageId));
+    console.log(`Message ${messageId} removed from UI`);
+  };
+  
   // Handle menu open/close
   const handleMenuOpen = (event) => {
     setMenuAnchorEl(event.currentTarget);
@@ -403,6 +412,7 @@ const ChatMessages = () => {
                   message={message} 
                   isOwnMessage={message.sender?._id === user?._id}
                   showSender={chatInfo.isGroup}
+                  onMessageDeleted={handleMessageDeleted}
                 />
               ))}
             </Box>

@@ -19,22 +19,50 @@ export const accessChat = async (userId) => {
 // Get all chats for the current user
 export const fetchChats = async () => {
   try {
+    console.log('Fetching all chats...');
     const { data } = await axios.get(`${API_URL}/chat`);
-    return data;
+    
+    // Ensure we always return an array
+    if (Array.isArray(data)) {
+      console.log(`Fetched ${data.length} chats`);
+      return data;
+    } else if (data && Array.isArray(data.chats)) {
+      console.log(`Fetched ${data.chats.length} chats from data.chats property`);
+      return data.chats;
+    } else {
+      console.warn('Unexpected chat data format:', data);
+      return [];
+    }
   } catch (error) {
-    throw error.response?.data || error.message;
+    console.error('Error fetching chats:', error);
+    // Return empty array on error instead of throwing
+    return [];
   }
 };
 
 // Create a group chat
 export const createGroupChat = async (name, users) => {
   try {
+    console.log('Creating group chat with:', { name, userCount: users.length });
+    
     const { data } = await axios.post(`${API_URL}/chat/group`, {
       name,
       users: JSON.stringify(users),
     });
-    return data;
+    
+    console.log('Group chat creation response:', data);
+    
+    // Return a consistent format even if the server doesn't
+    if (data && data._id) {
+      return data;
+    } else if (data && data.chat) {
+      return data.chat;
+    } else {
+      console.warn('Unexpected group chat creation response format:', data);
+      return { _id: null, chatName: name, isGroupChat: true, users: [], ...data };
+    }
   } catch (error) {
+    console.error('Group chat creation error:', error);
     throw error.response?.data || error.message;
   }
 };

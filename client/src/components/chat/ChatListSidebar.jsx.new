@@ -22,7 +22,6 @@ import {
 import { 
   Search as SearchIcon, 
   Add as AddIcon, 
-  Group as GroupIcon,
   MoreVert as MoreVertIcon,
   Archive as ArchiveIcon
 } from '@mui/icons-material';
@@ -40,11 +39,10 @@ const ChatListSidebar = () => {
     setSelectedChat, 
     notifications, 
     setNotifications, 
+    isLoading, 
+    setIsLoading,
     getUnreadCountForChat: contextGetUnreadCountForChat 
   } = useChat();
-  
-  // Use local loading state instead of context to avoid the setIsLoading error
-  const [isLoading, setIsLoading] = useState(false);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredChats, setFilteredChats] = useState([]);
@@ -230,20 +228,24 @@ const ChatListSidebar = () => {
       return `System: ${latest.content}`;
     }
     
-    if (latest.hasAttachment) {
-      return '[attachment]';
+    // If message has attachments
+    if (latest.attachments && latest.attachments.length > 0) {
+      if (latest.content) {
+        return `${latest.content} [attachment]`;
+      }
+      return `[attachment]`;
     }
     
     return latest.content || '';
   };
-
+  
   // Get unread count for a chat
   const getUnreadCountForChat = (chatId) => {
     if (!chatId) return 0;
     
     // First check local state for UI reactivity
     if (unreadMessagesByChatId && unreadMessagesByChatId[chatId]) {
-      return unreadMessagesByChatId[chatId].length;
+      return unreadMessagesByChatId[chatId].length || 0;
     }
     
     // Check context if available
@@ -253,7 +255,7 @@ const ChatListSidebar = () => {
     
     return 0; // Default fallback value
   };
-
+  
   // Handle user selection from search
   const handleUserSelect = async (userId) => {
     if (!userId) return;
@@ -315,12 +317,7 @@ const ChatListSidebar = () => {
   const removeFromHiddenChats = (chatId) => {
     setHiddenChats(hiddenChats.filter(id => id !== chatId));
   };
-
-  // Handle search term change
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-  };
-
+  
   return (
     <Box sx={{ width: '100%', height: '100%', borderRight: 1, borderColor: 'divider', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
@@ -330,7 +327,6 @@ const ChatListSidebar = () => {
           <IconButton onClick={() => setOpenUserSearch(true)}>
             <AddIcon />
           </IconButton>
-          {/* Group chat button hidden as requested */}
         </Box>
       </Box>
       
@@ -341,13 +337,13 @@ const ChatListSidebar = () => {
           size="small"
           placeholder="Search conversations"
           value={searchTerm}
-          onChange={handleSearchChange}
+          onChange={(e) => setSearchTerm(e.target.value)}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
                 <SearchIcon fontSize="small" />
               </InputAdornment>
-            )
+            ),
           }}
         />
       </Box>
@@ -428,11 +424,7 @@ const ChatListSidebar = () => {
                       fontWeight: unreadCount > 0 ? 500 : 400,
                     }}
                   />
-                  <IconButton 
-                    edge="end" 
-                    size="small" 
-                    onClick={(event) => handleMenuOpen(event, chat)}
-                  >
+                  <IconButton edge="end" size="small" onClick={(event) => handleMenuOpen(event, chat)}>
                     <MoreVertIcon fontSize="small" />
                   </IconButton>
                 </ListItemButton>

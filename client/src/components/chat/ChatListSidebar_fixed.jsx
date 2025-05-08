@@ -22,7 +22,6 @@ import {
 import { 
   Search as SearchIcon, 
   Add as AddIcon, 
-  Group as GroupIcon,
   MoreVert as MoreVertIcon,
   Archive as ArchiveIcon
 } from '@mui/icons-material';
@@ -40,11 +39,10 @@ const ChatListSidebar = () => {
     setSelectedChat, 
     notifications, 
     setNotifications, 
+    isLoading, 
+    setIsLoading,
     getUnreadCountForChat: contextGetUnreadCountForChat 
   } = useChat();
-  
-  // Use local loading state instead of context to avoid the setIsLoading error
-  const [isLoading, setIsLoading] = useState(false);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredChats, setFilteredChats] = useState([]);
@@ -330,7 +328,6 @@ const ChatListSidebar = () => {
           <IconButton onClick={() => setOpenUserSearch(true)}>
             <AddIcon />
           </IconButton>
-          {/* Group chat button hidden as requested */}
         </Box>
       </Box>
       

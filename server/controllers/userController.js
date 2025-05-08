@@ -6,11 +6,18 @@ export const searchUsers = async (req, res) => {
   try {
     const searchTerm = req.query.search || '';
     
-    if (!searchTerm.trim()) {
-      return res.status(200).json([]);
+    // Shortcut: If search term is empty or just a single character, 
+    // return all users except the current one (useful for showing all available chat users)
+    if (searchTerm.trim().length <= 1) {
+      console.log('Short search term detected, returning all users');
+      const allUsers = await User.find({
+        _id: { $ne: req.user.userId } // Exclude the current user
+      }).select('-password -secretKey -loginHistory -currentSession');
+      
+      return res.status(200).json(allUsers);
     }
 
-    // Create a regex search pattern (case insensitive)
+    // For normal searches, create a regex search pattern (case insensitive)
     const searchPattern = new RegExp(searchTerm, 'i');
     
     // Find users that match the search term (excluding the requesting user)

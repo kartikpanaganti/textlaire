@@ -287,3 +287,60 @@ export const deleteMessage = async (req, res) => {
     res.status(500).json({ message: "Error deleting message", error: error.message });
   }
 };
+
+// Clear all messages in a chat
+export const clearChatHistory = async (req, res) => {
+  const { chatId } = req.params;
+  
+  if (!chatId) {
+    return res.status(400).json({ message: "Chat ID is required" });
+  }
+  
+  try {
+    // Find the chat
+    const chat = await Chat.findById(chatId);
+    
+    if (!chat) {
+      return res.status(404).json({ message: "Chat not found" });
+    }
+    
+    // Check if the user is part of this chat
+    if (!chat.users.includes(req.user.userId)) {
+      return res.status(403).json({ message: "Not authorized to clear this chat history" });
+    }
+    
+    // Find all messages with attachments in this chat to delete files
+    const messagesWithAttachments = await Message.find({
+      chat: chatId,
+      attachments: { $exists: true, $not: { $size: 0 } }
+    });
+    
+    // Delete attached files
+    messagesWithAttachments.forEach(message => {
+      if (message.attachments && message.attachments.length > 0) {
+        message.attachments.forEach(attachment => {
+          const filePath = path.join(process.cwd(), attachment.filePath.replace('/uploads/', 'uploads/'));
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        });
+      }
+    });
+    
+    // Delete all messages in the chat
+    await Message.deleteMany({ chat: chatId });
+    
+    // Update the latestMessage field in the chat to null
+    await Chat.findByIdAndUpdate(chatId, { latestMessage: null });
+    
+    // Notify all users in the chat
+    chat.users.forEach(userId => {
+      io.to(`user-${userId}`).emit('chat_cleared', { chatId });
+    });
+    
+    res.status(200).json({ message: "Chat history cleared successfully" });
+  } catch (error) {
+    console.error("Error clearing chat history:", error);
+    res.status(500).json({ message: "Error clearing chat history", error: error.message });
+  }
+};

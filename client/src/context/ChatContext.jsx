@@ -12,6 +12,7 @@ export const ChatProvider = ({ children }) => {
   const { socket } = useContext(SocketContext);
   const [user, setUser] = useState(null);
   const [selectedChat, setSelectedChat] = useState(null);
+  // Always initialize chats as an empty array instead of undefined
   const [chats, setChats] = useState([]);
   const [messages, setMessages] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -20,6 +21,17 @@ export const ChatProvider = ({ children }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState({}); // Track unread messages per chat
   const messageProcessorRef = useRef(null);
+  
+  // Custom chats setter that ensures we never set undefined
+  const safeSetChats = useCallback((newChats) => {
+    // If newChats is undefined, null, or not an array, use empty array instead
+    if (!newChats || !Array.isArray(newChats)) {
+      console.warn('Attempted to set chats to non-array value:', newChats);
+      setChats([]);
+    } else {
+      setChats(newChats);
+    }
+  }, []);
   
   // Initialize user data from localStorage
   useEffect(() => {
@@ -88,8 +100,8 @@ export const ChatProvider = ({ children }) => {
           return timeB - timeA;
         });
         
-        // Update state with sorted chats
-        setChats(sortedChats);
+        // Update state with sorted chats (using safe setter)
+        safeSetChats(sortedChats);
         
         // Cache the data in both session and local storage
         try {
@@ -101,6 +113,8 @@ export const ChatProvider = ({ children }) => {
         }
       } else {
         console.warn('Received invalid chat data from server');
+        // Initialize with empty array if data is invalid
+        safeSetChats([]);
       }
     } catch (error) {
       console.error('Error fetching chats:', error);
@@ -420,6 +434,7 @@ export const ChatProvider = ({ children }) => {
     socket.off('chat_list_update');
     socket.off('refresh_messages');
     socket.off('refresh_chat_data');
+    socket.off('message_deleted'); // Add message_deleted event to prevent duplicates
     
     // Handler for new messages via socket
     const handleNewMessage = (newMessage) => {
@@ -518,6 +533,28 @@ export const ChatProvider = ({ children }) => {
       fetchFreshChats();
     };
     
+    // Handler for message deletion events
+    const handleMessageDeleted = ({ messageId, chatId }) => {
+      console.log(`SOCKET: Message deleted - ID: ${messageId}, Chat: ${chatId}`);
+      
+      // If this deleted message is in the current chat, remove it from the messages array
+      if (selectedChat && selectedChat._id === chatId) {
+        setMessages(prevMessages => prevMessages.filter(msg => msg._id !== messageId));
+      }
+      
+      // Also update the latest message in the chat list if it was the deleted message
+      setChats(prevChats => prevChats.map(chat => {
+        if (chat._id === chatId && chat.latestMessage && chat.latestMessage._id === messageId) {
+          // Find the next latest message (this will be automatically updated on the next chat refresh)
+          return {
+            ...chat,
+            latestMessage: null // Temporarily remove the latest message reference
+          };
+        }
+        return chat;
+      }));
+    };
+    
     // Handler for custom direct message events
     const handleDirectMessage = (event) => {
       console.log('CUSTOM EVENT: Received message via custom event');
@@ -533,6 +570,7 @@ export const ChatProvider = ({ children }) => {
     socket.on('chat_list_update', handleChatListUpdate);
     socket.on('refresh_messages', handleRefreshMessages);
     socket.on('refresh_chat_data', handleRefreshChatData);
+    socket.on('message_deleted', handleMessageDeleted); // Register the message_deleted event handler
     
     // Remove any existing custom event listeners before adding new ones
     window.removeEventListener('textlaire_new_message', handleDirectMessage);
@@ -706,7 +744,7 @@ export const ChatProvider = ({ children }) => {
         selectedChat,
         setSelectedChat,
         chats,
-        setChats,
+        setChats: safeSetChats, // Use the safe setter instead of direct setter
         messages,
         setMessages,
         fetchChats: fetchFreshChats,

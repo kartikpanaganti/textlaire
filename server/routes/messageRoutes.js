@@ -5,6 +5,7 @@ import {
   getAllMessages,
   markMessagesAsRead,
   deleteMessage,
+  clearChatHistory,
   upload
 } from "../controllers/messageController.js";
 
@@ -17,6 +18,7 @@ router.use(authMiddleware);
 router.route("/").post(upload.array("files", 5), sendMessage); // Allow up to 5 file uploads
 router.route("/:chatId").get(getAllMessages);
 router.route("/read/:chatId").put(markMessagesAsRead);
+router.route("/clear/:chatId").delete(clearChatHistory);
 router.route("/:messageId").delete(deleteMessage);
 
 export default router;
