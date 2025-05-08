@@ -39,11 +39,32 @@ export const ChatProvider = ({ children }) => {
       const userInfo = JSON.parse(localStorage.getItem('user'));
       if (userInfo) {
         setUser(userInfo);
+        console.log('User loaded from localStorage:', userInfo._id);
       }
     } catch (error) {
       console.error('Error loading user from localStorage:', error);
+      // If there's an error, try to retrieve the token and fetch the user data again
+      const token = localStorage.getItem('token');
+      if (token) {
+        refreshUserData();
+      }
     }
   }, []);
+
+  // Function to refresh user data if needed
+  const refreshUserData = async () => {
+    try {
+      const response = await api.get('/api/user/me');
+      if (response.data) {
+        setUser(response.data);
+        // Update localStorage
+        localStorage.setItem('user', JSON.stringify(response.data));
+        console.log('User data refreshed from API');
+      }
+    } catch (error) {
+      console.error('Failed to refresh user data:', error);
+    }
+  };
 
   // Load chats on initialization with local cache for faster initial load
   useEffect(() => {

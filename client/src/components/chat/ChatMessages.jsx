@@ -390,7 +390,7 @@ const ChatMessages = () => {
         ) : messageGroups.length > 0 ? (
           // Show message groups in chronological order (oldest to newest)
           messageGroups.map((group, index) => (
-            <Box key={index} sx={{ mb: 3 }}>
+            <Box key={index} sx={{ mb: 3, width: '100%' }}>
               <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
                 <Typography
                   variant="caption"
@@ -406,15 +406,17 @@ const ChatMessages = () => {
                 </Typography>
               </Box>
               
-              {group.messages.map((message, msgIndex) => (
-                <MessageItem 
-                  key={message._id} 
-                  message={message} 
-                  isOwnMessage={message.sender?._id === user?._id}
-                  showSender={chatInfo.isGroup}
-                  onMessageDeleted={handleMessageDeleted}
-                />
-              ))}
+              <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                {group.messages.map((message, msgIndex) => (
+                  <MessageItem 
+                    key={message._id} 
+                    message={message} 
+                    isOwnMessage={message.sender?._id === user?._id}
+                    showSender={chatInfo.isGroup}
+                    onMessageDeleted={handleMessageDeleted}
+                  />
+                ))}
+              </Box>
             </Box>
           ))
         ) : (

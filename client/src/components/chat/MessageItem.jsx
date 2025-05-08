@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useContext } from 'react';
 import { Avatar, Box, IconButton, Menu, MenuItem, Typography, Paper } from '@mui/material';
 import { 
   MoreVert as MoreVertIcon, 
@@ -10,10 +10,12 @@ import {
 import { format } from 'date-fns';
 import { deleteMessage } from '../../api/messageApi';
 import AttachmentPreview from './AttachmentPreview';
+import { ChatContext } from '../../context/ChatContext';
 
 const MessageItem = ({ message, isOwnMessage, showSender, onMessageDeleted }) => {
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const { user } = useContext(ChatContext);
   
   // Format message time
   const formatMessageTime = (timestamp) => {
@@ -50,26 +52,31 @@ const MessageItem = ({ message, isOwnMessage, showSender, onMessageDeleted }) =>
     }
   };
   
+  // Determine if message is from current user - prioritize the prop if provided
+  const isSentByCurrentUser = isOwnMessage !== undefined ? isOwnMessage : message.sender?._id === user?._id;
+  
   return (
     <Box
       sx={{
         display: 'flex',
-        flexDirection: isOwnMessage ? 'row-reverse' : 'row',
+        flexDirection: isSentByCurrentUser ? 'row-reverse' : 'row',
         mb: 1.5,
         maxWidth: '80%',
-        alignSelf: isOwnMessage ? 'flex-end' : 'flex-start',
-        // Fixed styles to remove the right gap for sender's messages
-        ...(isOwnMessage && {
-          mr: 0,  // No right margin for own messages
-          pr: 0,  // No right padding
-          '& > div': {
-            mr: 0, // No margin on children
-            pr: 0  // No padding on children
-          }
+        width: 'auto',
+        alignSelf: isSentByCurrentUser ? 'flex-end' : 'flex-start',
+        // Adjusted styles to position messages correctly
+        ...(isSentByCurrentUser ? {
+          marginLeft: 'auto', // Push to right side
+          marginRight: '0px',
+          justifyContent: 'flex-end'
+        } : {
+          marginLeft: '0px', // Push to left side
+          marginRight: 'auto',
+          justifyContent: 'flex-start'
         })
       }}
     >
-      {showSender && !isOwnMessage && (
+      {showSender && !isSentByCurrentUser && (
         <Avatar
           sx={{ width: 32, height: 32, mr: 1, mt: 0.5 }}
         >
@@ -78,7 +85,7 @@ const MessageItem = ({ message, isOwnMessage, showSender, onMessageDeleted }) =>
       )}
       
       <Box sx={{ maxWidth: '100%' }}>
-        {showSender && !isOwnMessage && (
+        {showSender && !isSentByCurrentUser && (
           <Typography 
             variant="caption" 
             color="text.secondary"
@@ -93,14 +100,16 @@ const MessageItem = ({ message, isOwnMessage, showSender, onMessageDeleted }) =>
           sx={{
             p: 1.5,
             borderRadius: 2,
-            bgcolor: isOwnMessage ? 'primary.main' : 'background.paper',
-            color: isOwnMessage ? 'primary.contrastText' : 'text.primary',
+            bgcolor: isSentByCurrentUser ? 'primary.main' : 'background.paper',
+            color: isSentByCurrentUser ? 'primary.contrastText' : 'text.primary',
             position: 'relative',
             wordBreak: 'break-word',
-            ...(isOwnMessage && {
-              mr: 0,  // No right margin for sender messages
-              pr: 1.5, // Proper padding on the right
-              width: '100%' // Use full width of container
+            maxWidth: '100%',
+            minWidth: '120px',
+            ...(isSentByCurrentUser ? {
+              borderTopRightRadius: 0, // Makes sender bubbles connect to right side
+            } : {
+              borderTopLeftRadius: 0, // Makes received bubbles connect to left side
             })
           }}
         >
@@ -126,7 +135,7 @@ const MessageItem = ({ message, isOwnMessage, showSender, onMessageDeleted }) =>
             }}
           >
             {/* Message status indicators (only for own messages) */}
-            {isOwnMessage && (
+            {isSentByCurrentUser && (
               <Box 
                 sx={{
                   display: 'flex',
@@ -150,7 +159,7 @@ const MessageItem = ({ message, isOwnMessage, showSender, onMessageDeleted }) =>
               {formatMessageTime(message.createdAt)}
             </Typography>
             
-            {isOwnMessage && (
+            {isSentByCurrentUser && (
               <IconButton 
                 size="small" 
                 onClick={handleMenuOpen}

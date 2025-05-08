@@ -8,10 +8,48 @@ import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
 import { getBaseUrl } from '../config/baseUrl.js';
 
+// Helper function to migrate existing attachments if needed
+const migrateAttachment = (attachment) => {
+  // Check if the attachment uses the old path format
+  if (attachment.filePath && attachment.filePath.startsWith('/uploads/chat/') && 
+      !attachment.filePath.includes('/attachment/')) {
+    
+    const oldFilePath = path.join(process.cwd(), attachment.filePath.replace('/uploads/', 'uploads/'));
+    const newFileName = path.basename(attachment.filePath);
+    const newDir = path.join(process.cwd(), 'uploads/chat/attachment');
+    const newFilePath = path.join(newDir, newFileName);
+    
+    // Create the new directory if it doesn't exist
+    if (!fs.existsSync(newDir)) {
+      fs.mkdirSync(newDir, { recursive: true });
+    }
+    
+    // Check if the file exists at the old location
+    if (fs.existsSync(oldFilePath)) {
+      try {
+        // Copy to new location
+        fs.copyFileSync(oldFilePath, newFilePath);
+        console.log(`Migrated attachment from ${oldFilePath} to ${newFilePath}`);
+        
+        // Update path in the attachment
+        const baseUrl = getBaseUrl();
+        attachment.filePath = `/uploads/chat/attachment/${newFileName}`;
+        attachment.fileUrl = `${baseUrl}/uploads/chat/attachment/${newFileName}`;
+        
+        return attachment;
+      } catch (error) {
+        console.error(`Error migrating attachment: ${error.message}`);
+      }
+    }
+  }
+  
+  return attachment; // Return unchanged if no migration needed
+};
+
 // Configure multer storage
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const uploadDir = path.join(process.cwd(), "uploads/chat");
+    const uploadDir = path.join(process.cwd(), "uploads/chat/attachment");
     
     // Create directory if it doesn't exist
     if (!fs.existsSync(uploadDir)) {
@@ -61,8 +99,8 @@ export const sendMessage = async (req, res) => {
         const baseUrl = getBaseUrl();
         attachments.push({
           fileName: file.originalname,
-          filePath: `/uploads/chat/${file.filename}`,
-          fileUrl: `${baseUrl}/uploads/chat/${file.filename}`,
+          filePath: `/uploads/chat/attachment/${file.filename}`,
+          fileUrl: `${baseUrl}/uploads/chat/attachment/${file.filename}`,
           fileType: file.mimetype,
           fileSize: file.size,
           uploadDate: new Date()
@@ -183,8 +221,23 @@ export const getAllMessages = async (req, res) => {
       .populate("sender", "name email")
       .populate("chat");
     
-    console.log(`Found ${messages.length} messages for chat ${chatId}`);
-    res.status(200).json(messages);
+    // Process messages to handle attachments
+    const processedMessages = messages.map(message => {
+      // Create a plain object from the Mongoose document for modification
+      const plainMessage = message.toObject();
+      
+      // Process attachments if present
+      if (plainMessage.attachments && plainMessage.attachments.length > 0) {
+        plainMessage.attachments = plainMessage.attachments.map(attachment => 
+          migrateAttachment(attachment)
+        );
+      }
+      
+      return plainMessage;
+    });
+    
+    console.log(`Found ${processedMessages.length} messages for chat ${chatId}`);
+    res.status(200).json(processedMessages);
   } catch (error) {
     console.error(`Error fetching messages for chat ${chatId}:`, error);
     // Return empty array instead of error
@@ -262,8 +315,12 @@ export const deleteMessage = async (req, res) => {
     if (message.attachments && message.attachments.length > 0) {
       message.attachments.forEach(attachment => {
         const filePath = path.join(process.cwd(), attachment.filePath.replace('/uploads/', 'uploads/'));
+        console.log(`Attempting to delete attachment at: ${filePath}`);
         if (fs.existsSync(filePath)) {
           fs.unlinkSync(filePath);
+          console.log(`Successfully deleted attachment at: ${filePath}`);
+        } else {
+          console.log(`Attachment file not found at: ${filePath}`);
         }
       });
     }
@@ -320,8 +377,12 @@ export const clearChatHistory = async (req, res) => {
       if (message.attachments && message.attachments.length > 0) {
         message.attachments.forEach(attachment => {
           const filePath = path.join(process.cwd(), attachment.filePath.replace('/uploads/', 'uploads/'));
+          console.log(`Attempting to delete attachment at: ${filePath}`);
           if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
+            console.log(`Successfully deleted attachment at: ${filePath}`);
+          } else {
+            console.log(`Attachment file not found at: ${filePath}`);
           }
         });
       }
