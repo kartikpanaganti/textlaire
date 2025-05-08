@@ -14,7 +14,16 @@ const productPatternSchema = new mongoose.Schema({
   },
   code: {
     type: String,
-    trim: true
+    trim: true,
+    validate: {
+      validator: function(v) {
+        return v === null || v === undefined || v.trim().length > 0;
+      },
+      message: 'Code cannot be an empty string'
+    },
+    set: function(v) {
+      return v === '' ? null : v;
+    }
   },
   type: {
     type: String
@@ -80,5 +89,7 @@ const productPatternSchema = new mongoose.Schema({
     default: Date.now
   }
 }, { timestamps: true });
+
+productPatternSchema.index({ code: 1 }, { unique: true, sparse: true });
 
 export default mongoose.model('ProductPattern', productPatternSchema); 
