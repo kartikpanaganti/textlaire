@@ -19,3 +19,120 @@
 <img width="1600" height="852" alt="Screenshot 2025-05-09 075243" src="https://github.com/user-attachments/assets/e33a8ead-c551-4b64-a47e-38c2e33a92f2" />
 <img width="1600" height="852" alt="Screenshot 2025-05-09 075240" src="https://github.com/user-attachments/assets/44f9bb7b-f5f1-4037-b12c-929e6767b854" />
 <img width="1600" height="852" alt="Screenshot 2025-05-09 075234" src="https://github.com/user-attachments/assets/68365b7c-abe1-4167-aeaa-96fc2354ad12" />
+
+# 🧵 Texlaire: Smart Textile Management System
+
+Texlaire is a comprehensive MERN-based web application designed to streamline textile manufacturing through features like workforce management, inventory control, real-time monitoring, and ML-powered design innovation.
+
+---
+
+## 📁 Project Structure
+
+\`\`\`
+textlaire/
+├── client/         # Frontend (React + Vite)
+├── server/         # Backend (Node.js + Express)
+├── package.json    # Root scripts for full-stack operations
+\`\`\`
+
+---
+
+## ⚙️ Prerequisites
+
+Make sure you have the following installed:
+
+- Node.js (v16+ recommended)
+- npm
+- Git
+
+---
+
+## 📦 Installation
+
+Clone the repository and install all dependencies:
+
+\`\`\`bash
+git clone https://github.com/kartikpanganti/textlaire.git
+cd textlaire
+npm run install
+\`\`\`
+
+This command will:
+- Install client dependencies inside \`client/\`
+- Install server dependencies inside \`server/\`
+- Use \`--legacy-peer-deps\` to handle React/Vite issues
+
+---
+
+## 🏃 Running the App (Dev Mode)
+
+Start both client and server concurrently:
+
+\`\`\`bash
+npm start
+\`\`\`
+
+- Client runs on: \`http://localhost:5173\`
+- Server runs on: \`http://localhost:5000\` (or your custom port)
+
+---
+
+## 🌐 Tunneling (Optional)
+
+To expose your local project to the web (e.g., for demos or webhook testing), run:
+
+\`\`\`bash
+npx localtunnel --port 5000
+\`\`\`
+
+---
+
+## 🧪 Available Scripts
+
+| Command            | Description                                      |
+|--------------------|--------------------------------------------------|
+| \`npm start\`        | Starts both client and server                    |
+| \`npm run client\`   | Runs only the frontend (Vite)                    |
+| \`npm run server\`   | Runs only the backend (Express)                 |
+| \`npm run install\`  | Installs dependencies for both client and server|
+
+---
+
+## 🛠 Tech Stack
+
+- **Frontend**: React, Vite, Tailwind CSS
+- **Backend**: Node.js, Express
+- **Database**: MongoDB
+- **Utilities**: Concurrently, Localtunnel, Nanoid, WS
+
+---
+
+## 🔐 Environment Setup
+
+Create the following \`.env\` file in \`/server\`:
+
+\`\`\`env
+PORT=5000
+MONGO_URI=your_mongodb_connection_string
+\`\`\`
+
+You may also need a \`.env\` in \`/client\` for environment variables.
+
+---
+
+## 📄 License
+
+This project is licensed under the **ISC License**.
+
+---
+
+## 🐛 Issues & Feedback
+
+Encountered a bug or have a feature request?  
+👉 [Submit an issue here](https://github.com/kartikpanganti/textlaire/issues)
+
+---
+
+## 🌟 Star this repo if you like the project!
+
+[https://github.com/kartikpanganti/textlaire](https://github.com/kartikp)
