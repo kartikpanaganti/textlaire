@@ -132,7 +132,3 @@ Encountered a bug or have a feature request?
 👉 [Submit an issue here](https://github.com/kartikpanganti/textlaire/issues)
 
 ---
-
-## 🌟 Star this repo if you like the project!
-
-[https://github.com/kartikpanganti/textlaire](https://github.com/kartikp)
